@@ -1,0 +1,75 @@
+# D&D Character Sheet Creator — Setup
+
+## Requirements
+
+- [Python 3.13+](https://www.python.org/)
+- [Poetry 2+](https://python-poetry.org/)
+- [Docker](https://www.docker.com/)
+- [just](https://github.com/casey/just)
+
+## Installation
+
+```bash
+# Install dependencies
+poetry install
+
+# Copy environment config
+cp .env.example .env
+```
+
+## Running the app
+
+```bash
+# Start the database
+just db-up
+
+# Apply migrations
+just migrate
+
+# Start the API (with hot-reload)
+just dev
+```
+
+The API is available at <http://localhost:8000>.
+Interactive docs (Swagger UI) at <http://localhost:8000/docs>.
+
+## Common commands
+
+```bash
+just dev                        # Start API with hot-reload
+just start                      # Start API without hot-reload
+just test                       # Run test suite
+just db-up                      # Start Postgres container
+just db-down                    # Stop Postgres container
+just migrate                    # Apply pending migrations
+just migration "add users table" # Create a new migration
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://dnd:dnd@localhost:5434/dnd_db` | SQLAlchemy async connection URL |
+| `POSTGRES_USER` | `dnd` | Postgres username |
+| `POSTGRES_PASSWORD` | `dnd` | Postgres password |
+| `POSTGRES_DB` | `dnd_db` | Postgres database name |
+| `POSTGRES_HOST` | `localhost` | Postgres host |
+| `POSTGRES_PORT` | `5434` | Postgres port (5434 to avoid conflicts with local installs) |
+
+## Project structure
+
+```
+app/
+  main.py        # FastAPI app and routes
+  database.py    # SQLAlchemy async engine, session factory, Base
+  models/        # Pydantic / SQLAlchemy models
+  routers/       # Route groups
+alembic/         # Database migrations
+  versions/      # Migration files
+tests/
+  conftest.py    # Pytest fixtures (async client, db session)
+  test_integration.py
+docker-compose.yml
+Justfile
+pyproject.toml
+```
