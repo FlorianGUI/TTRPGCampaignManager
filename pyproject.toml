@@ -28,11 +28,11 @@ pytest-cov = "^7.1.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=90"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=100"
 
 [tool.coverage.run]
-branch = true
 source = ["app"]
+core = "sysmon"
 
 [build-system]
 requires = ["poetry-core"]
