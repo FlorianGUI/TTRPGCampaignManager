@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 import pytest
@@ -13,28 +14,30 @@ def context():
 
 
 @given(parsers.parse('I create a character named "{name}" with class "{character_class}"'))
-async def create_character(client: AsyncClient, context: dict, name: str, character_class: str):
-    response = await client.post("/characters/", json={"name": name, "character_class": character_class})
+def create_character(client: AsyncClient, context: dict, name: str, character_class: str):
+    response = asyncio.get_event_loop().run_until_complete(
+        client.post("/characters/", json={"name": name, "character_class": character_class})
+    )
     assert response.status_code == 201
     context.setdefault("created_characters", []).append(response.json())
 
 
 @when("I retrieve the character by its ID")
-async def retrieve_character(client: AsyncClient, context: dict):
+def retrieve_character(client: AsyncClient, context: dict):
     character_id = context["created_characters"][0]["id"]
-    response = await client.get(f"/characters/{character_id}")
+    response = asyncio.get_event_loop().run_until_complete(client.get(f"/characters/{character_id}"))
     context["response"] = response
 
 
 @when("I list all characters")
-async def list_characters(client: AsyncClient, context: dict):
-    response = await client.get("/characters/")
+def list_characters(client: AsyncClient, context: dict):
+    response = asyncio.get_event_loop().run_until_complete(client.get("/characters/"))
     context["response"] = response
 
 
 @when("I request a character with an unknown ID")
-async def request_unknown_character(client: AsyncClient, context: dict):
-    response = await client.get(f"/characters/{uuid.uuid4()}")
+def request_unknown_character(client: AsyncClient, context: dict):
+    response = asyncio.get_event_loop().run_until_complete(client.get(f"/characters/{uuid.uuid4()}"))
     context["response"] = response
 
 
@@ -58,8 +61,8 @@ def get_not_found_error(context: dict):
 
 
 @when("I create a character without a class")
-async def create_character_without_class(client: AsyncClient, context: dict):
-    response = await client.post("/characters/", json={"name": "Aragorn"})
+def create_character_without_class(client: AsyncClient, context: dict):
+    response = asyncio.get_event_loop().run_until_complete(client.post("/characters/", json={"name": "Aragorn"}))
     context["response"] = response
 
 

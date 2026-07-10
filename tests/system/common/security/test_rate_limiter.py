@@ -1,5 +1,5 @@
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -8,10 +8,9 @@ from app.main import app
 
 
 @pytest.fixture
-async def rate_limited_client():
+async def rate_limited_client(client: AsyncClient):
     app.state.limiter = Limiter(key_func=get_remote_address, default_limits=["2/minute"])  # type: ignore[attr-defined]
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+    yield client
     app.state.limiter = _limiter  # type: ignore[attr-defined]
 
 
