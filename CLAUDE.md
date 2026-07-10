@@ -13,6 +13,10 @@ just migrate      # apply migrations (alembic upgrade head)
 just migration <name>  # generate a new migration
 ```
 
+## Git workflow
+
+Create a new branch from `main` for changes and open a pull request for review — don't push directly to `main`.
+
 ## Architecture
 
 ### Bounded contexts
