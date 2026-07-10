@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.common.health.health_route import router as health_router
+from app.common.security.cors import setup_cors
 from app.common.security.rate_limiter import setup_rate_limiter
 from app.contexts.character.adapters.primary.api.routers.characters import router as characters_router
 from app.contexts.user.adapters.primary.api.routers.users import router as users_router
@@ -11,6 +12,7 @@ app = FastAPI(
     description="API for creating and managing D&D character sheets",
 )
 
+setup_cors(app)
 setup_rate_limiter(app)
 
 app.include_router(health_router)
