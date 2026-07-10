@@ -6,7 +6,7 @@ FastAPI application following hexagonal architecture, organised by bounded conte
 
 ```bash
 just dev          # start dev server with hot reload (port 8000)
-just test         # run all tests (fails if coverage drops below 90%)
+just test         # run all tests (fails if coverage drops below 100%)
 just coverage     # run tests and open an HTML coverage report
 just db-up        # start PostgreSQL via Docker
 just db-down      # stop PostgreSQL
