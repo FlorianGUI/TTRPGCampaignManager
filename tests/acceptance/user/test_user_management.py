@@ -1,15 +1,9 @@
 import asyncio
 
-import pytest
 from httpx import AsyncClient
 from pytest_bdd import given, when, then, scenarios, parsers
 
 scenarios("features/user_management.feature")
-
-
-@pytest.fixture
-def context():
-    return {}
 
 
 @given(parsers.parse('I register as "{username}" with email "{email}" and password "{password}"'))

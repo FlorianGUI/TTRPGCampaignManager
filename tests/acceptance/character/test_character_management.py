@@ -1,36 +1,14 @@
 import asyncio
 import uuid
 
-import pytest
 from httpx import AsyncClient
 from pytest_bdd import given, when, then, scenarios, parsers
 
 scenarios("features/character_management.feature")
 
 
-@pytest.fixture
-def context():
-    return {}
-
-
 def _auth_headers(context: dict) -> dict:
     return {"Authorization": f"Bearer {context['token']}"}
-
-
-@given("I am logged in as a player")
-def log_in_as_a_player(client: AsyncClient, context: dict):
-    username = f"player-{uuid.uuid4().hex[:8]}"
-    password = "testpass123"
-    asyncio.get_event_loop().run_until_complete(
-        client.post(
-            "/users/register",
-            json={"username": username, "email": f"{username}@example.com", "password": password},
-        )
-    )
-    response = asyncio.get_event_loop().run_until_complete(
-        client.post("/users/login", data={"username": username, "password": password})
-    )
-    context["token"] = response.json()["access_token"]
 
 
 @given(parsers.parse('I create a character named "{name}" with class "{character_class}"'))
