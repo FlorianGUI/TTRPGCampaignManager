@@ -3,7 +3,7 @@ from uuid import UUID
 
 import pytest
 
-from app.contexts.user.application.security import decode_access_token
+from app.common.security.security import create_access_token, decode_access_token
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
     UsernameAlreadyExistsError,
@@ -83,3 +83,23 @@ class TestGet:
         result = await service.get(uuid.uuid4())
 
         assert result is None
+
+
+class TestGetByToken:
+    async def test_returns_user_for_valid_token(self, service: UserService):
+        created = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        token = create_access_token(subject=str(created.id))
+
+        found = await service.get_by_token(token)
+
+        assert found == created
+
+    async def test_raises_for_malformed_token(self, service: UserService):
+        with pytest.raises(InvalidCredentialsError):
+            await service.get_by_token("not-a-valid-token")
+
+    async def test_raises_when_user_no_longer_exists(self, service: UserService):
+        token = create_access_token(subject=str(uuid.uuid4()))
+
+        with pytest.raises(InvalidCredentialsError):
+            await service.get_by_token(token)
