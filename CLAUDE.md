@@ -17,6 +17,8 @@ just migrate      # apply migrations (alembic upgrade head)
 just migration <name>  # generate a new migration
 ```
 
+Run `poetry run pre-commit install` once after cloning to enable the pre-commit hooks (ruff + mypy) defined in `.pre-commit-config.yaml`.
+
 ## Git workflow
 
 Create a new branch from `main` for changes and open a pull request for review — don't push directly to `main`.

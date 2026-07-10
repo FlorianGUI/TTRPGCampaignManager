@@ -42,6 +42,9 @@ just db-up
 # Apply migrations
 just migrate
 
+# Enable pre-commit hooks (ruff + mypy)
+poetry run pre-commit install
+
 # Start the dev server (http://localhost:8000)
 just dev
 ```
@@ -70,6 +73,9 @@ curl -X POST http://localhost:8000/characters/ \
 ```bash
 just dev              # start dev server with hot reload
 just test             # run all tests
+just lint             # check ruff linting + formatting
+just format           # auto-fix ruff linting + formatting
+just typecheck        # run mypy
 just db-up            # start PostgreSQL via Docker
 just db-down          # stop PostgreSQL
 just migrate          # apply migrations

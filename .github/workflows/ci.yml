@@ -11,6 +11,24 @@ jobs:
       - name: Build Docker image
         run: docker build -t dnd-app:ci .
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Run ruff
+        run: |
+          poetry run ruff check .
+          poetry run ruff format --check .
+      - name: Run mypy
+        run: poetry run mypy .
+
   test:
     runs-on: ubuntu-latest
     services:
