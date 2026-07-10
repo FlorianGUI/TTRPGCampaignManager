@@ -2,7 +2,7 @@ import uuid
 
 from httpx import AsyncClient
 
-from app.contexts.user.application.security import create_access_token
+from app.common.security.security import create_access_token
 
 
 class TestGetCurrentUser:
