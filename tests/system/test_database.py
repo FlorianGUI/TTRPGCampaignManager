@@ -12,7 +12,7 @@ class TestGetDb:
 
         assert isinstance(session, AsyncSession)
         result = await session.execute(text("SELECT 1 AS value"))
-        assert result.fetchone().value == 1
+        assert result.one().value == 1
 
         with pytest.raises(StopAsyncIteration):
             await anext(gen)
