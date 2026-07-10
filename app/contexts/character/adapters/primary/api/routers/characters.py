@@ -3,12 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.security.auth import get_current_user
 from app.contexts.character.adapters.primary.api.schemas.character import CharacterCreate, CharacterResponse
 from app.contexts.character.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
 from app.contexts.character.application.character_service import CharacterService
 from app.database import get_db
 
-router = APIRouter(prefix="/characters", tags=["characters"])
+router = APIRouter(prefix="/characters", tags=["characters"], dependencies=[Depends(get_current_user)])
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> CharacterService:
