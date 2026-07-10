@@ -18,6 +18,10 @@ db-down:
 test:
     poetry run pytest
 
+coverage:
+    poetry run pytest --cov-report=html
+    open htmlcov/index.html
+
 migrate:
     poetry run alembic upgrade head
 
