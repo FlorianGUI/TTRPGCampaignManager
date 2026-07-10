@@ -9,9 +9,9 @@ from app.main import app
 
 @pytest.fixture
 async def rate_limited_client(client: AsyncClient):
-    app.state.limiter = Limiter(key_func=get_remote_address, default_limits=["2/minute"])  # type: ignore[attr-defined]
+    app.state.limiter = Limiter(key_func=get_remote_address, default_limits=["2/minute"])
     yield client
-    app.state.limiter = _limiter  # type: ignore[attr-defined]
+    app.state.limiter = _limiter
 
 
 class TestRateLimiter:

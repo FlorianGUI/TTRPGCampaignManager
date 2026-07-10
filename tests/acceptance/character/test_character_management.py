@@ -2,7 +2,7 @@ import asyncio
 import uuid
 
 from httpx import AsyncClient
-from pytest_bdd import given, when, then, scenarios, parsers
+from pytest_bdd import given, parsers, scenarios, then, when
 
 scenarios("features/character_management.feature")
 
@@ -35,9 +35,7 @@ def retrieve_character(client: AsyncClient, context: dict):
 
 @when("I list all characters")
 def list_characters(client: AsyncClient, context: dict):
-    response = asyncio.get_event_loop().run_until_complete(
-        client.get("/characters/", headers=_auth_headers(context))
-    )
+    response = asyncio.get_event_loop().run_until_complete(client.get("/characters/", headers=_auth_headers(context)))
     context["response"] = response
 
 

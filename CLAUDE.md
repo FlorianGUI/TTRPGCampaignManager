@@ -8,6 +8,9 @@ FastAPI application following hexagonal architecture, organised by bounded conte
 just dev          # start dev server with hot reload (port 8000)
 just test         # run all tests (fails if coverage drops below 100%)
 just coverage     # run tests and open an HTML coverage report
+just lint         # check ruff linting + formatting
+just format       # auto-fix ruff linting + formatting
+just typecheck    # run mypy
 just db-up        # start PostgreSQL via Docker
 just db-down      # stop PostgreSQL
 just migrate      # apply migrations (alembic upgrade head)

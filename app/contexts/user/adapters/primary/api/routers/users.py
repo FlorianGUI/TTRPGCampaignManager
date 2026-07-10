@@ -25,7 +25,7 @@ async def register(body: UserCreate, service: UserService = Depends(get_service)
     try:
         user = await service.register(body.username, body.email, body.password)
     except UsernameAlreadyExistsError:
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Username already exists") from None
     return UserResponse(id=user.id, username=user.username, email=user.email)
 
 
@@ -34,7 +34,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), service: UserS
     try:
         access_token = await service.authenticate(form_data.username, form_data.password)
     except InvalidCredentialsError:
-        raise HTTPException(status_code=401, detail="Incorrect username or password")
+        raise HTTPException(status_code=401, detail="Incorrect username or password") from None
     return Token(access_token=access_token)
 
 

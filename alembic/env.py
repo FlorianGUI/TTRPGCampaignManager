@@ -7,12 +7,12 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app.database import Base
 
 # Import every secondary-adapter model so Base.metadata is fully populated
 # before autogenerate compares it against the database schema.
 from app.contexts.character.adapters.secondary.persistence import character_model  # noqa: F401
 from app.contexts.user.adapters.secondary.persistence import user_model  # noqa: F401
+from app.database import Base
 
 load_dotenv()
 
@@ -58,4 +58,5 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     import asyncio
+
     asyncio.run(run_migrations_online())

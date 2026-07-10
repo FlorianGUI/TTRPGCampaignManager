@@ -24,9 +24,7 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
         return character
 
     async def find_by_id(self, id: UUID) -> Character | None:
-        result = await self._session.execute(
-            select(CharacterModel).where(CharacterModel.id == id)
-        )
+        result = await self._session.execute(select(CharacterModel).where(CharacterModel.id == id))
         model = result.scalar_one_or_none()
         if model is None:
             return None

@@ -22,9 +22,9 @@ class TestHealthRoutes:
 class TestDbConnection:
     async def test_session_executes_query(self, db: AsyncSession):
         result = await db.execute(text("SELECT 1 AS value"))
-        assert result.fetchone().value == 1
+        assert result.one().value == 1
 
     async def test_session_reuses_same_backend_connection(self, db: AsyncSession):
-        pid_1 = (await db.execute(text("SELECT pg_backend_pid() AS pid"))).fetchone().pid
-        pid_2 = (await db.execute(text("SELECT pg_backend_pid() AS pid"))).fetchone().pid
+        pid_1 = (await db.execute(text("SELECT pg_backend_pid() AS pid"))).one().pid
+        pid_2 = (await db.execute(text("SELECT pg_backend_pid() AS pid"))).one().pid
         assert pid_1 == pid_2

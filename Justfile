@@ -22,6 +22,17 @@ coverage:
     poetry run pytest --cov-report=html
     open htmlcov/index.html
 
+lint:
+    poetry run ruff check .
+    poetry run ruff format --check .
+
+format:
+    poetry run ruff check --fix .
+    poetry run ruff format .
+
+typecheck:
+    poetry run mypy .
+
 migrate:
     poetry run alembic upgrade head
 

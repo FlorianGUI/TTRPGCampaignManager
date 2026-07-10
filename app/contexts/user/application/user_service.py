@@ -38,7 +38,7 @@ class UserService:
         try:
             user_id = UUID(decode_access_token(token))
         except (jwt.PyJWTError, ValueError):
-            raise InvalidCredentialsError(token)
+            raise InvalidCredentialsError(token) from None
         user = await self._repository.find_by_id(user_id)
         if user is None:
             raise InvalidCredentialsError(token)

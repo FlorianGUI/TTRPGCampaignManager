@@ -1,7 +1,7 @@
 import asyncio
 
 from httpx import AsyncClient
-from pytest_bdd import given, when, then, scenarios, parsers
+from pytest_bdd import given, parsers, scenarios, then, when
 
 scenarios("features/user_management.feature")
 
