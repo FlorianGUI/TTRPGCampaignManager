@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.database import Base
 
+# Import every secondary-adapter model so Base.metadata is fully populated
+# before autogenerate compares it against the database schema.
+from app.contexts.character.adapters.secondary.persistence import character_model  # noqa: F401
+from app.contexts.user.adapters.secondary.persistence import user_model  # noqa: F401
+
 load_dotenv()
 
 config = context.config

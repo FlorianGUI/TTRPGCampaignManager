@@ -30,6 +30,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+asyncpg://dnd:dnd@localhost:5432/dnd_db
+      JWT_SECRET_KEY: ci-test-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
