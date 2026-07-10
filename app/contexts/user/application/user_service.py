@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from app.contexts.user.application.security import create_access_token, hash_password, verify_password
+import jwt
+
+from app.common.security.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.contexts.user.domain.ports.user_repository import UserRepository
 from app.contexts.user.domain.user import User
 
@@ -31,3 +33,13 @@ class UserService:
 
     async def get(self, id: UUID) -> User | None:
         return await self._repository.find_by_id(id)
+
+    async def get_by_token(self, token: str) -> User:
+        try:
+            user_id = UUID(decode_access_token(token))
+        except (jwt.PyJWTError, ValueError):
+            raise InvalidCredentialsError(token)
+        user = await self._repository.find_by_id(user_id)
+        if user is None:
+            raise InvalidCredentialsError(token)
+        return user
