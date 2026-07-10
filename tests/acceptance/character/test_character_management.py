@@ -1,22 +1,24 @@
 import asyncio
 import uuid
 
-import pytest
 from httpx import AsyncClient
 from pytest_bdd import given, when, then, scenarios, parsers
 
 scenarios("features/character_management.feature")
 
 
-@pytest.fixture
-def context():
-    return {}
+def _auth_headers(context: dict) -> dict:
+    return {"Authorization": f"Bearer {context['token']}"}
 
 
 @given(parsers.parse('I create a character named "{name}" with class "{character_class}"'))
 def create_character(client: AsyncClient, context: dict, name: str, character_class: str):
     response = asyncio.get_event_loop().run_until_complete(
-        client.post("/characters/", json={"name": name, "character_class": character_class})
+        client.post(
+            "/characters/",
+            json={"name": name, "character_class": character_class},
+            headers=_auth_headers(context),
+        )
     )
     assert response.status_code == 201
     context.setdefault("created_characters", []).append(response.json())
@@ -25,19 +27,25 @@ def create_character(client: AsyncClient, context: dict, name: str, character_cl
 @when("I retrieve the character by its ID")
 def retrieve_character(client: AsyncClient, context: dict):
     character_id = context["created_characters"][0]["id"]
-    response = asyncio.get_event_loop().run_until_complete(client.get(f"/characters/{character_id}"))
+    response = asyncio.get_event_loop().run_until_complete(
+        client.get(f"/characters/{character_id}", headers=_auth_headers(context))
+    )
     context["response"] = response
 
 
 @when("I list all characters")
 def list_characters(client: AsyncClient, context: dict):
-    response = asyncio.get_event_loop().run_until_complete(client.get("/characters/"))
+    response = asyncio.get_event_loop().run_until_complete(
+        client.get("/characters/", headers=_auth_headers(context))
+    )
     context["response"] = response
 
 
 @when("I request a character with an unknown ID")
 def request_unknown_character(client: AsyncClient, context: dict):
-    response = asyncio.get_event_loop().run_until_complete(client.get(f"/characters/{uuid.uuid4()}"))
+    response = asyncio.get_event_loop().run_until_complete(
+        client.get(f"/characters/{uuid.uuid4()}", headers=_auth_headers(context))
+    )
     context["response"] = response
 
 
@@ -62,7 +70,9 @@ def get_not_found_error(context: dict):
 
 @when("I create a character without a class")
 def create_character_without_class(client: AsyncClient, context: dict):
-    response = asyncio.get_event_loop().run_until_complete(client.post("/characters/", json={"name": "Aragorn"}))
+    response = asyncio.get_event_loop().run_until_complete(
+        client.post("/characters/", json={"name": "Aragorn"}, headers=_auth_headers(context))
+    )
     context["response"] = response
 
 

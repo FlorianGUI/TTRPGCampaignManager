@@ -3,6 +3,9 @@ Feature: Character Management
   I want to manage my D&D characters
   So that I can keep track of all my characters
 
+  Background:
+    Given I am logged in as a player
+
   Scenario: Create and retrieve a character
     Given I create a character named "Aragorn" with class "Ranger"
     When I retrieve the character by its ID
