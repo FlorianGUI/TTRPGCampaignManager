@@ -38,3 +38,28 @@ migrate:
 
 migration name:
     poetry run alembic revision --autogenerate -m "{{name}}"
+
+# --- Frontend (Vue 3 + Vite, in ./frontend) ---
+
+front-install:
+    cd frontend && npm install
+
+front-dev:
+    cd frontend && npm run dev
+
+front-build:
+    cd frontend && npm run build
+
+front-preview:
+    cd frontend && npm run preview
+
+front-test:
+    cd frontend && npm test
+
+front-lint:
+    cd frontend && npm run lint
+    cd frontend && npm run format:check
+
+front-format:
+    cd frontend && npm run lint:fix
+    cd frontend && npm run format

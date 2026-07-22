@@ -14,3 +14,17 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+
+      - id: frontend-eslint
+        name: frontend eslint
+        entry: bash -c 'cd frontend && npm run lint:fix'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+      - id: frontend-prettier
+        name: frontend prettier
+        entry: bash -c 'cd frontend && npm run format'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
