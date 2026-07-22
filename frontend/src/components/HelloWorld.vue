@@ -10,7 +10,7 @@ defineProps({
 <template>
   <div class="hello">
     <h1>{{ msg }}</h1>
-    <p>D&D Character Sheet Creator frontend is up and running.</p>
+    <p>TTRPG Campaign Manager frontend is up and running.</p>
   </div>
 </template>
 

@@ -1,6 +1,8 @@
-# D&D Character Sheet Creator
+# TTRPG Campaign Manager
 
-FastAPI application following hexagonal architecture, organised by bounded contexts.
+An app to gather TTRPG information from all kinds of sources (source books, character
+sheets, campaign notes) into one place for the Game Master. FastAPI backend following
+hexagonal architecture, organised by bounded contexts, with a Vue 3 frontend.
 
 ## Project layout
 

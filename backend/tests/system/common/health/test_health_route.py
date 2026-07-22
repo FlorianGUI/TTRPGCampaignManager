@@ -11,7 +11,7 @@ class TestHealthRoutes:
     async def test_openapi_schema_available(self, client: AsyncClient):
         response = await client.get("/openapi.json")
         assert response.status_code == 200
-        assert response.json()["info"]["title"] == "D&D Character Sheet Creator"
+        assert response.json()["info"]["title"] == "TTRPG Campaign Manager"
 
     async def test_health_endpoint(self, client: AsyncClient):
         response = await client.get("/health")

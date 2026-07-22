@@ -1,6 +1,11 @@
-# D&D Character Sheet Creator
+# TTRPG Campaign Manager
 
-A REST API for creating and managing Dungeons & Dragons character sheets, built with FastAPI and following hexagonal architecture.
+An app to help a tabletop RPG party gather information from all kinds of sources —
+source books, character sheets, and campaign notes — and bring it together so
+everything is at the Game Master's fingertips.
+
+Built with a FastAPI backend (hexagonal architecture) and a Vue 3 frontend.
+Character management is the first building block; more campaign tooling is planned.
 
 ## Features
 

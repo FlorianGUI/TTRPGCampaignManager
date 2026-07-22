@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t dnd-app:ci backend
+        run: docker build -t ttrpg-app:ci backend
 
   lint:
     runs-on: ubuntu-latest

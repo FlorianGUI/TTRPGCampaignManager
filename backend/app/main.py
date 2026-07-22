@@ -7,9 +7,9 @@ from app.contexts.character.adapters.primary.api.routers.characters import route
 from app.contexts.user.adapters.primary.api.routers.users import router as users_router
 
 app = FastAPI(
-    title="D&D Character Sheet Creator",
+    title="TTRPG Campaign Manager",
     version="0.1.0",
-    description="API for creating and managing D&D character sheets",
+    description="API for gathering TTRPG source material, character sheets, and campaign info for the Game Master",
 )
 
 setup_cors(app)

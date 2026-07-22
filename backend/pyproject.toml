@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "dnd-character-sheet-creator"
+name = "ttrpg-campaign-manager"
 version = "0.1.0"
-description = "D&D Character Sheet Creator API"
+description = "TTRPG Campaign Manager API — gather source material, character sheets, and campaign info for the Game Master"
 authors = ["Florian Guillet <florian.guillet@tenacy.io>"]
 packages = [{include = "app"}]
 
