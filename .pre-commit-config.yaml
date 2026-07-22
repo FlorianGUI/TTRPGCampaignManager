@@ -10,8 +10,9 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: poetry run mypy .
+        entry: bash -c 'cd backend && poetry run mypy .'
         language: system
+        files: ^backend/
         pass_filenames: false
         types: [python]
 

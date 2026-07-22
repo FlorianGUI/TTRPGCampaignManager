@@ -10,8 +10,8 @@
 ## Installation
 
 ```bash
-# Install dependencies
-poetry install
+# Install backend dependencies
+cd backend && poetry install && cd ..
 
 # Copy environment config
 cp .env.example .env
@@ -59,17 +59,19 @@ just migration "add users table" # Create a new migration
 ## Project structure
 
 ```
-app/
-  main.py        # FastAPI app and routes
-  database.py    # SQLAlchemy async engine, session factory, Base
-  models/        # Pydantic / SQLAlchemy models
-  routers/       # Route groups
-alembic/         # Database migrations
-  versions/      # Migration files
-tests/
-  conftest.py    # Pytest fixtures (async client, db session)
-  test_integration.py
-docker-compose.yml
+backend/
+  app/           # FastAPI app (hexagonal, by bounded context — see CLAUDE.md)
+    main.py      # app entry point, router registration
+    contexts/    # bounded contexts (character, user, ...)
+    common/      # cross-cutting infrastructure (health, security, rate limiting)
+  alembic/       # database migrations
+    versions/    # migration files
+  tests/         # unit / integration / system / acceptance
+  pyproject.toml
+  Dockerfile
+frontend/        # Vue 3 + Vite SPA (see frontend/README.md)
+nginx/           # reference host nginx config for the VPS
+docker-compose.yml       # local Postgres
+docker-compose.prod.yml  # production stack (app + db)
 Justfile
-pyproject.toml
 ```

@@ -30,8 +30,8 @@ A REST API for creating and managing Dungeons & Dragons character sheets, built 
 ### Setup
 
 ```bash
-# Install dependencies
-poetry install
+# Install backend dependencies
+cd backend && poetry install && cd ..
 
 # Copy environment variables
 cp .env.example .env
@@ -42,12 +42,15 @@ just db-up
 # Apply migrations
 just migrate
 
-# Enable pre-commit hooks (ruff + mypy)
-poetry run pre-commit install
+# Enable pre-commit hooks (ruff + mypy + frontend eslint/prettier)
+(cd backend && poetry run pre-commit install)
 
 # Start the dev server (http://localhost:8000)
 just dev
 ```
+
+> The backend lives in `backend/` and the Vue 3 frontend in `frontend/` (see
+> `frontend/README.md`). The `just` recipes below are run from the repo root.
 
 ## API
 
@@ -87,15 +90,16 @@ just migration <name> # generate a new migration
 The project follows hexagonal architecture organised by bounded contexts.
 
 ```
-app/
-  contexts/
-    character/
-      domain/           # entities and port interfaces (pure Python)
-      application/      # use cases / services
-      adapters/
-        primary/        # inbound — HTTP routers and schemas
-        secondary/      # outbound — SQLAlchemy models and repositories
-  common/               # cross-cutting infrastructure (health, rate limiting)
+backend/
+  app/
+    contexts/
+      character/
+        domain/         # entities and port interfaces (pure Python)
+        application/    # use cases / services
+        adapters/
+          primary/      # inbound — HTTP routers and schemas
+          secondary/    # outbound — SQLAlchemy models and repositories
+    common/             # cross-cutting infrastructure (health, rate limiting)
 ```
 
 Dependencies flow inward only: `adapters → application → domain`. The domain has no knowledge of FastAPI or SQLAlchemy.
@@ -110,7 +114,7 @@ Tests are split into four layers:
 
 | Layer | Location | What it tests |
 |-------|----------|---------------|
-| Unit | `tests/unit/` | Domain entities and services in isolation |
-| Integration | `tests/integration/` | Repositories against a real database |
-| System | `tests/system/` | Health and infrastructure via HTTP |
-| Acceptance | `tests/acceptance/` | User-facing scenarios written in Gherkin |
+| Unit | `backend/tests/unit/` | Domain entities and services in isolation |
+| Integration | `backend/tests/integration/` | Repositories against a real database |
+| System | `backend/tests/system/` | Health and infrastructure via HTTP |
+| Acceptance | `backend/tests/acceptance/` | User-facing scenarios written in Gherkin |
