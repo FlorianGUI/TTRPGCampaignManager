@@ -1,4 +1,4 @@
-# D&D Character Sheet Creator — Setup
+# TTRPG Campaign Manager — Setup
 
 ## Requirements
 

@@ -1,6 +1,6 @@
 # Frontend
 
-Vue 3 + Vite single-page app for the D&D Character Sheet Creator.
+Vue 3 + Vite single-page app for the TTRPG Campaign Manager.
 
 ## Commands
 
