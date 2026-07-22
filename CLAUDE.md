@@ -2,6 +2,19 @@
 
 FastAPI application following hexagonal architecture, organised by bounded contexts.
 
+## Project layout
+
+The repo is a monorepo split into two apps:
+
+```
+backend/    # FastAPI app (this document's architecture applies here)
+frontend/   # Vue 3 + Vite SPA (see frontend/README.md)
+```
+
+Orchestration and shared config live at the root: `docker-compose*.yml`, `Justfile`,
+`.pre-commit-config.yaml`, `.github/`, `nginx/`. All backend paths below are relative
+to `backend/`; run the `just` recipes from the repo root (they `cd backend` for you).
+
 ## Commands
 
 ```bash
