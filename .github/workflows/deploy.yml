@@ -5,11 +5,14 @@ on:
     branches: [main]
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
+  backend-ci:
+    uses: ./.github/workflows/backend-ci.yml
+
+  frontend-ci:
+    uses: ./.github/workflows/frontend-ci.yml
 
   deploy:
-    needs: ci
+    needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
     steps:
       - name: Download frontend build
