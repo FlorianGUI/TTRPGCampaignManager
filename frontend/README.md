@@ -33,13 +33,53 @@ CORS configuration (`CORS_ORIGINS`, see `app/common/security/cors.py`).
 frontend/
   index.html                       # Vite entry point
   vite.config.js                   # Vite + Vitest config
+  scripts/
+    vendor-fonts.mjs               # re-download the self-hosted webfonts
+    check-contrast.mjs             # WCAG AA check over the theme's colour pairs
   src/
-    main.js                        # app bootstrap
-    App.vue                        # root component
+    main.js                        # app bootstrap + PrimeVue plugin
+    App.vue                        # SPIKE: design-direction judgement surface
+    assets/
+      base.css                     # element defaults, prose, ornament
+      fonts.css                    # @font-face for the self-hosted families
+      fonts/                       # woff2, latin + latin-ext subsets
+    design-system/
+      preset.js                    # the theme: primitives -> roles -> schemes
+      useTheme.js                  # theme + density state, persisted
     components/
-      HelloWorld.vue               # sample component
-      HelloWorld.test.js           # component unit test
+      AppShell.vue                 # top bar + context sidebar + content area
+      domain/                      # stat block, read-aloud, dice, entity tags
+    content/
+      sample.js                    # sample copy for the spike
 ```
+
+## Design system (spike — issue #23)
+
+The visual direction is still being iterated on. `src/App.vue` is not a real
+screen: it is one realistic page of prep notes used to judge type, palette and
+ornament in context. Tweak `src/design-system/preset.js` and look at that page.
+
+Some things worth knowing before touching it:
+
+- **PrimeVue is pinned to v4** (`4.5.5`, MIT). v5 relicensed to a commercial
+  model and renders a license banner without a key. Don't bump the major
+  without deciding that question.
+- **Everything colour-bearing reads a `--p-*` token.** No component hardcodes a
+  hex. A theme switch is a token swap.
+- **Two themes**: `candlelight` (dark, the default) and `parchment` (light),
+  driven by a `.theme-candlelight` class on `<html>`. The default is
+  deliberately _not_ tied to `prefers-color-scheme`.
+- **Contrast is checked, not eyeballed**: `node scripts/check-contrast.mjs`
+  verifies every foreground/background pair against WCAG AA in both themes and
+  exits non-zero on failure. Run it after any palette change.
+- **Fonts are self-hosted**, no CDN — Cinzel (display), Alegreya (body),
+  IBM Plex Mono (dice and stat lines), latin + latin-ext only, all OFL.
+  Regenerate with `node scripts/vendor-fonts.mjs`.
+- **Ornament is token-gated**: a `.no-ornament` class on any ancestor turns off
+  textures and rules.
+
+The three-layer token split, the `/styleguide` route, and per-component tests
+described in issue #23 come _after_ the direction is settled — see the issue.
 
 ## Testing
 
