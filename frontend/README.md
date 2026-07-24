@@ -70,7 +70,7 @@ frontend/
 The visual direction is settled (issue #23). Two surfaces exercise it:
 
 - **`/styleguide`** — the living reference: every token in both schemes, and
-  every component we own or override. Start here.
+  every component we own or override. Start here. **Dev only** — see below.
 - **`/` (`SpikeView.vue`)** — one realistic page of prep notes, for judging
   type, palette and ornament _in context_ rather than in a grid.
 
@@ -137,6 +137,12 @@ Some things worth knowing before touching any of it:
 - every route is **named**; link and navigate by name, never by a hand-built path
 - the landing route is eagerly imported, everything else is **lazy**, so the
   initial bundle carries only what the first paint needs
+- **`/styleguide` is dev only.** Its route is behind an `import.meta.env.DEV`
+  literal, which the bundler substitutes at build time, so the branch and its
+  dynamic import are dropped entirely: the view is not shipped, no chunk is
+  emitted, and `/styleguide` falls through to the catch-all in a production
+  build. Keep that condition a bare literal — putting it behind a variable or a
+  function parameter defeats the elimination and the chunk comes back.
 - every route sets `meta.title`, which `router/index.js` turns into the document
   title
 - the catch-all stays **last**
