@@ -17,6 +17,26 @@ Orchestration and shared config live at the root: `docker-compose*.yml`, `Justfi
 `.pre-commit-config.yaml`, `.github/`, `nginx/`. All backend paths below are relative
 to `backend/`; run the `just` recipes from the repo root (they `cd backend` for you).
 
+### Frontend conventions
+
+This document covers the backend. The frontend has its own conventions, documented
+in full in `frontend/README.md` — read that before touching `frontend/`. The parts
+that bite hardest if missed:
+
+- **The design system is three token layers** (`src/design-system/tokens/`):
+  primitives → semantic → components, each reaching downwards only. Never reference
+  a primitive from a component override.
+- **`LIGHT_ROLES` / `DARK_ROLES` must not be collapsed** into shared numeric indices.
+  The two schemes walk the ramp in opposite directions; collapsing them reintroduces
+  a light-on-light dark theme.
+- **Contrast is checked, not eyeballed**: `node scripts/check-contrast.mjs` gates
+  WCAG AA in both themes and exits non-zero on failure. Run it after any palette change.
+- **PrimeVue is pinned to v4 (MIT)**; v5 is commercially licensed and injects a
+  license banner. Don't bump the major.
+- **`/styleguide`** renders every token and component — the living reference.
+- **There is no elevation scale**, deliberately. Depth comes from rules, borders and
+  the chrome/content split.
+
 ## Commands
 
 ```bash

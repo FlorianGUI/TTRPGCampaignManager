@@ -1,0 +1,73 @@
+import { describe, it, expect, beforeAll, vi } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import { routes } from './routes.js'
+import { createAppRouter, APP_TITLE } from './index.js'
+
+/*
+ * Guards the routing conventions rather than the routes themselves: those will
+ * churn as features land, but a route that loses its name or a catch-all that
+ * stops being last breaks navigation everywhere at once.
+ */
+
+// jsdom has no scrollTo, and a real navigation calls it via scrollBehavior.
+beforeAll(() => {
+  window.scrollTo = vi.fn()
+})
+
+describe('routes', () => {
+  it('names every route, so navigation never has to build a path by hand', () => {
+    for (const route of routes) {
+      expect(route.name, route.path).toBeTruthy()
+    }
+  })
+
+  it('keeps the catch-all last, or it would swallow everything after it', () => {
+    const catchAllIndex = routes.findIndex((r) => r.path.includes(':pathMatch'))
+
+    expect(catchAllIndex).toBe(routes.length - 1)
+  })
+
+  it('lazy-loads everything except the landing route', () => {
+    const [landing, ...rest] = routes
+
+    expect(typeof landing.component).toBe('object')
+    for (const route of rest) {
+      expect(typeof route.component, route.name).toBe('function')
+    }
+  })
+
+  it('gives every route a title to build the document title from', () => {
+    for (const route of routes) {
+      expect(route.meta?.title, route.name).toBeTruthy()
+    }
+  })
+})
+
+describe('createAppRouter', () => {
+  it('sets the document title from the matched route', async () => {
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push({ name: 'styleguide' })
+    await router.isReady()
+
+    expect(document.title).toBe(`Styleguide — ${APP_TITLE}`)
+  })
+
+  it('resolves an unknown path to the not-found route rather than failing', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes })
+
+    expect(router.resolve('/no-such-page').name).toBe('not-found')
+  })
+
+  it('scrolls to the top on a forward navigation and restores on back', () => {
+    const router = createAppRouter(createMemoryHistory())
+    const saved = { top: 420, left: 0 }
+
+    expect(router.options.scrollBehavior({}, {}, saved)).toBe(saved)
+    expect(router.options.scrollBehavior({ hash: '' }, {}, null)).toEqual({ top: 0 })
+    expect(router.options.scrollBehavior({ hash: '#x' }, {}, null)).toEqual({
+      el: '#x',
+      behavior: 'smooth',
+    })
+  })
+})

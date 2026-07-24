@@ -37,29 +37,81 @@ frontend/
     vendor-fonts.mjs               # re-download the self-hosted webfonts
     check-contrast.mjs             # WCAG AA check over the theme's colour pairs
   src/
-    main.js                        # app bootstrap + PrimeVue plugin
-    App.vue                        # SPIKE: design-direction judgement surface
+    main.js                        # app bootstrap + PrimeVue plugin + router
+    App.vue                        # the persistent shell around <RouterView>
+    router/
+      index.js                     # router instance, scroll behaviour, title
+      routes.js                    # the route table
+    views/
+      SpikeView.vue                # SPIKE: design-direction judgement surface
+      StyleguideView.vue           # /styleguide — every token and component
+      NotFoundView.vue             # catch-all
     assets/
       base.css                     # element defaults, prose, ornament
       fonts.css                    # @font-face for the self-hosted families
       fonts/                       # woff2, latin + latin-ext subsets
     design-system/
-      preset.js                    # the theme: primitives -> roles -> schemes
+      preset.js                    # composes the three layers into the preset
+      tokens/
+        primitives.js              # raw ramps and scales, no meaning, no imports
+        semantic.js                # roles, the two schemes, app tokens
+        components.js              # per-component overrides
       useTheme.js                  # theme + density state, persisted
     components/
       AppShell.vue                 # top bar + context sidebar + content area
+      AppNav.vue                   # the nav list, shared by sidebar and drawer
       domain/                      # stat block, read-aloud, dice, entity tags
     content/
       sample.js                    # sample copy for the spike
 ```
 
-## Design system (spike — issue #23)
+## Design system
 
-The visual direction is still being iterated on. `src/App.vue` is not a real
-screen: it is one realistic page of prep notes used to judge type, palette and
-ornament in context. Tweak `src/design-system/preset.js` and look at that page.
+The visual direction is settled (issue #23). Two surfaces exercise it:
 
-Some things worth knowing before touching it:
+- **`/styleguide`** — the living reference: every token in both schemes, and
+  every component we own or override. Start here.
+- **`/` (`SpikeView.vue`)** — one realistic page of prep notes, for judging
+  type, palette and ornament _in context_ rather than in a grid.
+
+### Token layers
+
+`design-system/preset.js` composes three layers under `tokens/`, and each layer
+may only reach downwards:
+
+| layer      | file                   | holds                                                 |
+| ---------- | ---------------------- | ----------------------------------------------------- |
+| primitives | `tokens/primitives.js` | raw ramps and scales, no meaning, no imports          |
+| semantic   | `tokens/semantic.js`   | roles, the two schemes, app-owned `grimoire.*` tokens |
+| components | `tokens/components.js` | per-component overrides, referencing semantic tokens  |
+
+Two rules that are load-bearing:
+
+- **Never reference a primitive from a component override.** Go through the
+  semantic layer, so a ramp change never has to be chased into component files.
+- **Never collapse `LIGHT_ROLES` / `DARK_ROLES` into shared numeric indices.**
+  The schemes walk the ramp in _opposite_ directions — parchment top-down,
+  candlelight bottom-up. Collapsing them is what produced the light-on-light
+  dark theme bug during the spike.
+
+`tokens/primitives.js` is deliberately import-free so plain Node tooling can
+read it; `scripts/check-contrast.mjs` imports it directly.
+
+### Elevation
+
+**There is no elevation scale, and that is a decision rather than an omission.**
+A printed page has no z-axis: depth here comes from rules (`.rule-double`,
+`.rule-fleuron`), borders (`--p-content-border-color`) and the chrome/content
+split — dark leather against parchment. Every `shadow` in the preset is
+explicitly `none`, overriding Aura's defaults on `card`, `formField` and both
+focus rings.
+
+Shadows survive only where something genuinely floats above the page — drawer,
+popover, menu — and those come from PrimeVue's overlay tokens. If that stops
+being enough, add the ramp to `tokens/semantic.js` and tint it warm; the palette
+never reaches pure black, so a neutral shadow reads cold against it.
+
+Some things worth knowing before touching any of it:
 
 - **PrimeVue is pinned to v4** (`4.5.5`, MIT). v5 relicensed to a commercial
   model and renders a license banner without a key. Don't bump the major
@@ -78,8 +130,19 @@ Some things worth knowing before touching it:
 - **Ornament is token-gated**: a `.no-ornament` class on any ancestor turns off
   textures and rules.
 
-The three-layer token split, the `/styleguide` route, and per-component tests
-described in issue #23 come _after_ the direction is settled — see the issue.
+### Routing
+
+`vue-router` in history mode. Conventions, set in `router/routes.js`:
+
+- every route is **named**; link and navigate by name, never by a hand-built path
+- the landing route is eagerly imported, everything else is **lazy**, so the
+  initial bundle carries only what the first paint needs
+- every route sets `meta.title`, which `router/index.js` turns into the document
+  title
+- the catch-all stays **last**
+
+`App.vue` holds the shell and renders `<RouterView>` inside it, so the top bar
+and sidebar are not torn down on navigation.
 
 ## Testing
 
