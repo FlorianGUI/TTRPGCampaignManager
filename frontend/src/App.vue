@@ -116,17 +116,12 @@ import { sections, owlbear } from './content/sample.js'
 
 <style scoped>
 /*
- * The page is exactly as wide as it needs to be: the reading measure plus the
- * aside it has to hold. That gives every full-width element — rules, read-aloud
- * boxes, the encounter row — one shared right edge instead of three, and
- * centring it keeps the leftover parchment even on both sides rather than
- * pooling as a blank band on the right of a much wider surface.
+ * Full bleed: the page fills the content pane, so no parchment is left blank
+ * beside it at any width. There is no max-width and no centring — the page's
+ * right edge is the pane's right edge.
  */
 .page {
   --aside-width: 26rem;
-
-  max-width: calc(var(--measure) + var(--aside-width) + var(--space-6));
-  margin-inline: auto;
 }
 
 .page__byline {
@@ -146,11 +141,13 @@ import { sections, owlbear } from './content/sample.js'
 }
 
 /*
- * The split's own width already sets the reading measure beside the float;
- * clamping the inner block as well would keep it clear of the aside entirely
- * and no text would ever reflow around it.
+ * --measure is deliberately not applied on this page: filling the pane and
+ * clamping lines to 68ch are mutually exclusive, and filling won. Lines run
+ * the full width of the pane (~190 characters at 1920), which is well past
+ * what the type was tuned for — restore `max-width: var(--measure)` here if
+ * that trade stops being worth it.
  */
-.page__split .prose {
+.page .prose {
   max-width: none;
 }
 
