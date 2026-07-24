@@ -59,10 +59,16 @@
     box-sizing: border-box;
   }
 
-  html,
-  body,
-  #app {
-    height: 100%;
+  /*
+   * The document is the only scroller (issue #25). Nothing here locks the page
+   * to viewport height; the top bar and sidebar are sticky instead, so
+   * find-in-page, scrollIntoView, anchors and scroll restoration all work
+   * against the window the way the browser expects.
+   *
+   * scroll-padding-top keeps anchored targets clear of the sticky top bar.
+   */
+  html {
+    scroll-padding-top: var(--shell-topbar);
   }
 
   body {
