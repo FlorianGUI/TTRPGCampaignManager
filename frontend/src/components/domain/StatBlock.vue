@@ -83,6 +83,12 @@ function modifier(score) {
 
 <style scoped>
 .statblock {
+  /*
+   * The block is laid out against its own width, not the viewport's: it sits in
+   * a ~26rem aside on wide screens and runs full width once the aside stacks,
+   * so a viewport breakpoint would describe the wrong box (issue #25).
+   */
+  container-type: inline-size;
   padding: var(--space-4) var(--space-5);
   background: var(--p-grimoire-statblock-background);
   border: 1px solid var(--p-content-border-color);
@@ -137,9 +143,17 @@ function modifier(score) {
 
 .statblock__abilities {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-2);
   text-align: center;
+}
+
+/* Six columns of "20 (+5)" stop fitting around a phone-width block: wrap to 3×2. */
+@container (max-width: 22rem) {
+  .statblock__abilities {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: var(--space-3);
+  }
 }
 
 .statblock__ability-name {

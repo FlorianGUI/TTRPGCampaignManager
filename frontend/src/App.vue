@@ -77,7 +77,14 @@ import { sections, owlbear } from './content/sample.js'
 
       <h2 class="page__section-heading">Encounter — the nesting pair</h2>
 
+      <!--
+        The stat block is a floated aside rather than a grid column (issue #25):
+        prose reflows around it and continues under it once the aside ends, so a
+        section can't leave a dead band bounded by the sidebar and the block.
+      -->
       <div class="page__split">
+        <StatBlock class="page__aside" :creature="owlbear" />
+
         <div class="prose">
           <p>
             Two owlbears have made the surveyors' camp their own and will defend the hummock with no
@@ -102,8 +109,6 @@ import { sections, owlbear } from './content/sample.js'
             <Button label="Add to session" icon="pi pi-plus" severity="secondary" outlined />
           </p>
         </div>
-
-        <StatBlock :creature="owlbear" />
       </div>
     </article>
   </AppShell>
@@ -125,11 +130,31 @@ import { sections, owlbear } from './content/sample.js'
   margin-bottom: var(--space-4);
 }
 
+/*
+ * Sized as measure + aside rather than a fraction of the page, so the text
+ * beside the float still lands on --measure instead of being squeezed by
+ * whatever width the aside happens to be.
+ */
 .page__split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
-  gap: var(--space-6);
-  align-items: start;
+  --aside-width: 26rem;
+
+  display: flow-root;
+  max-width: calc(var(--measure) + var(--aside-width) + var(--space-6));
+}
+
+/*
+ * The split's own width already sets the reading measure beside the float;
+ * clamping the inner block as well would keep it clear of the aside entirely
+ * and no text would ever reflow around it.
+ */
+.page__split .prose {
+  max-width: none;
+}
+
+.page__aside {
+  float: right;
+  width: var(--aside-width);
+  margin: 0 0 var(--space-5) var(--space-6);
 }
 
 .page__rolls,
@@ -139,9 +164,13 @@ import { sections, owlbear } from './content/sample.js'
   flex-wrap: wrap;
 }
 
+/* Below the split's own width there is no room to float: aside goes full width. */
 @media (max-width: 1100px) {
-  .page__split {
-    grid-template-columns: minmax(0, 1fr);
+  .page__aside {
+    float: none;
+    width: auto;
+    max-width: var(--aside-width);
+    margin: 0 0 var(--space-5);
   }
 }
 </style>
