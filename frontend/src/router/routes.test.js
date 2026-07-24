@@ -36,6 +36,14 @@ describe('routes', () => {
     }
   })
 
+  it('registers the styleguide in dev and not in a production build', () => {
+    // The route table is built from a literal the bundler substitutes, so this
+    // tracks whichever mode the suite runs in rather than asserting a constant.
+    const hasStyleguide = routes.some((r) => r.name === 'styleguide')
+
+    expect(hasStyleguide).toBe(import.meta.env.DEV)
+  })
+
   it('gives every route a title to build the document title from', () => {
     for (const route of routes) {
       expect(route.meta?.title, route.name).toBeTruthy()
@@ -47,10 +55,12 @@ describe('createAppRouter', () => {
   it('sets the document title from the matched route', async () => {
     const router = createAppRouter(createMemoryHistory())
 
-    await router.push({ name: 'styleguide' })
+    // not-found rather than styleguide: it is the one route present in every
+    // build mode, so this doesn't depend on the dev-only gating above.
+    await router.push('/no-such-page')
     await router.isReady()
 
-    expect(document.title).toBe(`Styleguide — ${APP_TITLE}`)
+    expect(document.title).toBe(`Not found — ${APP_TITLE}`)
   })
 
   it('resolves an unknown path to the not-found route rather than failing', () => {

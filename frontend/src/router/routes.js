@@ -17,14 +17,27 @@ export const routes = [
     component: SpikeView,
     meta: { title: 'Session notes' },
   },
-  {
-    path: '/styleguide',
-    name: 'styleguide',
-    // Lazy: the reference is shipped so it is reachable in deployed
-    // environments, but it is a big page nobody loads on first paint.
-    component: () => import('../views/StyleguideView.vue'),
-    meta: { title: 'Styleguide' },
-  },
+  /*
+   * Dev-only. `import.meta.env.DEV` is substituted with a literal at build
+   * time, so this whole branch — and with it the dynamic import — is dropped
+   * from the production bundle rather than merely hidden: the view is not
+   * shipped, not code-split into a chunk, and /styleguide falls through to the
+   * catch-all in a deployed build.
+   *
+   * Keep the condition as a bare `import.meta.env.DEV` literal. Hiding it
+   * behind a variable or a parameter defeats the static elimination and the
+   * chunk comes back.
+   */
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/styleguide',
+          name: 'styleguide',
+          component: () => import('../views/StyleguideView.vue'),
+          meta: { title: 'Styleguide' },
+        },
+      ]
+    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',

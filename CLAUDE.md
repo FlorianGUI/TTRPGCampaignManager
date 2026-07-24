@@ -33,7 +33,9 @@ that bite hardest if missed:
   WCAG AA in both themes and exits non-zero on failure. Run it after any palette change.
 - **PrimeVue is pinned to v4 (MIT)**; v5 is commercially licensed and injects a
   license banner. Don't bump the major.
-- **`/styleguide`** renders every token and component — the living reference.
+- **`/styleguide`** renders every token and component — the living reference. It is
+  **dev only**: the route sits behind an `import.meta.env.DEV` literal so it is
+  stripped from production builds entirely.
 - **There is no elevation scale**, deliberately. Depth comes from rules, borders and
   the chrome/content split.
 
