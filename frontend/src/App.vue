@@ -115,8 +115,18 @@ import { sections, owlbear } from './content/sample.js'
 </template>
 
 <style scoped>
+/*
+ * The page is exactly as wide as it needs to be: the reading measure plus the
+ * aside it has to hold. That gives every full-width element — rules, read-aloud
+ * boxes, the encounter row — one shared right edge instead of three, and
+ * centring it keeps the leftover parchment even on both sides rather than
+ * pooling as a blank band on the right of a much wider surface.
+ */
 .page {
-  max-width: 72rem;
+  --aside-width: 26rem;
+
+  max-width: calc(var(--measure) + var(--aside-width) + var(--space-6));
+  margin-inline: auto;
 }
 
 .page__byline {
@@ -130,16 +140,9 @@ import { sections, owlbear } from './content/sample.js'
   margin-bottom: var(--space-4);
 }
 
-/*
- * Sized as measure + aside rather than a fraction of the page, so the text
- * beside the float still lands on --measure instead of being squeezed by
- * whatever width the aside happens to be.
- */
+/* flow-root so the section contains its floated aside. Width comes from .page. */
 .page__split {
-  --aside-width: 26rem;
-
   display: flow-root;
-  max-width: calc(var(--measure) + var(--aside-width) + var(--space-6));
 }
 
 /*
