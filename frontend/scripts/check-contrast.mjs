@@ -6,29 +6,17 @@
  *
  * Exits non-zero if any pair fails, so it can be wired into CI later.
  */
-import { readFile } from 'node:fs/promises'
-
-const src = await readFile(new URL('../src/design-system/preset.js', import.meta.url), 'utf8')
-
-// Pull the primitive ramps out of the preset source without importing it
-// (importing would drag in Vue/PrimeVue for a plain node script).
-function ramp(name) {
-  // Ramps are flat objects, so stopping at the first `}` is safe and handles
-  // both the multi-line and the single-line ones.
-  const body = src.match(new RegExp(`const ${name} = \\{([^}]*)\\}`))?.[1]
-  if (!body) throw new Error(`ramp "${name}" not found in preset.js`)
-  return Object.fromEntries(
-    [...body.matchAll(/(\d+):\s*'(#[0-9a-fA-F]{6})'/g)].map(([, k, v]) => [k, v]),
-  )
-}
-
-const ink = ramp('ink')
-const vellum = ramp('vellum')
-const gold = ramp('gold')
-const blood = ramp('blood')
-const moss = ramp('moss')
-const torch = ramp('torch')
-const scrying = ramp('scrying')
+// The primitives layer is deliberately import-free, so this plain Node script
+// can read the real ramps rather than regex-parsing the source for them.
+import {
+  ink,
+  vellum,
+  gold,
+  blood,
+  moss,
+  torch,
+  scrying,
+} from '../src/design-system/tokens/primitives.js'
 
 const srgb = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
 

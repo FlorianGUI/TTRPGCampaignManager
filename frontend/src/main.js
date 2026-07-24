@@ -3,10 +3,13 @@ import PrimeVue from 'primevue/config'
 import 'primeicons/primeicons.css'
 import './assets/base.css'
 import App from './App.vue'
+import { createAppRouter } from './router/index.js'
 import Grimoire from './design-system/preset.js'
 import { installTheme } from './design-system/useTheme.js'
 
 const app = createApp(App)
+
+app.use(createAppRouter())
 
 app.use(PrimeVue, {
   theme: {
