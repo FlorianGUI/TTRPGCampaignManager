@@ -22,68 +22,61 @@ import { sections, owlbear } from './content/sample.js'
 <template>
   <AppShell :sections="sections" active="Session notes">
     <article class="page">
-      <p class="label-smallcaps">Session 14 — prep</p>
-      <h1>The Hollow Beneath Greyfen</h1>
+      <div class="page__main">
+        <p class="label-smallcaps">Session 14 — prep</p>
+        <h1>The Hollow Beneath Greyfen</h1>
 
-      <p class="page__byline">
-        <EntityTag kind="location" label="Greyfen Marsh" />
-        <EntityTag kind="faction" label="The Fen Wardens" />
-        <EntityTag kind="npc" label="Maerin Holt" />
-        <EntityTag kind="session" label="Session 14" />
-      </p>
-
-      <hr class="rule-double" />
-
-      <div class="prose prose--opener">
-        <p>
-          Three days east of the last waystone the road gives up entirely, and what remains is a
-          causeway of black timber laid across standing water. The Wardens keep it passable out of
-          habit rather than duty — nobody has come this way in a season, and the moss has taken the
-          handrails. Travellers who stop to rest here report a sound under the boards that is not
-          water.
+        <p class="page__byline">
+          <EntityTag kind="location" label="Greyfen Marsh" />
+          <EntityTag kind="faction" label="The Fen Wardens" />
+          <EntityTag kind="npc" label="Maerin Holt" />
+          <EntityTag kind="session" label="Session 14" />
         </p>
-        <p>
-          The party arrives at dusk. If they push on through the night, the marsh lights begin about
-          an hour in; these are harmless, but the Wardens believe otherwise and any Warden escort
-          will refuse to continue until dawn. A successful
-          <strong>DC 14 Wisdom (Survival)</strong> check finds the dry hummock the old surveyors
-          used as a camp — otherwise a long rest here is interrupted on a roll of
-          <DiceChip notation="1d6" :result="2" /> or lower.
-        </p>
-      </div>
 
-      <ReadAloud>
-        <p>
-          The causeway ends at a sunken arch, half-swallowed by the peat, its keystone carved with a
-          face you cannot quite meet the eyes of. Water moves through the opening in a slow,
-          deliberate way — not with the current, but against it, as though something below were
-          breathing.
-        </p>
-      </ReadAloud>
+        <hr class="rule-double" />
 
-      <div class="prose">
-        <p>
-          Anyone who studies the arch for a full minute and succeeds on a
-          <strong>DC 16 Intelligence (History)</strong> check recognises the mason's mark of the
-          drowned city of Ilmareth <SourceRef work="Cities of the Vale" :page="88" />. The Wardens
-          will pay <EntityTag kind="item" label="200 gp" /> for a rubbing of it, no questions asked,
-          and rather more if the party neglects to mention the sound.
-        </p>
-      </div>
+        <div class="prose prose--opener">
+          <p>
+            Three days east of the last waystone the road gives up entirely, and what remains is a
+            causeway of black timber laid across standing water. The Wardens keep it passable out of
+            habit rather than duty — nobody has come this way in a season, and the moss has taken
+            the handrails. Travellers who stop to rest here report a sound under the boards that is
+            not water.
+          </p>
+          <p>
+            The party arrives at dusk. If they push on through the night, the marsh lights begin
+            about an hour in; these are harmless, but the Wardens believe otherwise and any Warden
+            escort will refuse to continue until dawn. A successful
+            <strong>DC 14 Wisdom (Survival)</strong> check finds the dry hummock the old surveyors
+            used as a camp — otherwise a long rest here is interrupted on a roll of
+            <DiceChip notation="1d6" :result="2" /> or lower.
+          </p>
+        </div>
 
-      <div class="rule-fleuron" role="presentation">
-        <span aria-hidden="true">❖</span>
-      </div>
+        <ReadAloud>
+          <p>
+            The causeway ends at a sunken arch, half-swallowed by the peat, its keystone carved with
+            a face you cannot quite meet the eyes of. Water moves through the opening in a slow,
+            deliberate way — not with the current, but against it, as though something below were
+            breathing.
+          </p>
+        </ReadAloud>
 
-      <h2 class="page__section-heading">Encounter — the nesting pair</h2>
+        <div class="prose">
+          <p>
+            Anyone who studies the arch for a full minute and succeeds on a
+            <strong>DC 16 Intelligence (History)</strong> check recognises the mason's mark of the
+            drowned city of Ilmareth <SourceRef work="Cities of the Vale" :page="88" />. The Wardens
+            will pay <EntityTag kind="item" label="200 gp" /> for a rubbing of it, no questions
+            asked, and rather more if the party neglects to mention the sound.
+          </p>
+        </div>
 
-      <!--
-        The stat block is a floated aside rather than a grid column (issue #25):
-        prose reflows around it and continues under it once the aside ends, so a
-        section can't leave a dead band bounded by the sidebar and the block.
-      -->
-      <div class="page__split">
-        <StatBlock class="page__aside" :creature="owlbear" />
+        <div class="rule-fleuron" role="presentation">
+          <span aria-hidden="true">❖</span>
+        </div>
+
+        <h2 class="page__section-heading">Encounter — the nesting pair</h2>
 
         <div class="prose">
           <p>
@@ -110,18 +103,40 @@ import { sections, owlbear } from './content/sample.js'
           </p>
         </div>
       </div>
+
+      <!--
+        Reference rail. Today it holds the encounter's stat block; it's the seat
+        for whatever entity is in focus, which is what an EntityTag click will
+        drive once that lands.
+      -->
+      <aside class="page__rail" aria-label="Reference">
+        <StatBlock :creature="owlbear" />
+      </aside>
     </article>
   </AppShell>
 </template>
 
 <style scoped>
 /*
- * Full bleed: the page fills the content pane, so no parchment is left blank
- * beside it at any width. There is no max-width and no centring — the page's
- * right edge is the pane's right edge.
+ * Two columns across the whole page: narrative hard against the left edge,
+ * reference rail hard against the right. Full bleed — the page spans the pane,
+ * so no parchment is left blank at either edge.
+ *
+ * align-items: start keeps the rail at its natural height instead of stretching
+ * it to the narrative's.
  */
 .page {
-  --aside-width: 26rem;
+  /*
+   * Fluid so the rail stays secondary. Fixed at 26rem it came out nearly 50/50
+   * with the narrative just above the stacking breakpoint, which reads as two
+   * peer columns rather than text-plus-reference.
+   */
+  --rail-width: clamp(18rem, 24vw, 26rem);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+  gap: var(--space-6);
+  align-items: start;
 }
 
 .page__byline {
@@ -135,26 +150,21 @@ import { sections, owlbear } from './content/sample.js'
   margin-bottom: var(--space-4);
 }
 
-/* flow-root so the section contains its floated aside. Width comes from .page. */
-.page__split {
-  display: flow-root;
+/* min-width: 0 so long prose lines can't push the grid column wider than 1fr. */
+.page__main {
+  min-width: 0;
 }
 
 /*
- * --measure is deliberately not applied on this page: filling the pane and
- * clamping lines to 68ch are mutually exclusive, and filling won. Lines run
- * the full width of the pane (~190 characters at 1920), which is well past
- * what the type was tuned for — restore `max-width: var(--measure)` here if
- * that trade stops being worth it.
+ * --measure is deliberately not applied here: the narrative column fills its
+ * grid track rather than clamping to 68ch, so no parchment is left blank.
+ * The rail claws back most of the cost — lines land around 90 characters at
+ * 1920 rather than the ~190 they ran at full bleed — but that is still above
+ * what the type was tuned for. Restore `max-width: var(--measure)` here if the
+ * trade stops being worth it.
  */
 .page .prose {
   max-width: none;
-}
-
-.page__aside {
-  float: right;
-  width: var(--aside-width);
-  margin: 0 0 var(--space-5) var(--space-6);
 }
 
 .page__rolls,
@@ -164,13 +174,14 @@ import { sections, owlbear } from './content/sample.js'
   flex-wrap: wrap;
 }
 
-/* Below the split's own width there is no room to float: aside goes full width. */
+/* No room for two columns: the rail drops under the narrative it refers to. */
 @media (max-width: 1100px) {
-  .page__aside {
-    float: none;
-    width: auto;
-    max-width: var(--aside-width);
-    margin: 0 0 var(--space-5);
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page__rail {
+    max-width: var(--rail-width);
   }
 }
 </style>
