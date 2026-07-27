@@ -73,3 +73,8 @@ jobs:
         run: poetry run alembic upgrade head
       - name: Run tests
         run: poetry run pytest
+      # CI gets a fresh database every run, so on its own it can never catch tests that
+      # leak state and only break on a developer's persistent volume (issue #22). Running
+      # the suite a second time against the database the first run just used does.
+      - name: Run tests again to check they are isolated
+        run: poetry run pytest
