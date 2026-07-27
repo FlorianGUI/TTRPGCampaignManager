@@ -49,12 +49,13 @@ just migration "add users table" # Create a new migration
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://dnd:dnd@localhost:5434/dnd_db` | SQLAlchemy async connection URL |
+| `DATABASE_URL` | `postgresql+asyncpg://dnd:dnd@localhost:5435/dnd_db` | SQLAlchemy async connection URL |
+| `TEST_DATABASE_URL` | `postgresql+asyncpg://dnd:dnd@localhost:5435/dnd_db_test` | **Local development and CI only — never set in production.** Database the test suite uses, dropped and rebuilt from the migrations on every run. Unset means the suite refuses to start, which is what keeps it from ever running against a deployed database |
 | `POSTGRES_USER` | `dnd` | Postgres username |
 | `POSTGRES_PASSWORD` | `dnd` | Postgres password |
 | `POSTGRES_DB` | `dnd_db` | Postgres database name |
 | `POSTGRES_HOST` | `localhost` | Postgres host |
-| `POSTGRES_PORT` | `5434` | Postgres port (5434 to avoid conflicts with local installs) |
+| `POSTGRES_PORT` | `5435` | Postgres port (5435 to avoid conflicts with local installs). Drives the `docker-compose.yml` port mapping, so changing it here is enough |
 
 ## Project structure
 

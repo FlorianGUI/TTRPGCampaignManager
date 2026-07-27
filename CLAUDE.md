@@ -128,6 +128,12 @@ Use `parsers.parse(...)` for steps with parameters:
 
 - Unit tests use a `Fake*Repository` in-memory stub — no mocking library
 - Integration and system tests use the real DB via the `db` and `client` fixtures in `tests/conftest.py`
+- The suite runs against its own database (`TEST_DATABASE_URL`, not `DATABASE_URL`), dropped
+  and rebuilt from the migrations at the start of each session. Never point the tests at the
+  development database — data created by hand through `just dev` would start failing
+  acceptance scenarios. The variable is required on purpose and is a dev/CI setting only:
+  production never defines it, so the suite fails closed there rather than creating a test
+  database beside the real one.
 - Those fixtures share one connection per test, held open in a transaction that is rolled
   back on teardown. Sessions join it with a savepoint, so repository `commit()` calls never
   reach the database and the suite can be re-run against the same local volume. Don't bind a
