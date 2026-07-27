@@ -128,6 +128,10 @@ Use `parsers.parse(...)` for steps with parameters:
 
 - Unit tests use a `Fake*Repository` in-memory stub — no mocking library
 - Integration and system tests use the real DB via the `db` and `client` fixtures in `tests/conftest.py`
+- Those fixtures share one connection per test, held open in a transaction that is rolled
+  back on teardown. Sessions join it with a savepoint, so repository `commit()` calls never
+  reach the database and the suite can be re-run against the same local volume. Don't bind a
+  test session to the engine directly — that escapes the rollback and leaks rows across runs.
 - `asyncio_mode = "auto"` is set globally — all async test functions are collected automatically
 - Add unit tests only when real business logic exists in the domain; do not test framework behaviour
 
