@@ -12,8 +12,9 @@ def context():
 
 
 @given("I am logged in as a player")
-def log_in_as_a_player(client: AsyncClient, context: dict):
-    username = f"player-{uuid.uuid4().hex[:8]}"
+@given("I am logged in as a game master")
+def log_in(client: AsyncClient, context: dict):
+    username = f"user-{uuid.uuid4().hex[:8]}"
     password = "testpass123"
     asyncio.get_event_loop().run_until_complete(
         client.post(

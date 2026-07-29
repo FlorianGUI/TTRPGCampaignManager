@@ -207,10 +207,12 @@ function scheme({ ramp, roles, accent, onAccent, tone }) {
           fumbleColor: tone.danger,
           fumbleBorderColor: tone.dangerBorder,
         },
-        // Per-context accent, so each bounded context is recognisable at a glance.
+        // Per-section accent, so each nav section is recognisable at a glance.
+        // These are nav sections, not backend contexts: `library` is the frontend
+        // name for a game master's sources, and has no context of its own.
         context: {
           campaign: accent[700],
-          compendium: tone.info,
+          library: tone.info,
           characters: tone.success,
         },
         entity: {

@@ -20,8 +20,8 @@ export const sections = [
     ],
   },
   {
-    label: 'Compendium',
-    context: 'compendium',
+    label: 'Library',
+    context: 'library',
     items: [
       { label: 'Bestiary', icon: 'pi-eye', count: 318 },
       { label: 'Spells', icon: 'pi-sparkles', count: 477 },
