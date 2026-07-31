@@ -36,6 +36,33 @@ Feature: Campaign Management
     Then I should get a not found error
     And the other game masters campaign should still be named "Someone elses table"
 
+  Scenario: Close down one of my campaigns
+    Given I create a campaign named "Greyfen"
+    When I delete my campaign
+    Then it should be gone from my campaigns
+
+  Scenario: Closing a campaign takes the characters at it with it
+    Given I create a campaign named "Greyfen"
+    And I have a character named "Aragorn" at that campaign
+    When I delete my campaign
+    Then that character should be gone too
+
+  Scenario: Closing a campaign leaves the characters at my other tables alone
+    Given I create a campaign named "Greyfen"
+    And I create a campaign named "Fen Wardens"
+    And I have a character named "Legolas" at my other campaign
+    When I delete my campaign
+    Then that other character should still be there
+
+  Scenario: Delete a campaign owned by another game master
+    When I delete the other game masters campaign
+    Then I should get a not found error
+    And the other game masters campaign should still be named "Someone elses table"
+
+  Scenario: Delete a campaign that does not exist
+    When I delete a campaign with an unknown ID
+    Then I should get a not found error
+
   Scenario: Request a campaign that does not exist
     When I request a campaign with an unknown ID
     Then I should get a not found error

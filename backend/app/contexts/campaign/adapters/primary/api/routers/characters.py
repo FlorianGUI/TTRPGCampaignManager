@@ -29,10 +29,8 @@ CAMPAIGN_NOT_FOUND = HTTPException(status_code=404, detail="Campaign not found")
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> CharacterService:
-    return CharacterService(
-        SqlAlchemyCharacterRepository(db),
-        CampaignService(SqlAlchemyCampaignRepository(db)),
-    )
+    characters = SqlAlchemyCharacterRepository(db)
+    return CharacterService(characters, CampaignService(SqlAlchemyCampaignRepository(db), characters))
 
 
 @router.post("/", response_model=CharacterResponse, status_code=201)
@@ -93,3 +91,18 @@ async def update_character(
     if character is None:
         raise NOT_FOUND
     return CharacterResponse(**character.__dict__)
+
+
+@router.delete("/{character_id}", status_code=204)
+async def delete_character(
+    campaign_id: UUID,
+    character_id: UUID,
+    user: User = Depends(get_current_user),
+    service: CharacterService = Depends(get_service),
+):
+    try:
+        deleted = await service.delete(character_id, campaign_id, user.id)
+    except CampaignNotAvailable:
+        raise CAMPAIGN_NOT_FOUND from None
+    if not deleted:
+        raise NOT_FOUND

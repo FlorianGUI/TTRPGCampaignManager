@@ -21,3 +21,6 @@ class SourceRepository(ABC):
 
     @abstractmethod
     async def find_all_for(self, owner_id: UUID) -> list[Source]: ...
+
+    @abstractmethod
+    async def delete_for(self, id: UUID, owner_id: UUID) -> None: ...

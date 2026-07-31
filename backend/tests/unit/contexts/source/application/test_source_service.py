@@ -25,6 +25,11 @@ class FakeSourceRepository(SourceRepository):
     async def find_all_for(self, owner_id: UUID) -> list[Source]:
         return [s for s in self._store.values() if s.owner_id == owner_id]
 
+    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
+        source = self._store.get(id)
+        if source is not None and source.owner_id == owner_id:
+            del self._store[id]
+
 
 @pytest.fixture
 def service():
@@ -150,3 +155,38 @@ class TestRename:
         found = await service.get_for(created.id, owner_id)
         assert found is not None
         assert found.title == "SRD 5.0"
+
+
+class TestDelete:
+    async def test_removes_the_source(self, service: SourceService, owner_id: UUID):
+        created = await service.create("SRD 5.1", owner_id)
+
+        assert await service.delete(created.id, owner_id) is True
+        assert await service.get_for(created.id, owner_id) is None
+
+    async def test_leaves_the_rest_of_the_library_alone(self, service: SourceService, owner_id: UUID):
+        doomed = await service.create("SRD 5.1", owner_id)
+        await service.create("Monster Manual", owner_id)
+
+        await service.delete(doomed.id, owner_id)
+
+        assert [s.title for s in await service.list_for(owner_id)] == ["Monster Manual"]
+
+    async def test_returns_false_when_not_found(self, service: SourceService, owner_id: UUID):
+        assert await service.delete(uuid.uuid4(), owner_id) is False
+
+    async def test_returns_false_when_owned_by_someone_else(
+        self, service: SourceService, owner_id: UUID, someone_else: UUID
+    ):
+        created = await service.create("SRD 5.1", owner_id)
+
+        assert await service.delete(created.id, someone_else) is False
+
+    async def test_leaves_a_source_owned_by_someone_else_standing(
+        self, service: SourceService, owner_id: UUID, someone_else: UUID
+    ):
+        created = await service.create("SRD 5.1", owner_id)
+
+        await service.delete(created.id, someone_else)
+
+        assert await service.get_for(created.id, owner_id) is not None

@@ -61,6 +61,34 @@ Feature: Character Management
     When I retrieve that character through my other campaign
     Then I should get a not found error
 
+  Scenario: Remove one of my characters
+    Given I create a character named "Aragorn" at my campaign
+    When I delete my character
+    Then it should be gone from my table
+
+  Scenario: Removing a character leaves the rest of my table alone
+    Given I create a character named "Aragorn" at my campaign
+    And I create a character named "Legolas" at my campaign
+    And I delete my character
+    When I list the characters at my campaign
+    Then I should see "Legolas" in the list
+
+  Scenario: Delete a character at a table I do not run
+    When I delete the other game masters character
+    Then I should get a not found error
+    And the other game masters character should still be named "Boromir"
+
+  Scenario: Delete a character through a campaign it is not at
+    Given I create a character named "Aragorn" at my campaign
+    And I create a second campaign named "Fen Wardens"
+    When I delete that character through my other campaign
+    Then I should get a not found error
+    And my character should still be named "Aragorn"
+
+  Scenario: Delete a character that does not exist
+    When I delete a character with an unknown ID
+    Then I should get a not found error
+
   Scenario: Request a character that does not exist
     When I request a character with an unknown ID
     Then I should get a not found error

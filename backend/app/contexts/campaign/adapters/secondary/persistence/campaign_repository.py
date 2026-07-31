@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contexts.campaign.adapters.secondary.persistence.campaign_model import CampaignModel
@@ -35,12 +35,16 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
         return self._to_domain(model)
 
     async def find_all_for(self, owner_id: UUID) -> list[Campaign]:
+        # The SQL twin of Campaign.is_visible_to. A contract test holds the two to the
+        # same answer, because this is the one place a wrong rule leaks rows silently.
         result = await self._session.execute(select(CampaignModel).where(CampaignModel.owner_id == owner_id))
         return [self._to_domain(m) for m in result.scalars().all()]
 
-    async def find_ids_for(self, owner_id: UUID) -> list[UUID]:
-        result = await self._session.execute(select(CampaignModel.id).where(CampaignModel.owner_id == owner_id))
-        return list(result.scalars().all())
+    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
+        await self._session.execute(
+            delete(CampaignModel).where(CampaignModel.id == id, CampaignModel.owner_id == owner_id)
+        )
+        await self._session.commit()
 
     @staticmethod
     def _to_domain(model: CampaignModel) -> Campaign:

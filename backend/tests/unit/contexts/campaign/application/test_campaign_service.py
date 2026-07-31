@@ -4,44 +4,12 @@ from uuid import UUID
 import pytest
 
 from app.contexts.campaign.application.campaign_service import CampaignService
-from app.contexts.campaign.domain.campaign import Campaign
-from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
-
-
-class FakeCampaignRepository(CampaignRepository):
-    def __init__(self):
-        self._store: dict[UUID, Campaign] = {}
-
-    async def save(self, campaign: Campaign) -> Campaign:
-        self._store[campaign.id] = campaign
-        return campaign
-
-    async def find_by_id_for(self, id: UUID, owner_id: UUID) -> Campaign | None:
-        campaign = self._store.get(id)
-        if campaign is None or campaign.owner_id != owner_id:
-            return None
-        return campaign
-
-    async def find_all_for(self, owner_id: UUID) -> list[Campaign]:
-        return [c for c in self._store.values() if c.owner_id == owner_id]
-
-    async def find_ids_for(self, owner_id: UUID) -> list[UUID]:
-        return [c.id for c in self._store.values() if c.owner_id == owner_id]
+from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
 
 
 @pytest.fixture
-def service():
-    return CampaignService(FakeCampaignRepository())
-
-
-@pytest.fixture
-def owner_id():
-    return uuid.uuid4()
-
-
-@pytest.fixture
-def someone_else():
-    return uuid.uuid4()
+def service(campaigns: CampaignService):
+    return campaigns
 
 
 class TestCreate:
@@ -96,25 +64,25 @@ class TestListFor:
         assert [c.name for c in result] == ["The Hollow Beneath Greyfen"]
 
 
-class TestIdsOwnedBy:
-    async def test_returns_the_ids_of_that_owners_campaigns(self, service: CampaignService, owner_id: UUID):
-        first = await service.create("The Hollow Beneath Greyfen", owner_id)
-        second = await service.create("Fen Wardens", owner_id)
+class TestAccessTo:
+    async def test_grants_a_token_for_my_own_campaign(self, service: CampaignService, owner_id: UUID):
+        created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
-        result = await service.ids_owned_by(owner_id)
+        access = await service.access_to(created.id, owner_id)
 
-        assert sorted(result) == sorted([first.id, second.id])
+        assert access is not None
+        assert access.campaign_id == created.id
+        assert access.viewer_id == owner_id
 
-    async def test_leaves_out_the_campaigns_of_other_owners(
+    async def test_grants_nothing_for_a_campaign_that_does_not_exist(self, service: CampaignService, owner_id: UUID):
+        assert await service.access_to(uuid.uuid4(), owner_id) is None
+
+    async def test_grants_nothing_for_a_campaign_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
-        mine = await service.create("The Hollow Beneath Greyfen", owner_id)
-        await service.create("Someone elses table", someone_else)
+        created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
-        assert await service.ids_owned_by(owner_id) == [mine.id]
-
-    async def test_returns_empty_list_for_a_user_running_nothing(self, service: CampaignService, owner_id: UUID):
-        assert await service.ids_owned_by(owner_id) == []
+        assert await service.access_to(created.id, someone_else) is None
 
 
 class TestUpdate:
@@ -155,3 +123,76 @@ class TestUpdate:
         found = await service.get_for(created.id, owner_id)
         assert found is not None
         assert found.name == "Greyfen"
+
+
+class TestDelete:
+    async def test_removes_the_campaign(self, service: CampaignService, owner_id: UUID):
+        created = await service.create("Greyfen", owner_id)
+
+        assert await service.delete(created.id, owner_id) is True
+        assert await service.get_for(created.id, owner_id) is None
+
+    async def test_takes_the_characters_at_that_table_with_it(
+        self, service: CampaignService, characters: FakeCharacterRepository, owner_id: UUID
+    ):
+        created = await service.create("Greyfen", owner_id)
+        access = await service.access_to(created.id, owner_id)
+        assert access is not None
+        await characters.save(access.new_character("Aragorn"))
+
+        await service.delete(created.id, owner_id)
+
+        assert await characters.find_all_in(access) == []
+
+    async def test_leaves_the_characters_at_other_tables_alone(
+        self, service: CampaignService, characters: FakeCharacterRepository, owner_id: UUID
+    ):
+        doomed = await service.create("Greyfen", owner_id)
+        spared = await service.create("Fen Wardens", owner_id)
+        elsewhere = await service.access_to(spared.id, owner_id)
+        assert elsewhere is not None
+        await characters.save(elsewhere.new_character("Legolas"))
+
+        await service.delete(doomed.id, owner_id)
+
+        assert [c.name for c in await characters.find_all_in(elsewhere)] == ["Legolas"]
+
+    async def test_deleting_an_empty_campaign_is_not_an_error(self, service: CampaignService, owner_id: UUID):
+        created = await service.create("Greyfen", owner_id)
+
+        assert await service.delete(created.id, owner_id) is True
+
+    async def test_returns_false_when_not_found(self, service: CampaignService, owner_id: UUID):
+        assert await service.delete(uuid.uuid4(), owner_id) is False
+
+    async def test_returns_false_when_owned_by_someone_else(
+        self, service: CampaignService, owner_id: UUID, someone_else: UUID
+    ):
+        created = await service.create("Greyfen", owner_id)
+
+        assert await service.delete(created.id, someone_else) is False
+
+    async def test_leaves_a_campaign_owned_by_someone_else_standing(
+        self, service: CampaignService, owner_id: UUID, someone_else: UUID
+    ):
+        created = await service.create("Greyfen", owner_id)
+
+        await service.delete(created.id, someone_else)
+
+        assert await service.get_for(created.id, owner_id) is not None
+
+    async def test_leaves_the_characters_of_a_campaign_it_could_not_delete(
+        self,
+        service: CampaignService,
+        characters: FakeCharacterRepository,
+        owner_id: UUID,
+        someone_else: UUID,
+    ):
+        created = await service.create("Greyfen", owner_id)
+        access = await service.access_to(created.id, owner_id)
+        assert access is not None
+        await characters.save(access.new_character("Aragorn"))
+
+        await service.delete(created.id, someone_else)
+
+        assert [c.name for c in await characters.find_all_in(access)] == ["Aragorn"]
