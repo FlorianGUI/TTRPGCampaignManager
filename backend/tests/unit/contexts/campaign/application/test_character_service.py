@@ -5,47 +5,22 @@ import pytest
 
 from app.contexts.campaign.application.campaign_service import CampaignService
 from app.contexts.campaign.application.character_service import CampaignNotAvailable, CharacterService
-from app.contexts.campaign.domain.character import Character
-from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
-from tests.unit.contexts.campaign.application.test_campaign_service import FakeCampaignRepository
-
-
-class FakeCharacterRepository(CharacterRepository):
-    def __init__(self):
-        self._store: dict[UUID, Character] = {}
-
-    async def save(self, character: Character) -> Character:
-        self._store[character.id] = character
-        return character
-
-    async def find_by_id_in(self, id: UUID, campaign_id: UUID) -> Character | None:
-        character = self._store.get(id)
-        if character is None or character.campaign_id != campaign_id:
-            return None
-        return character
-
-    async def find_all_in(self, campaign_id: UUID) -> list[Character]:
-        return [c for c in self._store.values() if c.campaign_id == campaign_id]
+from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
 
 
 @pytest.fixture
-def game_master():
-    return uuid.uuid4()
+def game_master(owner_id: UUID):
+    return owner_id
 
 
 @pytest.fixture
-def stranger():
-    return uuid.uuid4()
+def stranger(someone_else: UUID):
+    return someone_else
 
 
 @pytest.fixture
-def campaigns():
-    return CampaignService(FakeCampaignRepository())
-
-
-@pytest.fixture
-def service(campaigns: CampaignService):
-    return CharacterService(FakeCharacterRepository(), campaigns)
+def service(characters: FakeCharacterRepository, campaigns: CampaignService):
+    return CharacterService(characters, campaigns)
 
 
 @pytest.fixture
@@ -194,3 +169,61 @@ class TestUpdate:
         found = await service.get_for(created.id, campaign_id, game_master)
         assert found is not None
         assert found.name == "Aragorn"
+
+
+class TestDelete:
+    async def test_removes_the_character(self, service: CharacterService, game_master: UUID, campaign_id: UUID):
+        created = await service.create(campaign_id, game_master, "Aragorn")
+
+        assert await service.delete(created.id, campaign_id, game_master) is True
+        assert await service.get_for(created.id, campaign_id, game_master) is None
+
+    async def test_leaves_the_other_sheets_at_the_table(
+        self, service: CharacterService, game_master: UUID, campaign_id: UUID
+    ):
+        doomed = await service.create(campaign_id, game_master, "Aragorn")
+        await service.create(campaign_id, game_master, "Legolas")
+
+        await service.delete(doomed.id, campaign_id, game_master)
+
+        assert [c.name for c in await service.list_for(campaign_id, game_master)] == ["Legolas"]
+
+    async def test_returns_false_when_not_found(self, service: CharacterService, game_master: UUID, campaign_id: UUID):
+        assert await service.delete(uuid.uuid4(), campaign_id, game_master) is False
+
+    async def test_returns_false_for_a_character_at_another_table(
+        self, service: CharacterService, campaigns: CampaignService, game_master: UUID, campaign_id: UUID
+    ):
+        """The id is real and both tables are mine — it is still not at this one."""
+        other = await campaigns.create("Fen Wardens", game_master)
+        created = await service.create(other.id, game_master, "Aragorn")
+
+        assert await service.delete(created.id, campaign_id, game_master) is False
+
+    async def test_a_character_reached_through_the_wrong_table_survives(
+        self, service: CharacterService, campaigns: CampaignService, game_master: UUID, campaign_id: UUID
+    ):
+        other = await campaigns.create("Fen Wardens", game_master)
+        created = await service.create(other.id, game_master, "Aragorn")
+
+        await service.delete(created.id, campaign_id, game_master)
+
+        assert await service.get_for(created.id, other.id, game_master) is not None
+
+    async def test_a_stranger_cannot_reach_the_table(
+        self, service: CharacterService, game_master: UUID, stranger: UUID, campaign_id: UUID
+    ):
+        created = await service.create(campaign_id, game_master, "Aragorn")
+
+        with pytest.raises(CampaignNotAvailable):
+            await service.delete(created.id, campaign_id, stranger)
+
+    async def test_a_stranger_leaves_the_character_standing(
+        self, service: CharacterService, game_master: UUID, stranger: UUID, campaign_id: UUID
+    ):
+        created = await service.create(campaign_id, game_master, "Aragorn")
+
+        with pytest.raises(CampaignNotAvailable):
+            await service.delete(created.id, campaign_id, stranger)
+
+        assert await service.get_for(created.id, campaign_id, game_master) is not None

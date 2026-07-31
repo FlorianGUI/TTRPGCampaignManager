@@ -62,3 +62,13 @@ async def update_source(
     if source is None:
         raise NOT_FOUND
     return SourceResponse(**source.__dict__)
+
+
+@router.delete("/{source_id}", status_code=204)
+async def delete_source(
+    source_id: UUID,
+    user: User = Depends(get_current_user),
+    service: SourceService = Depends(get_service),
+):
+    if not await service.delete(source_id, user.id):
+        raise NOT_FOUND

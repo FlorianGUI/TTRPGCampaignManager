@@ -10,6 +10,7 @@ from app.contexts.campaign.adapters.primary.api.schemas.campaign import (
     CampaignUpdate,
 )
 from app.contexts.campaign.adapters.secondary.persistence.campaign_repository import SqlAlchemyCampaignRepository
+from app.contexts.campaign.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
 from app.contexts.campaign.application.campaign_service import CampaignService
 from app.contexts.user.domain.user import User
 from app.database import get_db
@@ -21,7 +22,9 @@ NOT_FOUND = HTTPException(status_code=404, detail="Campaign not found")
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> CampaignService:
-    return CampaignService(SqlAlchemyCampaignRepository(db))
+    # The character repository comes along because deleting a campaign takes the sheets
+    # at it with it — the aggregate root owns the lifecycle of what lives inside it.
+    return CampaignService(SqlAlchemyCampaignRepository(db), SqlAlchemyCharacterRepository(db))
 
 
 @router.post("/", response_model=CampaignResponse, status_code=201)
@@ -65,3 +68,14 @@ async def update_campaign(
     if campaign is None:
         raise NOT_FOUND
     return CampaignResponse(**campaign.__dict__)
+
+
+@router.delete("/{campaign_id}", status_code=204)
+async def delete_campaign(
+    campaign_id: UUID,
+    user: User = Depends(get_current_user),
+    service: CampaignService = Depends(get_service),
+):
+    # Takes the characters at the table with it. See CampaignService.delete.
+    if not await service.delete(campaign_id, user.id):
+        raise NOT_FOUND

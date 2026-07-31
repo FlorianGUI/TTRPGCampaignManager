@@ -27,7 +27,19 @@ class SourceService:
 
     async def rename(self, id: UUID, owner_id: UUID, title: str) -> Source | None:
         source = await self._repository.find_by_id_for(id, owner_id)
-        if source is None:
+        if source is None or not source.is_editable_by(owner_id):
             return None
         source.title = title
         return await self._repository.save(source)
+
+    async def delete(self, id: UUID, owner_id: UUID) -> bool:
+        """Nothing hangs off a source, so removing one sweeps nothing up after it.
+
+        The contrast with `CampaignService.delete` is the whole reason a source needs no
+        access token: there is nothing underneath it to reach.
+        """
+        source = await self._repository.find_by_id_for(id, owner_id)
+        if source is None or not source.is_editable_by(owner_id):
+            return False
+        await self._repository.delete_for(id, owner_id)
+        return True

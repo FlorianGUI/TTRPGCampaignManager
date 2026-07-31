@@ -1,8 +1,10 @@
 import uuid
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contexts.campaign.adapters.secondary.persistence.campaign_model import CampaignModel
 from app.contexts.campaign.adapters.secondary.persistence.campaign_repository import SqlAlchemyCampaignRepository
 from app.contexts.campaign.domain.campaign import Campaign
 
@@ -96,18 +98,67 @@ class TestFindAllFor:
         assert [c.name for c in await repository.find_all_for(owner_id)] == ["Mine"]
 
 
-class TestFindIdsFor:
-    async def test_returns_the_ids_of_that_owners_campaigns(
-        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID
-    ):
-        campaign = Campaign(name="Mine", owner_id=owner_id)
+class TestDeleteFor:
+    async def test_removes_the_campaign(self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID):
+        campaign = Campaign(name="Greyfen", owner_id=owner_id)
         await repository.save(campaign)
 
-        assert await repository.find_ids_for(owner_id) == [campaign.id]
+        await repository.delete_for(campaign.id, owner_id)
 
-    async def test_leaves_out_the_campaigns_of_other_owners(
+        assert await repository.find_by_id_for(campaign.id, owner_id) is None
+
+    async def test_leaves_the_owners_other_campaigns_alone(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID
+    ):
+        doomed = Campaign(name="Greyfen", owner_id=owner_id)
+        await repository.save(doomed)
+        await repository.save(Campaign(name="Fen Wardens", owner_id=owner_id))
+
+        await repository.delete_for(doomed.id, owner_id)
+
+        assert [c.name for c in await repository.find_all_for(owner_id)] == ["Fen Wardens"]
+
+    async def test_deleting_an_unknown_id_is_not_an_error(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID
+    ):
+        await repository.delete_for(uuid.uuid4(), owner_id)
+
+    async def test_leaves_a_campaign_owned_by_someone_else_standing(
         self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID, someone_else: uuid.UUID
     ):
+        campaign = Campaign(name="Theirs", owner_id=someone_else)
+        await repository.save(campaign)
+
+        await repository.delete_for(campaign.id, owner_id)
+
+        assert await repository.find_by_id_for(campaign.id, someone_else) is not None
+
+
+class TestTheQueryAgreesWithTheDomainRule:
+    """Holds `find_all_for` and `Campaign.is_visible_to` to the same answer.
+
+    They are one rule written twice: in SQL so that rows the caller may not see are never
+    loaded, and in Python so that the rule can be read in the domain. Nothing in the type
+    system keeps the two in step — `find_all_for` would still compile with a wrong WHERE
+    clause, and the wrongness would look exactly like working code.
+
+    So this is the guard. When #31 teaches `is_visible_to` about membership and the query
+    is not taught the same thing, the two disagree here rather than in production.
+    """
+
+    async def test_returns_exactly_the_rows_the_domain_rule_accepts(
+        self,
+        repository: SqlAlchemyCampaignRepository,
+        db: AsyncSession,
+        owner_id: uuid.UUID,
+        someone_else: uuid.UUID,
+    ):
+        await repository.save(Campaign(name="Mine", owner_id=owner_id))
+        await repository.save(Campaign(name="Also mine", owner_id=owner_id))
         await repository.save(Campaign(name="Theirs", owner_id=someone_else))
 
-        assert await repository.find_ids_for(owner_id) == []
+        queried = await repository.find_all_for(owner_id)
+        every_row = (await db.execute(select(CampaignModel))).scalars().all()
+        allowed = [m for m in every_row if Campaign(name=m.name, owner_id=m.owner_id, id=m.id).is_visible_to(owner_id)]
+
+        assert sorted(c.id for c in queried) == sorted(m.id for m in allowed)

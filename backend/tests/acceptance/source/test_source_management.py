@@ -70,6 +70,33 @@ def rename_the_other_game_masters_source(client: AsyncClient, context: dict, tit
     context["response"] = response
 
 
+@given("I delete my source")
+@when("I delete my source")
+def delete_my_source(client: AsyncClient, context: dict):
+    source_id = context["created_sources"][0]["id"]
+    response = asyncio.get_event_loop().run_until_complete(
+        client.delete(f"/sources/{source_id}", headers=_auth_headers(context))
+    )
+    context["response"] = response
+
+
+@when("I delete the other game masters source")
+def delete_the_other_game_masters_source(client: AsyncClient, context: dict):
+    source_id = context["other_game_master"]["source"]["id"]
+    response = asyncio.get_event_loop().run_until_complete(
+        client.delete(f"/sources/{source_id}", headers=_auth_headers(context))
+    )
+    context["response"] = response
+
+
+@when("I delete a source with an unknown ID")
+def delete_unknown_source(client: AsyncClient, context: dict):
+    response = asyncio.get_event_loop().run_until_complete(
+        client.delete(f"/sources/{uuid.uuid4()}", headers=_auth_headers(context))
+    )
+    context["response"] = response
+
+
 @when("I list all sources")
 def list_sources(client: AsyncClient, context: dict):
     response = asyncio.get_event_loop().run_until_complete(client.get("/sources/", headers=_auth_headers(context)))
@@ -118,6 +145,16 @@ def see_source_in_list(context: dict, title: str):
 def not_see_source_in_list(context: dict, title: str):
     titles = [s["title"] for s in context["response"].json()]
     assert title not in titles
+
+
+@then("it should be gone from my library")
+def source_is_gone(client: AsyncClient, context: dict):
+    assert context["response"].status_code == 204
+    source_id = context["created_sources"][0]["id"]
+    follow_up = asyncio.get_event_loop().run_until_complete(
+        client.get(f"/sources/{source_id}", headers=_auth_headers(context))
+    )
+    assert follow_up.status_code == 404
 
 
 @then(parsers.parse('the other game masters source should still be titled "{title}"'))

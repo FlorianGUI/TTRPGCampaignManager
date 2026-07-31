@@ -38,6 +38,28 @@ Feature: Source Management
     Then I should get a not found error
     And the other game masters source should still be titled "Xanathars Guide"
 
+  Scenario: Remove one of my sources
+    Given I create a source titled "SRD 5.1"
+    When I delete my source
+    Then it should be gone from my library
+
+  Scenario: A source I deleted is out of my library
+    Given I create a source titled "SRD 5.1"
+    And I create a source titled "Monster Manual"
+    And I delete my source
+    When I list all sources
+    Then I should not see "SRD 5.1" in the list
+    And I should see "Monster Manual" in the list
+
+  Scenario: Delete a source owned by another game master
+    When I delete the other game masters source
+    Then I should get a not found error
+    And the other game masters source should still be titled "Xanathars Guide"
+
+  Scenario: Delete a source that does not exist
+    When I delete a source with an unknown ID
+    Then I should get a not found error
+
   Scenario: Request a source that does not exist
     When I request a source with an unknown ID
     Then I should get a not found error

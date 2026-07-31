@@ -118,6 +118,50 @@ def retrieve_the_other_game_masters_character(client: AsyncClient, context: dict
     )
 
 
+@given("I delete my character")
+@when("I delete my character")
+def delete_my_character(client: AsyncClient, context: dict):
+    character = context["created_characters"][0]
+    context["response"] = _run(
+        client.delete(
+            f"{_characters(context['my_campaign']['id'])}{character['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I delete that character through my other campaign")
+def delete_character_through_my_other_campaign(client: AsyncClient, context: dict):
+    character = context["created_characters"][0]
+    context["response"] = _run(
+        client.delete(
+            f"{_characters(context['my_other_campaign']['id'])}{character['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I delete the other game masters character")
+def delete_the_other_game_masters_character(client: AsyncClient, context: dict):
+    other = context["other_game_master"]
+    context["response"] = _run(
+        client.delete(
+            f"{_characters(other['campaign']['id'])}{other['character']['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I delete a character with an unknown ID")
+def delete_unknown_character(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.delete(
+            f"{_characters(context['my_campaign']['id'])}{uuid.uuid4()}",
+            headers=_auth_headers(context),
+        )
+    )
+
+
 @when(parsers.parse('I rename my character to "{name}"'))
 def rename_my_character(client: AsyncClient, context: dict, name: str):
     character = context["created_characters"][0]
@@ -231,6 +275,31 @@ def see_character_at_my_campaign(context: dict):
 @then(parsers.parse('I should see "{name}" in the list'))
 def see_character_in_list(context: dict, name: str):
     assert name in [c["name"] for c in context["response"].json()]
+
+
+@then("it should be gone from my table")
+def character_is_gone(client: AsyncClient, context: dict):
+    assert context["response"].status_code == 204
+    character = context["created_characters"][0]
+    follow_up = _run(
+        client.get(
+            f"{_characters(context['my_campaign']['id'])}{character['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+    assert follow_up.status_code == 404
+
+
+@then(parsers.parse('my character should still be named "{name}"'))
+def my_character_is_unchanged(client: AsyncClient, context: dict, name: str):
+    character = context["created_characters"][0]
+    response = _run(
+        client.get(
+            f"{_characters(context['my_campaign']['id'])}{character['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.json()["name"] == name
 
 
 @then(parsers.parse('the other game masters character should still be named "{name}"'))

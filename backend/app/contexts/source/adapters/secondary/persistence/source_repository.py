@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contexts.source.adapters.secondary.persistence.source_model import SourceModel
@@ -37,8 +37,15 @@ class SqlAlchemySourceRepository(SourceRepository):
     async def find_all_for(self, owner_id: UUID) -> list[Source]:
         # Filtered in the query, not after the fact: rows the caller may not see are
         # never loaded in the first place.
+        #
+        # The SQL twin of Source.is_visible_to. A contract test holds the two to the same
+        # answer, because this is the one place a wrong rule leaks rows silently.
         result = await self._session.execute(select(SourceModel).where(SourceModel.owner_id == owner_id))
         return [self._to_domain(m) for m in result.scalars().all()]
+
+    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
+        await self._session.execute(delete(SourceModel).where(SourceModel.id == id, SourceModel.owner_id == owner_id))
+        await self._session.commit()
 
     @staticmethod
     def _to_domain(model: SourceModel) -> Source:
