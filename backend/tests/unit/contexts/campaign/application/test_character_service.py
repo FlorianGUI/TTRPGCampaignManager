@@ -4,9 +4,9 @@ from uuid import UUID
 import pytest
 
 from app.contexts.campaign.application.character_service import CharacterService
-from app.contexts.campaign.domain.access import CampaignAccess
-from app.contexts.campaign.domain.campaign import Campaign
+from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character import CharacterNotAvailable
+from app.contexts.campaign.domain.character_access import CharacterAccess
 from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
 
 # Every test here starts from a token, because every method does. Whether a viewer may
@@ -20,13 +20,13 @@ def game_master(owner_id: UUID):
 
 
 @pytest.fixture
-def access(game_master: UUID) -> CampaignAccess:
-    return Campaign(name="The Hollow Beneath Greyfen", owner_id=game_master).grant(game_master)
+def access(game_master: UUID) -> CharacterAccess:
+    return CampaignAccess(game_master).characters_at(Campaign(name="The Hollow Beneath Greyfen", owner_id=game_master))
 
 
 @pytest.fixture
-def other_access(game_master: UUID) -> CampaignAccess:
-    return Campaign(name="Fen Wardens", owner_id=game_master).grant(game_master)
+def other_access(game_master: UUID) -> CharacterAccess:
+    return CampaignAccess(game_master).characters_at(Campaign(name="Fen Wardens", owner_id=game_master))
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def service(characters: FakeCharacterRepository):
 
 class TestCreate:
     async def test_returns_character_with_correct_fields(
-        self, service: CharacterService, access: CampaignAccess, game_master: UUID
+        self, service: CharacterService, access: CharacterAccess, game_master: UUID
     ):
         character = await service.create(access, "Aragorn", "A ranger of the North")
 
@@ -45,7 +45,7 @@ class TestCreate:
         assert character.owner_id == game_master
         assert character.campaign_id == access.campaign_id
 
-    async def test_description_is_optional(self, service: CharacterService, access: CampaignAccess):
+    async def test_description_is_optional(self, service: CharacterService, access: CharacterAccess):
         character = await service.create(access, "Aragorn")
 
         assert character.description is None
@@ -53,18 +53,18 @@ class TestCreate:
 
 class TestGetFor:
     async def test_the_game_master_sees_a_character_at_their_table(
-        self, service: CharacterService, access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess
     ):
         created = await service.create(access, "Aragorn")
 
         assert await service.get_for(created.id, access) == created
 
-    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+    async def test_raises_when_not_found(self, service: CharacterService, access: CharacterAccess):
         with pytest.raises(CharacterNotAvailable):
             await service.get_for(uuid.uuid4(), access)
 
     async def test_raises_for_a_character_at_another_table(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         """The id is real and both tables are mine — it is still not at this one."""
         created = await service.create(other_access, "Aragorn")
@@ -74,17 +74,17 @@ class TestGetFor:
 
 
 class TestListFor:
-    async def test_returns_empty_list_when_the_table_is_empty(self, service: CharacterService, access: CampaignAccess):
+    async def test_returns_empty_list_when_the_table_is_empty(self, service: CharacterService, access: CharacterAccess):
         assert await service.list_for(access) == []
 
-    async def test_returns_the_characters_at_that_table(self, service: CharacterService, access: CampaignAccess):
+    async def test_returns_the_characters_at_that_table(self, service: CharacterService, access: CharacterAccess):
         await service.create(access, "Aragorn")
         await service.create(access, "Legolas")
 
         assert len(await service.list_for(access)) == 2
 
     async def test_leaves_out_characters_at_another_table(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         await service.create(access, "Aragorn")
         await service.create(other_access, "Boromir")
@@ -93,7 +93,7 @@ class TestListFor:
 
 
 class TestUpdate:
-    async def test_returns_the_character_with_its_new_name(self, service: CharacterService, access: CampaignAccess):
+    async def test_returns_the_character_with_its_new_name(self, service: CharacterService, access: CharacterAccess):
         created = await service.create(access, "Aragorn")
 
         updated = await service.update(created.id, access, "Strider", "Also called Elessar")
@@ -102,7 +102,7 @@ class TestUpdate:
         assert updated.name == "Strider"
         assert updated.description == "Also called Elessar"
 
-    async def test_clears_a_description_that_is_left_out(self, service: CharacterService, access: CampaignAccess):
+    async def test_clears_a_description_that_is_left_out(self, service: CharacterService, access: CharacterAccess):
         created = await service.create(access, "Aragorn", "A ranger of the North")
 
         updated = await service.update(created.id, access, "Aragorn")
@@ -111,7 +111,7 @@ class TestUpdate:
         assert updated.description is None
 
     async def test_does_not_change_who_owns_the_character(
-        self, service: CharacterService, access: CampaignAccess, game_master: UUID
+        self, service: CharacterService, access: CharacterAccess, game_master: UUID
     ):
         created = await service.create(access, "Aragorn")
 
@@ -120,12 +120,12 @@ class TestUpdate:
         assert updated is not None
         assert updated.owner_id == game_master
 
-    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+    async def test_raises_when_not_found(self, service: CharacterService, access: CharacterAccess):
         with pytest.raises(CharacterNotAvailable):
             await service.update(uuid.uuid4(), access, "Strider")
 
     async def test_raises_for_a_character_at_another_table(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
@@ -133,7 +133,7 @@ class TestUpdate:
             await service.update(created.id, access, "Stolen")
 
     async def test_a_character_reached_through_the_wrong_table_is_untouched(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
@@ -144,7 +144,7 @@ class TestUpdate:
 
 
 class TestDelete:
-    async def test_removes_the_character(self, service: CharacterService, access: CampaignAccess):
+    async def test_removes_the_character(self, service: CharacterService, access: CharacterAccess):
         created = await service.create(access, "Aragorn")
 
         await service.delete(created.id, access)
@@ -152,7 +152,7 @@ class TestDelete:
         with pytest.raises(CharacterNotAvailable):
             await service.get_for(created.id, access)
 
-    async def test_leaves_the_other_sheets_at_the_table(self, service: CharacterService, access: CampaignAccess):
+    async def test_leaves_the_other_sheets_at_the_table(self, service: CharacterService, access: CharacterAccess):
         doomed = await service.create(access, "Aragorn")
         await service.create(access, "Legolas")
 
@@ -160,12 +160,12 @@ class TestDelete:
 
         assert [c.name for c in await service.list_for(access)] == ["Legolas"]
 
-    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+    async def test_raises_when_not_found(self, service: CharacterService, access: CharacterAccess):
         with pytest.raises(CharacterNotAvailable):
             await service.delete(uuid.uuid4(), access)
 
     async def test_raises_for_a_character_at_another_table(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
@@ -173,7 +173,7 @@ class TestDelete:
             await service.delete(created.id, access)
 
     async def test_a_character_reached_through_the_wrong_table_survives(
-        self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
+        self, service: CharacterService, access: CharacterAccess, other_access: CharacterAccess
     ):
         created = await service.create(other_access, "Aragorn")
 

@@ -1,22 +1,31 @@
 from dataclasses import dataclass, field
+from typing import ClassVar
 from uuid import UUID, uuid4
 
-from app.contexts.campaign.domain.access import CampaignAccess, CampaignNotReachable
+from app.common.access import Access
+from app.common.errors import NotAvailable
+from app.contexts.campaign.domain.character_access import CharacterAccess
+
+
+class CampaignNotReachable(NotAvailable):
+    """A campaign that is not there, or not this viewer's to reach.
+
+    One exception for both, so a caller holding a real id learns exactly as much as one
+    guessing. It travels untouched to the HTTP boundary, where one handler turns it into
+    the 404 that a campaign which never existed would also get.
+    """
+
+    detail = "Campaign not found"
 
 
 @dataclass
 class Campaign:
     """A game master's table: the thing play happens around.
 
-    A campaign has exactly one owner. Inviting other users to it is real and planned
-    but lands in #31 through a membership table, so ownership is the whole of the
-    access story for now.
-
-    It is also the access boundary for everything that hangs off it: reaching a
-    character, and later a session note (#52) or an asset (#29), means asking the
-    campaign for a `CampaignAccess` first. The rules below are the single statement of
-    who may do what — the repository queries mirror them, and a contract test holds the
-    two together.
+    Data and nothing else. Who may see or change a campaign is not a property of the
+    campaign, it is a relationship between a viewer and a record — so it lives on
+    `CampaignAccess`, the object that models exactly that. `Character` has been shaped
+    this way from the start; this is the entity catching up.
     """
 
     name: str
@@ -24,24 +33,49 @@ class Campaign:
     description: str | None = None
     id: UUID = field(default_factory=uuid4)
 
-    def is_visible_to(self, viewer_id: UUID) -> bool:
-        """#31: or the viewer is a member of this campaign."""
-        return self.owner_id == viewer_id
 
-    def is_editable_by(self, viewer_id: UUID) -> bool:
-        """Renaming or deleting the table itself stays with the game master who runs it.
+@dataclass(frozen=True)
+class CampaignAccess(Access[Campaign]):
+    """What a viewer may do with a campaign, and the door to what is inside it.
 
-        #31: a co-GM may well qualify, but a player invited to play never should.
+    Not a capability: anyone may build one around any viewer id, and it proves nothing on
+    its own — the rule is checked against the record, not against the fact that you are
+    holding this. `CharacterAccess` is the opposite, which is why only this class can
+    hand one out.
+
+    The three rules give the same answer today and are written out separately anyway,
+    because #31 is expected to part them and nothing should have to be discovered when
+    it does.
+    """
+
+    viewer_id: UUID
+
+    not_available: ClassVar[type[NotAvailable]] = CampaignNotReachable
+
+    def may_read(self, record: Campaign) -> bool:
+        """#31: or the viewer is a member of this campaign.
+
+        `find_all_for` states this same rule in SQL, because a list cannot afford to load
+        rows it will discard. A contract test holds the two to the same answer.
         """
-        return self.owner_id == viewer_id
+        return record.owner_id == self.viewer_id
 
-    def grant(self, viewer_id: UUID) -> CampaignAccess:
-        """Hand out proof that this viewer may reach this table.
+    def may_edit(self, record: Campaign) -> bool:
+        """#31: a co-GM may qualify; a player invited to play never should. Renaming a
+        table out from under the game master running it is the thing to prevent."""
+        return record.owner_id == self.viewer_id
 
-        The one door into everything inside the campaign. Anything that wants to read or
-        write a character has to come through here first, which is what makes the check
-        impossible to route around rather than merely rude to skip.
+    def may_delete(self, record: Campaign) -> bool:
+        """Closing a table takes every sheet at it, so if these ever diverge this is the
+        stricter one. #31: owner only, most likely, even where `may_edit` widens."""
+        return record.owner_id == self.viewer_id
+
+    def characters_at(self, campaign: Campaign | None) -> CharacterAccess:
+        """Hand out the right to work with the sheets at this table.
+
+        The one door into everything inside a campaign, and the only thing anywhere that
+        builds a `CharacterAccess`. Reaching the table is checked first and by the same
+        method every other read goes through, so there is no second copy of the rule to
+        drift. #52 and #29 add a sibling each.
         """
-        if not self.is_visible_to(viewer_id):
-            raise CampaignNotReachable
-        return CampaignAccess(campaign_id=self.id, viewer_id=viewer_id)
+        return CharacterAccess(campaign_id=self.readable(campaign).id, viewer_id=self.viewer_id)

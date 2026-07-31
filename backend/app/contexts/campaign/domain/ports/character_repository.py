@@ -1,39 +1,53 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from app.contexts.campaign.domain.access import CampaignAccess
 from app.contexts.campaign.domain.character import Character
+from app.contexts.campaign.domain.character_access import CharacterAccess
 
 
 class CharacterRepository(ABC):
-    """Every read and write is located by an access token, never by a bare campaign id.
+    """Fetching one sheet asks no questions; fetching many cannot afford not to.
 
-    The token is both the campaign to filter on and the proof that the caller may filter
-    on it, which is the point: there is no `campaign_id: UUID` parameter left in this
-    port for an unauthorised caller to supply. Where the source context made an
-    unfiltered read impossible to write, this makes an unauthorised one impossible to
-    write.
+    That split is deliberate and is the only asymmetry here worth explaining.
 
-    `save` is the exception and takes only the character, because a character cannot be
-    built without a token in the first place — `CampaignAccess.new_character` is its
-    only constructor in application code, and it stamps the campaign and the owner from
-    the proof rather than from anything the caller sent.
+    `find_by_id` takes a bare id and applies no rule. It used to filter on the campaign,
+    which meant the rule "a sheet belongs to the table you reached" was written in a
+    WHERE clause where it could not be read, tested, or reasoned about — and written a
+    second time in the fake, and a third time in prose. It now lives once, in
+    `CharacterAccess.readable`, and this method's job is only to answer whether a row
+    exists.
+
+    `find_all_in` keeps the campaign in its query, because the alternative is loading
+    every character in the database and discarding most of them in Python. #12 rules
+    that out in as many words: filtered in the query, not after the fact. One row is a
+    lookup; all rows is a scan.
+
+    The cost of the first half, stated plainly: #41 removed unscoped reads so that an
+    unauthorised one could not be *written*. A bare `find_by_id` is reachable again, and
+    what stops it leaking is now that its return type is Optional and the only sensible
+    way to open it is a token method. That is a weaker guarantee than a type error, and
+    it buys a rule that exists in one place instead of three.
+
+    `save` takes only the character because whoever built it needed a token to do so:
+    `CharacterService.create` stamps both from the token rather than from
+    anything the caller sent.
     """
 
     @abstractmethod
     async def save(self, character: Character) -> Character: ...
 
     @abstractmethod
-    async def find_by_id_in(self, id: UUID, access: CampaignAccess) -> Character | None: ...
+    async def find_by_id(self, id: UUID) -> Character | None: ...
 
     @abstractmethod
-    async def find_all_in(self, access: CampaignAccess) -> list[Character]: ...
+    async def find_all_in(self, access: CharacterAccess) -> list[Character]: ...
 
     @abstractmethod
-    async def delete_in(self, id: UUID, access: CampaignAccess) -> None: ...
+    async def delete(self, id: UUID) -> None:
+        """Unscoped on purpose: the caller reached this through a token method already."""
 
     @abstractmethod
-    async def delete_all_in(self, access: CampaignAccess) -> None:
+    async def delete_all_in(self, access: CharacterAccess) -> None:
         """Empty a table of its sheets, for when the table itself goes.
 
         Deleting nothing is not an error: a campaign nobody put a character at is an

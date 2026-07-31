@@ -4,8 +4,14 @@ from uuid import UUID
 import pytest
 
 from app.contexts.campaign.application.campaign_service import CampaignService
-from app.contexts.campaign.domain.access import CampaignNotReachable
+from app.contexts.campaign.domain.campaign import CampaignNotReachable
+from app.contexts.campaign.domain.character import Character
+from app.contexts.campaign.domain.character_access import CharacterAccess
 from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
+
+
+def _character_at(access: CharacterAccess, name: str) -> Character:
+    return Character(name=name, owner_id=access.viewer_id, campaign_id=access.campaign_id)
 
 
 @pytest.fixture
@@ -71,7 +77,7 @@ class TestAccessTo:
     async def test_grants_a_token_for_my_own_campaign(self, service: CampaignService, owner_id: UUID):
         created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
-        access = await service.access_to(created.id, owner_id)
+        access = await service.characters_at(created.id, owner_id)
 
         assert access is not None
         assert access.campaign_id == created.id
@@ -79,7 +85,7 @@ class TestAccessTo:
 
     async def test_grants_nothing_for_a_campaign_that_does_not_exist(self, service: CampaignService, owner_id: UUID):
         with pytest.raises(CampaignNotReachable):
-            await service.access_to(uuid.uuid4(), owner_id)
+            await service.characters_at(uuid.uuid4(), owner_id)
 
     async def test_grants_nothing_for_a_campaign_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
@@ -87,7 +93,7 @@ class TestAccessTo:
         created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
         with pytest.raises(CampaignNotReachable):
-            await service.access_to(created.id, someone_else)
+            await service.characters_at(created.id, someone_else)
 
 
 class TestUpdate:
@@ -144,8 +150,8 @@ class TestDelete:
         self, service: CampaignService, characters: FakeCharacterRepository, owner_id: UUID
     ):
         created = await service.create("Greyfen", owner_id)
-        access = await service.access_to(created.id, owner_id)
-        await characters.save(access.new_character("Aragorn"))
+        access = await service.characters_at(created.id, owner_id)
+        await characters.save(_character_at(access, "Aragorn"))
 
         await service.delete(created.id, owner_id)
 
@@ -156,8 +162,8 @@ class TestDelete:
     ):
         doomed = await service.create("Greyfen", owner_id)
         spared = await service.create("Fen Wardens", owner_id)
-        elsewhere = await service.access_to(spared.id, owner_id)
-        await characters.save(elsewhere.new_character("Legolas"))
+        elsewhere = await service.characters_at(spared.id, owner_id)
+        await characters.save(_character_at(elsewhere, "Legolas"))
 
         await service.delete(doomed.id, owner_id)
 
@@ -198,8 +204,8 @@ class TestDelete:
         someone_else: UUID,
     ):
         created = await service.create("Greyfen", owner_id)
-        access = await service.access_to(created.id, owner_id)
-        await characters.save(access.new_character("Aragorn"))
+        access = await service.characters_at(created.id, owner_id)
+        await characters.save(_character_at(access, "Aragorn"))
 
         with pytest.raises(CampaignNotReachable):
             await service.delete(created.id, someone_else)

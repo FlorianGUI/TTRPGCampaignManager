@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contexts.campaign.adapters.secondary.persistence.campaign_model import CampaignModel
 from app.contexts.campaign.adapters.secondary.persistence.campaign_repository import SqlAlchemyCampaignRepository
-from app.contexts.campaign.domain.campaign import Campaign
+from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ class TestSave:
         campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id, description="A drowned village")
         await repository.save(campaign)
 
-        found = await repository.find_by_id_for(campaign.id, owner_id)
+        found = await repository.find_by_id(campaign.id)
 
         assert found is not None
         assert found.name == "The Hollow Beneath Greyfen"
@@ -50,31 +50,37 @@ class TestSave:
         campaign.name = "The Hollow Beneath Greyfen"
         await repository.save(campaign)
 
-        found = await repository.find_by_id_for(campaign.id, owner_id)
+        found = await repository.find_by_id(campaign.id)
         assert found is not None
         assert found.name == "The Hollow Beneath Greyfen"
 
 
-class TestFindByIdFor:
+class TestFindById:
     async def test_returns_campaign_when_found(self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID):
         campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id)
         await repository.save(campaign)
 
-        result = await repository.find_by_id_for(campaign.id, owner_id)
+        result = await repository.find_by_id(campaign.id)
 
         assert result is not None
         assert result.id == campaign.id
 
-    async def test_returns_none_for_unknown_id(self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID):
-        assert await repository.find_by_id_for(uuid.uuid4(), owner_id) is None
+    async def test_returns_none_for_unknown_id(self, repository: SqlAlchemyCampaignRepository):
+        assert await repository.find_by_id(uuid.uuid4()) is None
 
-    async def test_returns_none_when_owned_by_someone_else(
-        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID, someone_else: uuid.UUID
+    async def test_finds_a_campaign_whoever_owns_it(
+        self, repository: SqlAlchemyCampaignRepository, someone_else: uuid.UUID
     ):
-        campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id)
+        """Ownership is no longer this method's business, and that is the point.
+
+        It used to filter on the owner, which put `owner_id ==` in a WHERE clause where
+        it could not be read or tested. `campaign.readable` holds that rule now, and this
+        method's whole job is to say whether a row exists.
+        """
+        campaign = Campaign(name="Theirs", owner_id=someone_else)
         await repository.save(campaign)
 
-        assert await repository.find_by_id_for(campaign.id, someone_else) is None
+        assert await repository.find_by_id(campaign.id) is not None
 
 
 class TestFindAllFor:
@@ -98,14 +104,14 @@ class TestFindAllFor:
         assert [c.name for c in await repository.find_all_for(owner_id)] == ["Mine"]
 
 
-class TestDeleteFor:
+class TestDelete:
     async def test_removes_the_campaign(self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID):
         campaign = Campaign(name="Greyfen", owner_id=owner_id)
         await repository.save(campaign)
 
-        await repository.delete_for(campaign.id, owner_id)
+        await repository.delete(campaign.id)
 
-        assert await repository.find_by_id_for(campaign.id, owner_id) is None
+        assert await repository.find_by_id(campaign.id) is None
 
     async def test_leaves_the_owners_other_campaigns_alone(
         self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID
@@ -114,35 +120,23 @@ class TestDeleteFor:
         await repository.save(doomed)
         await repository.save(Campaign(name="Fen Wardens", owner_id=owner_id))
 
-        await repository.delete_for(doomed.id, owner_id)
+        await repository.delete(doomed.id)
 
         assert [c.name for c in await repository.find_all_for(owner_id)] == ["Fen Wardens"]
 
-    async def test_deleting_an_unknown_id_is_not_an_error(
-        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID
-    ):
-        await repository.delete_for(uuid.uuid4(), owner_id)
-
-    async def test_leaves_a_campaign_owned_by_someone_else_standing(
-        self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID, someone_else: uuid.UUID
-    ):
-        campaign = Campaign(name="Theirs", owner_id=someone_else)
-        await repository.save(campaign)
-
-        await repository.delete_for(campaign.id, owner_id)
-
-        assert await repository.find_by_id_for(campaign.id, someone_else) is not None
+    async def test_deleting_an_unknown_id_is_not_an_error(self, repository: SqlAlchemyCampaignRepository):
+        await repository.delete(uuid.uuid4())
 
 
 class TestTheQueryAgreesWithTheDomainRule:
-    """Holds `find_all_for` and `Campaign.is_visible_to` to the same answer.
+    """Holds `find_all_for` and `CampaignAccess.may_read` to the same answer.
 
     They are one rule written twice: in SQL so that rows the caller may not see are never
     loaded, and in Python so that the rule can be read in the domain. Nothing in the type
     system keeps the two in step — `find_all_for` would still compile with a wrong WHERE
     clause, and the wrongness would look exactly like working code.
 
-    So this is the guard. When #31 teaches `is_visible_to` about membership and the query
+    So this is the guard. When #31 teaches `may_read` about membership and the query
     is not taught the same thing, the two disagree here rather than in production.
     """
 
@@ -159,6 +153,7 @@ class TestTheQueryAgreesWithTheDomainRule:
 
         queried = await repository.find_all_for(owner_id)
         every_row = (await db.execute(select(CampaignModel))).scalars().all()
-        allowed = [m for m in every_row if Campaign(name=m.name, owner_id=m.owner_id, id=m.id).is_visible_to(owner_id)]
+        access = CampaignAccess(owner_id)
+        allowed = [m for m in every_row if access.may_read(Campaign(name=m.name, owner_id=m.owner_id, id=m.id))]
 
         assert sorted(c.id for c in queried) == sorted(m.id for m in allowed)
