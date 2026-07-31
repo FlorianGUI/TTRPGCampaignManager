@@ -25,10 +25,8 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
         await self._session.commit()
         return campaign
 
-    async def find_by_id_for(self, id: UUID, owner_id: UUID) -> Campaign | None:
-        result = await self._session.execute(
-            select(CampaignModel).where(CampaignModel.id == id, CampaignModel.owner_id == owner_id)
-        )
+    async def find_by_id(self, id: UUID) -> Campaign | None:
+        result = await self._session.execute(select(CampaignModel).where(CampaignModel.id == id))
         model = result.scalar_one_or_none()
         if model is None:
             return None
@@ -40,10 +38,8 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
         result = await self._session.execute(select(CampaignModel).where(CampaignModel.owner_id == owner_id))
         return [self._to_domain(m) for m in result.scalars().all()]
 
-    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
-        await self._session.execute(
-            delete(CampaignModel).where(CampaignModel.id == id, CampaignModel.owner_id == owner_id)
-        )
+    async def delete(self, id: UUID) -> None:
+        await self._session.execute(delete(CampaignModel).where(CampaignModel.id == id))
         await self._session.commit()
 
     @staticmethod

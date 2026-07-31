@@ -16,19 +16,14 @@ class FakeSourceRepository(SourceRepository):
         self._store[source.id] = source
         return source
 
-    async def find_by_id_for(self, id: UUID, owner_id: UUID) -> Source | None:
-        source = self._store.get(id)
-        if source is None or source.owner_id != owner_id:
-            return None
-        return source
+    async def find_by_id(self, id: UUID) -> Source | None:
+        return self._store.get(id)
 
     async def find_all_for(self, owner_id: UUID) -> list[Source]:
         return [s for s in self._store.values() if s.owner_id == owner_id]
 
-    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
-        source = self._store.get(id)
-        if source is not None and source.owner_id == owner_id:
-            del self._store[id]
+    async def delete(self, id: UUID) -> None:
+        self._store.pop(id, None)
 
 
 @pytest.fixture

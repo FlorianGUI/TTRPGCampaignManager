@@ -8,7 +8,7 @@ from app.contexts.campaign.adapters.secondary.persistence.campaign_repository im
 from app.contexts.campaign.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
 from app.contexts.campaign.application.campaign_service import CampaignService
 from app.contexts.campaign.application.character_service import CharacterService
-from app.contexts.campaign.domain.access import CampaignAccess
+from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.user.domain.user import User
 from app.database import get_db
 
@@ -23,11 +23,11 @@ def get_character_service(db: AsyncSession = Depends(get_db)) -> CharacterServic
     return CharacterService(SqlAlchemyCharacterRepository(db))
 
 
-async def get_campaign_access(
+async def get_character_access(
     campaign_id: UUID,
     user: User = Depends(get_current_user),
     campaigns: CampaignService = Depends(get_campaign_service),
-) -> CampaignAccess:
+) -> CharacterAccess:
     """Turn the campaign in the path into proof that this caller may reach it.
 
     Every route under a campaign asks for this instead of doing the check itself, so
@@ -41,8 +41,8 @@ async def get_campaign_access(
     call a single repository method that touches a campaign's contents, because none of
     them accept anything else. Forgetting this fails closed rather than open.
 
-    Nothing is caught here. `access_to` raises `CampaignNotReachable` for a campaign
+    Nothing is caught here. `characters_at` raises `CampaignNotReachable` for a campaign
     that is missing or not this viewer's, and it travels untouched to the handler that
     turns it into a 404 — the same answer, in the same words, for either reason.
     """
-    return await campaigns.access_to(campaign_id, user.id)
+    return await campaigns.characters_at(campaign_id, user.id)

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contexts.source.adapters.secondary.persistence.source_model import SourceModel
 from app.contexts.source.adapters.secondary.persistence.source_repository import SqlAlchemySourceRepository
-from app.contexts.source.domain.source import Source
+from app.contexts.source.domain.source import Source, SourceAccess
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ class TestSave:
         source = Source(title="SRD 5.1", owner_id=owner_id)
         await repository.save(source)
 
-        found = await repository.find_by_id_for(source.id, owner_id)
+        found = await repository.find_by_id(source.id)
 
         assert found is not None
         assert found.title == "SRD 5.1"
@@ -51,35 +51,32 @@ class TestSave:
         source.title = "SRD 5.1"
         await repository.save(source)
 
-        found = await repository.find_by_id_for(source.id, owner_id)
+        found = await repository.find_by_id(source.id)
         assert found is not None
         assert found.title == "SRD 5.1"
 
 
-class TestFindByIdFor:
+class TestFindById:
     async def test_returns_source_when_found(self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID):
         source = Source(title="Fen Wardens notes", owner_id=owner_id)
         await repository.save(source)
 
-        result = await repository.find_by_id_for(source.id, owner_id)
+        result = await repository.find_by_id(source.id)
 
         assert result is not None
         assert result.id == source.id
 
-    async def test_returns_none_for_unknown_id(self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID):
-        result = await repository.find_by_id_for(uuid.uuid4(), owner_id)
+    async def test_returns_none_for_unknown_id(self, repository: SqlAlchemySourceRepository):
+        assert await repository.find_by_id(uuid.uuid4()) is None
 
-        assert result is None
-
-    async def test_returns_none_when_owned_by_someone_else(
-        self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID, someone_else: uuid.UUID
+    async def test_finds_a_source_whoever_owns_it(
+        self, repository: SqlAlchemySourceRepository, someone_else: uuid.UUID
     ):
-        source = Source(title="Xanathars Guide", owner_id=owner_id)
+        """Ownership moved to `source.readable`; this method only reports existence."""
+        source = Source(title="Xanathars Guide", owner_id=someone_else)
         await repository.save(source)
 
-        result = await repository.find_by_id_for(source.id, someone_else)
-
-        assert result is None
+        assert await repository.find_by_id(source.id) is not None
 
 
 class TestFindAllFor:
@@ -104,14 +101,14 @@ class TestFindAllFor:
         assert [s.title for s in results] == ["SRD 5.1"]
 
 
-class TestDeleteFor:
+class TestDelete:
     async def test_removes_the_source(self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID):
         source = Source(title="SRD 5.1", owner_id=owner_id)
         await repository.save(source)
 
-        await repository.delete_for(source.id, owner_id)
+        await repository.delete(source.id)
 
-        assert await repository.find_by_id_for(source.id, owner_id) is None
+        assert await repository.find_by_id(source.id) is None
 
     async def test_leaves_the_rest_of_the_library_alone(
         self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID
@@ -120,28 +117,16 @@ class TestDeleteFor:
         await repository.save(doomed)
         await repository.save(Source(title="Monster Manual", owner_id=owner_id))
 
-        await repository.delete_for(doomed.id, owner_id)
+        await repository.delete(doomed.id)
 
         assert [s.title for s in await repository.find_all_for(owner_id)] == ["Monster Manual"]
 
-    async def test_deleting_an_unknown_id_is_not_an_error(
-        self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID
-    ):
-        await repository.delete_for(uuid.uuid4(), owner_id)
-
-    async def test_leaves_a_source_owned_by_someone_else_standing(
-        self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID, someone_else: uuid.UUID
-    ):
-        source = Source(title="Xanathars Guide", owner_id=someone_else)
-        await repository.save(source)
-
-        await repository.delete_for(source.id, owner_id)
-
-        assert await repository.find_by_id_for(source.id, someone_else) is not None
+    async def test_deleting_an_unknown_id_is_not_an_error(self, repository: SqlAlchemySourceRepository):
+        await repository.delete(uuid.uuid4())
 
 
 class TestTheQueryAgreesWithTheDomainRule:
-    """Holds `find_all_for` and `Source.is_visible_to` to the same answer.
+    """Holds `find_all_for` and `SourceAccess.may_read` to the same answer.
 
     The campaign context has the twin of this test, and for the same reason: the rule is
     written once in SQL and once in Python, and only this holds the two together.
@@ -160,6 +145,7 @@ class TestTheQueryAgreesWithTheDomainRule:
 
         queried = await repository.find_all_for(owner_id)
         every_row = (await db.execute(select(SourceModel))).scalars().all()
-        allowed = [m for m in every_row if Source(title=m.title, owner_id=m.owner_id, id=m.id).is_visible_to(owner_id)]
+        access = SourceAccess(owner_id)
+        allowed = [m for m in every_row if access.may_read(Source(title=m.title, owner_id=m.owner_id, id=m.id))]
 
         assert sorted(s.id for s in queried) == sorted(m.id for m in allowed)

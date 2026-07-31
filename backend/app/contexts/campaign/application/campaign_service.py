@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from app.contexts.campaign.domain.access import CampaignAccess, CampaignNotReachable
-from app.contexts.campaign.domain.campaign import Campaign
+from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
+from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
 
@@ -27,30 +27,23 @@ class CampaignService:
         return await self._repository.save(campaign)
 
     async def get_for(self, id: UUID, owner_id: UUID) -> Campaign:
-        campaign = await self._repository.find_by_id_for(id, owner_id)
-        if campaign is None:
-            raise CampaignNotReachable
-        return campaign
+        return CampaignAccess(owner_id).readable(await self._repository.find_by_id(id))
 
     async def list_for(self, owner_id: UUID) -> list[Campaign]:
         return await self._repository.find_all_for(owner_id)
 
-    async def access_to(self, id: UUID, viewer_id: UUID) -> CampaignAccess:
+    async def characters_at(self, id: UUID, viewer_id: UUID) -> CharacterAccess:
         """The one authorisation helper for this context, and the door to everything inside it.
 
-        Two questions in one call, and they stay distinct as the rules grow: the read
-        answers *may this viewer reach the table at all*, and `grant` answers *what may
-        they do once there*. Today the first implies the second, so a token goes to
-        anyone the query returned. After #31 the query also returns campaigns the viewer
-        was invited to, and `grant` is what starts telling a game master apart from a
-        player — without this call site changing.
+        Fetch the row, hand it to the access object, get back a token or an exception.
+        Whether the viewer may reach the table is `CampaignAccess.may_read`, and what
+        they may do once there is `CharacterAccess` — two questions that answer the same
+        way today and stop doing so in #31, without this call site changing.
         """
-        return (await self.get_for(id, viewer_id)).grant(viewer_id)
+        return CampaignAccess(viewer_id).characters_at(await self._repository.find_by_id(id))
 
     async def update(self, id: UUID, owner_id: UUID, name: str, description: str | None = None) -> Campaign:
-        campaign = await self._repository.find_by_id_for(id, owner_id)
-        if campaign is None or not campaign.is_editable_by(owner_id):
-            raise CampaignNotReachable
+        campaign = CampaignAccess(owner_id).editable(await self._repository.find_by_id(id))
         campaign.name = name
         campaign.description = description
         return await self._repository.save(campaign)
@@ -66,8 +59,7 @@ class CampaignService:
         sheets gone, which is recoverable by hand; the other order would leave sheets
         pointing at a campaign nobody can reach, which is not.
         """
-        campaign = await self._repository.find_by_id_for(id, owner_id)
-        if campaign is None or not campaign.is_editable_by(owner_id):
-            raise CampaignNotReachable
-        await self._characters.delete_all_in(campaign.grant(owner_id))
-        await self._repository.delete_for(id, owner_id)
+        access = CampaignAccess(owner_id)
+        campaign = access.deletable(await self._repository.find_by_id(id))
+        await self._characters.delete_all_in(access.characters_at(campaign))
+        await self._repository.delete(campaign.id)

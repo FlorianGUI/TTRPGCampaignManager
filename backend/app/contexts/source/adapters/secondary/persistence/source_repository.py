@@ -25,10 +25,8 @@ class SqlAlchemySourceRepository(SourceRepository):
         await self._session.commit()
         return source
 
-    async def find_by_id_for(self, id: UUID, owner_id: UUID) -> Source | None:
-        result = await self._session.execute(
-            select(SourceModel).where(SourceModel.id == id, SourceModel.owner_id == owner_id)
-        )
+    async def find_by_id(self, id: UUID) -> Source | None:
+        result = await self._session.execute(select(SourceModel).where(SourceModel.id == id))
         model = result.scalar_one_or_none()
         if model is None:
             return None
@@ -43,8 +41,8 @@ class SqlAlchemySourceRepository(SourceRepository):
         result = await self._session.execute(select(SourceModel).where(SourceModel.owner_id == owner_id))
         return [self._to_domain(m) for m in result.scalars().all()]
 
-    async def delete_for(self, id: UUID, owner_id: UUID) -> None:
-        await self._session.execute(delete(SourceModel).where(SourceModel.id == id, SourceModel.owner_id == owner_id))
+    async def delete(self, id: UUID) -> None:
+        await self._session.execute(delete(SourceModel).where(SourceModel.id == id))
         await self._session.commit()
 
     @staticmethod
