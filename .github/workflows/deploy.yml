@@ -40,6 +40,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 49191
+          # Without this the script runs on after a failed command and only the
+          # last exit code is reported, so a broken `git pull` still deploys green.
+          script_stop: true
           script: |
             cd /opt/dnd
             git pull
