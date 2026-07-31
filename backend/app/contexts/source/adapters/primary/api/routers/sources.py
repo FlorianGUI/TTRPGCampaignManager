@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
@@ -10,11 +10,11 @@ from app.contexts.source.application.source_service import SourceService
 from app.contexts.user.domain.user import User
 from app.database import get_db
 
+# A source the caller does not own raises SourceNotAvailable exactly as one that does
+# not exist, and one handler turns that into a 404 — so the response never confirms that
+# an id belongs to someone. Nothing here decides that; there is nothing here to get
+# wrong.
 router = APIRouter(prefix="/sources", tags=["sources"], dependencies=[Depends(get_current_user)])
-
-# A source the caller does not own answers exactly as one that does not exist — same
-# status, same detail — so the response never confirms that an id belongs to someone.
-NOT_FOUND = HTTPException(status_code=404, detail="Source not found")
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> SourceService:
@@ -46,8 +46,6 @@ async def get_source(
     service: SourceService = Depends(get_service),
 ):
     source = await service.get_for(source_id, user.id)
-    if source is None:
-        raise NOT_FOUND
     return SourceResponse(**source.__dict__)
 
 
@@ -59,8 +57,6 @@ async def update_source(
     service: SourceService = Depends(get_service),
 ):
     source = await service.rename(source_id, user.id, body.title)
-    if source is None:
-        raise NOT_FOUND
     return SourceResponse(**source.__dict__)
 
 
@@ -70,5 +66,4 @@ async def delete_source(
     user: User = Depends(get_current_user),
     service: SourceService = Depends(get_service),
 ):
-    if not await service.delete(source_id, user.id):
-        raise NOT_FOUND
+    await service.delete(source_id, user.id)

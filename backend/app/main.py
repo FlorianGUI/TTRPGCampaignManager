@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.common.error_handlers import setup_error_handlers
 from app.common.health.health_route import router as health_router
 from app.common.security.cors import setup_cors
 from app.common.security.rate_limiter import setup_rate_limiter
@@ -16,6 +17,7 @@ app = FastAPI(
 
 setup_cors(app)
 setup_rate_limiter(app)
+setup_error_handlers(app)
 
 app.include_router(health_router)
 app.include_router(campaigns_router)

@@ -6,6 +6,7 @@ import pytest
 from app.contexts.campaign.application.character_service import CharacterService
 from app.contexts.campaign.domain.access import CampaignAccess
 from app.contexts.campaign.domain.campaign import Campaign
+from app.contexts.campaign.domain.character import CharacterNotAvailable
 from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
 
 # Every test here starts from a token, because every method does. Whether a viewer may
@@ -58,16 +59,18 @@ class TestGetFor:
 
         assert await service.get_for(created.id, access) == created
 
-    async def test_returns_none_when_not_found(self, service: CharacterService, access: CampaignAccess):
-        assert await service.get_for(uuid.uuid4(), access) is None
+    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+        with pytest.raises(CharacterNotAvailable):
+            await service.get_for(uuid.uuid4(), access)
 
-    async def test_returns_none_for_a_character_at_another_table(
+    async def test_raises_for_a_character_at_another_table(
         self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
     ):
         """The id is real and both tables are mine — it is still not at this one."""
         created = await service.create(other_access, "Aragorn")
 
-        assert await service.get_for(created.id, access) is None
+        with pytest.raises(CharacterNotAvailable):
+            await service.get_for(created.id, access)
 
 
 class TestListFor:
@@ -117,34 +120,37 @@ class TestUpdate:
         assert updated is not None
         assert updated.owner_id == game_master
 
-    async def test_returns_none_when_not_found(self, service: CharacterService, access: CampaignAccess):
-        assert await service.update(uuid.uuid4(), access, "Strider") is None
+    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+        with pytest.raises(CharacterNotAvailable):
+            await service.update(uuid.uuid4(), access, "Strider")
 
-    async def test_returns_none_for_a_character_at_another_table(
+    async def test_raises_for_a_character_at_another_table(
         self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
-        assert await service.update(created.id, access, "Stolen") is None
+        with pytest.raises(CharacterNotAvailable):
+            await service.update(created.id, access, "Stolen")
 
     async def test_a_character_reached_through_the_wrong_table_is_untouched(
         self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
-        await service.update(created.id, access, "Stolen")
+        with pytest.raises(CharacterNotAvailable):
+            await service.update(created.id, access, "Stolen")
 
-        found = await service.get_for(created.id, other_access)
-        assert found is not None
-        assert found.name == "Aragorn"
+        assert (await service.get_for(created.id, other_access)).name == "Aragorn"
 
 
 class TestDelete:
     async def test_removes_the_character(self, service: CharacterService, access: CampaignAccess):
         created = await service.create(access, "Aragorn")
 
-        assert await service.delete(created.id, access) is True
-        assert await service.get_for(created.id, access) is None
+        await service.delete(created.id, access)
+
+        with pytest.raises(CharacterNotAvailable):
+            await service.get_for(created.id, access)
 
     async def test_leaves_the_other_sheets_at_the_table(self, service: CharacterService, access: CampaignAccess):
         doomed = await service.create(access, "Aragorn")
@@ -154,21 +160,24 @@ class TestDelete:
 
         assert [c.name for c in await service.list_for(access)] == ["Legolas"]
 
-    async def test_returns_false_when_not_found(self, service: CharacterService, access: CampaignAccess):
-        assert await service.delete(uuid.uuid4(), access) is False
+    async def test_raises_when_not_found(self, service: CharacterService, access: CampaignAccess):
+        with pytest.raises(CharacterNotAvailable):
+            await service.delete(uuid.uuid4(), access)
 
-    async def test_returns_false_for_a_character_at_another_table(
+    async def test_raises_for_a_character_at_another_table(
         self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
-        assert await service.delete(created.id, access) is False
+        with pytest.raises(CharacterNotAvailable):
+            await service.delete(created.id, access)
 
     async def test_a_character_reached_through_the_wrong_table_survives(
         self, service: CharacterService, access: CampaignAccess, other_access: CampaignAccess
     ):
         created = await service.create(other_access, "Aragorn")
 
-        await service.delete(created.id, access)
+        with pytest.raises(CharacterNotAvailable):
+            await service.delete(created.id, access)
 
         assert await service.get_for(created.id, other_access) is not None

@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.contexts.source.domain.ports.source_repository import SourceRepository
-from app.contexts.source.domain.source import Source
+from app.contexts.source.domain.source import Source, SourceNotAvailable
 
 
 class SourceService:
@@ -19,20 +19,23 @@ class SourceService:
         source = Source(title=title, owner_id=owner_id)
         return await self._repository.save(source)
 
-    async def get_for(self, id: UUID, owner_id: UUID) -> Source | None:
-        return await self._repository.find_by_id_for(id, owner_id)
+    async def get_for(self, id: UUID, owner_id: UUID) -> Source:
+        source = await self._repository.find_by_id_for(id, owner_id)
+        if source is None:
+            raise SourceNotAvailable
+        return source
 
     async def list_for(self, owner_id: UUID) -> list[Source]:
         return await self._repository.find_all_for(owner_id)
 
-    async def rename(self, id: UUID, owner_id: UUID, title: str) -> Source | None:
+    async def rename(self, id: UUID, owner_id: UUID, title: str) -> Source:
         source = await self._repository.find_by_id_for(id, owner_id)
         if source is None or not source.is_editable_by(owner_id):
-            return None
+            raise SourceNotAvailable
         source.title = title
         return await self._repository.save(source)
 
-    async def delete(self, id: UUID, owner_id: UUID) -> bool:
+    async def delete(self, id: UUID, owner_id: UUID) -> None:
         """Nothing hangs off a source, so removing one sweeps nothing up after it.
 
         The contrast with `CampaignService.delete` is the whole reason a source needs no
@@ -40,6 +43,5 @@ class SourceService:
         """
         source = await self._repository.find_by_id_for(id, owner_id)
         if source is None or not source.is_editable_by(owner_id):
-            return False
+            raise SourceNotAvailable
         await self._repository.delete_for(id, owner_id)
-        return True

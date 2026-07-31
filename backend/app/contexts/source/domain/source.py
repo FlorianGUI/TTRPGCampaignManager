@@ -1,6 +1,14 @@
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
+from app.common.errors import NotAvailable
+
+
+class SourceNotAvailable(NotAvailable):
+    """No such source, or not one this game master owns — indistinguishable on purpose."""
+
+    detail = "Source not found"
+
 
 @dataclass
 class Source:

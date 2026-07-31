@@ -1,6 +1,18 @@
 from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
+from app.common.errors import NotAvailable
+
+
+class CharacterNotAvailable(NotAvailable):
+    """No such sheet at this table, or not one this viewer may touch.
+
+    One exception for both, so a caller holding a real character id from someone else's
+    campaign learns exactly as much as one guessing at random.
+    """
+
+    detail = "Character not found"
+
 
 @dataclass
 class Character:

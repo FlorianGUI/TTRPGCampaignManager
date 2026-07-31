@@ -5,7 +5,7 @@ import pytest
 
 from app.contexts.source.application.source_service import SourceService
 from app.contexts.source.domain.ports.source_repository import SourceRepository
-from app.contexts.source.domain.source import Source
+from app.contexts.source.domain.source import Source, SourceNotAvailable
 
 
 class FakeSourceRepository(SourceRepository):
@@ -73,19 +73,15 @@ class TestGetFor:
 
         assert found == created
 
-    async def test_returns_none_when_not_found(self, service: SourceService, owner_id: UUID):
-        result = await service.get_for(uuid.uuid4(), owner_id)
+    async def test_raises_when_not_found(self, service: SourceService, owner_id: UUID):
+        with pytest.raises(SourceNotAvailable):
+            await service.get_for(uuid.uuid4(), owner_id)
 
-        assert result is None
-
-    async def test_returns_none_when_owned_by_someone_else(
-        self, service: SourceService, owner_id: UUID, someone_else: UUID
-    ):
+    async def test_raises_when_owned_by_someone_else(self, service: SourceService, owner_id: UUID, someone_else: UUID):
         created = await service.create("SRD 5.1", owner_id)
 
-        result = await service.get_for(created.id, someone_else)
-
-        assert result is None
+        with pytest.raises(SourceNotAvailable):
+            await service.get_for(created.id, someone_else)
 
 
 class TestListFor:
@@ -119,7 +115,6 @@ class TestRename:
 
         renamed = await service.rename(created.id, owner_id, "SRD 5.1")
 
-        assert renamed is not None
         assert renamed.title == "SRD 5.1"
 
     async def test_keeps_the_new_title(self, service: SourceService, owner_id: UUID):
@@ -127,42 +122,37 @@ class TestRename:
 
         await service.rename(created.id, owner_id, "SRD 5.1")
 
-        found = await service.get_for(created.id, owner_id)
-        assert found is not None
-        assert found.title == "SRD 5.1"
+        assert (await service.get_for(created.id, owner_id)).title == "SRD 5.1"
 
-    async def test_returns_none_when_not_found(self, service: SourceService, owner_id: UUID):
-        result = await service.rename(uuid.uuid4(), owner_id, "SRD 5.1")
+    async def test_raises_when_not_found(self, service: SourceService, owner_id: UUID):
+        with pytest.raises(SourceNotAvailable):
+            await service.rename(uuid.uuid4(), owner_id, "SRD 5.1")
 
-        assert result is None
-
-    async def test_returns_none_when_owned_by_someone_else(
-        self, service: SourceService, owner_id: UUID, someone_else: UUID
-    ):
+    async def test_raises_when_owned_by_someone_else(self, service: SourceService, owner_id: UUID, someone_else: UUID):
         created = await service.create("SRD 5.0", owner_id)
 
-        result = await service.rename(created.id, someone_else, "SRD 5.1")
-
-        assert result is None
+        with pytest.raises(SourceNotAvailable):
+            await service.rename(created.id, someone_else, "SRD 5.1")
 
     async def test_leaves_a_source_owned_by_someone_else_untouched(
         self, service: SourceService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("SRD 5.0", owner_id)
 
-        await service.rename(created.id, someone_else, "SRD 5.1")
+        with pytest.raises(SourceNotAvailable):
+            await service.rename(created.id, someone_else, "SRD 5.1")
 
-        found = await service.get_for(created.id, owner_id)
-        assert found is not None
-        assert found.title == "SRD 5.0"
+        assert (await service.get_for(created.id, owner_id)).title == "SRD 5.0"
 
 
 class TestDelete:
     async def test_removes_the_source(self, service: SourceService, owner_id: UUID):
         created = await service.create("SRD 5.1", owner_id)
 
-        assert await service.delete(created.id, owner_id) is True
-        assert await service.get_for(created.id, owner_id) is None
+        await service.delete(created.id, owner_id)
+
+        with pytest.raises(SourceNotAvailable):
+            await service.get_for(created.id, owner_id)
 
     async def test_leaves_the_rest_of_the_library_alone(self, service: SourceService, owner_id: UUID):
         doomed = await service.create("SRD 5.1", owner_id)
@@ -172,21 +162,22 @@ class TestDelete:
 
         assert [s.title for s in await service.list_for(owner_id)] == ["Monster Manual"]
 
-    async def test_returns_false_when_not_found(self, service: SourceService, owner_id: UUID):
-        assert await service.delete(uuid.uuid4(), owner_id) is False
+    async def test_raises_when_not_found(self, service: SourceService, owner_id: UUID):
+        with pytest.raises(SourceNotAvailable):
+            await service.delete(uuid.uuid4(), owner_id)
 
-    async def test_returns_false_when_owned_by_someone_else(
-        self, service: SourceService, owner_id: UUID, someone_else: UUID
-    ):
+    async def test_raises_when_owned_by_someone_else(self, service: SourceService, owner_id: UUID, someone_else: UUID):
         created = await service.create("SRD 5.1", owner_id)
 
-        assert await service.delete(created.id, someone_else) is False
+        with pytest.raises(SourceNotAvailable):
+            await service.delete(created.id, someone_else)
 
     async def test_leaves_a_source_owned_by_someone_else_standing(
         self, service: SourceService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("SRD 5.1", owner_id)
 
-        await service.delete(created.id, someone_else)
+        with pytest.raises(SourceNotAvailable):
+            await service.delete(created.id, someone_else)
 
         assert await service.get_for(created.id, owner_id) is not None
