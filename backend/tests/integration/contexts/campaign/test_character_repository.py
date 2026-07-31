@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.access import Unsafe
+from app.common.ids import CharacterId, UserId
 from app.contexts.campaign.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character import Character
@@ -24,18 +25,18 @@ def repository(db: AsyncSession) -> SqlAlchemyCharacterRepository:
 
 
 @pytest.fixture
-def owner_id() -> uuid.UUID:
-    return uuid.uuid4()
+def owner_id() -> UserId:
+    return UserId(uuid.uuid4())
 
 
 @pytest.fixture
-def access(owner_id: uuid.UUID) -> CharacterAccess:
+def access(owner_id: UserId) -> CharacterAccess:
     campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id)
     return CampaignAccess(owner_id).characters_at(Unsafe(campaign))
 
 
 @pytest.fixture
-def other_access(owner_id: uuid.UUID) -> CharacterAccess:
+def other_access(owner_id: UserId) -> CharacterAccess:
     return CampaignAccess(owner_id).characters_at(Unsafe(Campaign(name="Fen Wardens", owner_id=owner_id)))
 
 
@@ -48,7 +49,7 @@ class TestSave:
         assert await repository.save(character) == character
 
     async def test_persists_character(
-        self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess, owner_id: uuid.UUID
+        self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess, owner_id: UserId
     ):
         character = _character_at(access, "Aragorn", "A ranger of the North")
         await repository.save(character)
@@ -90,7 +91,7 @@ class TestFindById:
     async def test_returns_none_for_unknown_id(
         self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess
     ):
-        assert (await repository.find_by_id(uuid.uuid4())).unchecked is None
+        assert (await repository.find_by_id(CharacterId(uuid.uuid4()))).unchecked is None
 
     async def test_finds_a_character_at_any_table(
         self,
@@ -160,7 +161,7 @@ class TestDelete:
     async def test_deleting_an_unknown_id_is_not_an_error(
         self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess
     ):
-        await repository.delete(uuid.uuid4())
+        await repository.delete(CharacterId(uuid.uuid4()))
 
 
 class TestDeleteAllIn:

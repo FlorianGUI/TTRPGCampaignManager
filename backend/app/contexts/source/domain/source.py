@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import ClassVar
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from app.common.access import Access
 from app.common.errors import NotAvailable
+from app.common.ids import SourceId, UserId
 
 
 class SourceNotAvailable(NotAvailable):
@@ -21,8 +22,8 @@ class Source:
     """
 
     title: str
-    owner_id: UUID
-    id: UUID = field(default_factory=uuid4)
+    owner_id: UserId
+    id: SourceId = field(default_factory=lambda: SourceId(uuid4()))
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class SourceAccess(Access[Source]):
     sources without owning them, `may_read` widens and the other two do not.
     """
 
-    viewer_id: UUID
+    viewer_id: UserId
 
     not_available: ClassVar[type[NotAvailable]] = SourceNotAvailable
 

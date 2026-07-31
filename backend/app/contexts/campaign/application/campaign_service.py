@@ -1,6 +1,5 @@
-from uuid import UUID
-
 from app.common.access import Unsafe
+from app.common.ids import CampaignId, UserId
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
@@ -23,17 +22,17 @@ class CampaignService:
         self._repository = repository
         self._characters = characters
 
-    async def create(self, name: str, owner_id: UUID, description: str | None = None) -> Campaign:
+    async def create(self, name: str, owner_id: UserId, description: str | None = None) -> Campaign:
         campaign = Campaign(name=name, owner_id=owner_id, description=description)
         return await self._repository.save(campaign)
 
-    async def get_for(self, id: UUID, owner_id: UUID) -> Campaign:
+    async def get_for(self, id: CampaignId, owner_id: UserId) -> Campaign:
         return CampaignAccess(owner_id).readable(await self._repository.find_by_id(id))
 
-    async def list_for(self, owner_id: UUID) -> list[Campaign]:
+    async def list_for(self, owner_id: UserId) -> list[Campaign]:
         return await self._repository.find_all_for(owner_id)
 
-    async def characters_at(self, id: UUID, viewer_id: UUID) -> CharacterAccess:
+    async def characters_at(self, id: CampaignId, viewer_id: UserId) -> CharacterAccess:
         """The one authorisation helper for this context, and the door to everything inside it.
 
         Fetch the row, hand it to the access object, get back a token or an exception.
@@ -43,13 +42,13 @@ class CampaignService:
         """
         return CampaignAccess(viewer_id).characters_at(await self._repository.find_by_id(id))
 
-    async def update(self, id: UUID, owner_id: UUID, name: str, description: str | None = None) -> Campaign:
+    async def update(self, id: CampaignId, owner_id: UserId, name: str, description: str | None = None) -> Campaign:
         campaign = CampaignAccess(owner_id).editable(await self._repository.find_by_id(id))
         campaign.name = name
         campaign.description = description
         return await self._repository.save(campaign)
 
-    async def delete(self, id: UUID, owner_id: UUID) -> None:
+    async def delete(self, id: CampaignId, owner_id: UserId) -> None:
         """Take the table away, and the sheets at it with it.
 
         The cascade is a rule of the application, not an `ON DELETE CASCADE`: there is

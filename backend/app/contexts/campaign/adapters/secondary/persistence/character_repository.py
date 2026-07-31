@@ -1,9 +1,8 @@
-from uuid import UUID
-
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.access import Unsafe
+from app.common.ids import CampaignId, CharacterId, UserId
 from app.contexts.campaign.adapters.secondary.persistence.character_model import CharacterModel
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
@@ -35,7 +34,7 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
         await self._session.commit()
         return character
 
-    async def find_by_id(self, id: UUID) -> Unsafe[Character]:
+    async def find_by_id(self, id: CharacterId) -> Unsafe[Character]:
         result = await self._session.execute(select(CharacterModel).where(CharacterModel.id == id))
         model = result.scalar_one_or_none()
         return Unsafe(self._to_domain(model) if model is not None else None)
@@ -46,7 +45,7 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
-    async def delete(self, id: UUID) -> None:
+    async def delete(self, id: CharacterId) -> None:
         await self._session.execute(delete(CharacterModel).where(CharacterModel.id == id))
         await self._session.commit()
 
@@ -58,9 +57,9 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
     @staticmethod
     def _to_domain(model: CharacterModel) -> Character:
         return Character(
-            id=model.id,
+            id=CharacterId(model.id),
             name=model.name,
             description=model.description,
-            owner_id=model.owner_id,
-            campaign_id=model.campaign_id,
+            owner_id=UserId(model.owner_id),
+            campaign_id=CampaignId(model.campaign_id),
         )

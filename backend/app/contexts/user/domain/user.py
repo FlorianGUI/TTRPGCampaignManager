@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
-from uuid import UUID, uuid4
+from uuid import uuid4
+
+from app.common.ids import UserId
 
 
 @dataclass
@@ -7,4 +9,4 @@ class User:
     username: str
     email: str
     hashed_password: str
-    id: UUID = field(default_factory=uuid4)
+    id: UserId = field(default_factory=lambda: UserId(uuid4()))

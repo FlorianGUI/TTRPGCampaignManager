@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 from typing import ClassVar
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from app.common.access import Access, Unsafe
 from app.common.errors import NotAvailable
-from app.contexts.campaign.domain.character_access import CharacterAccess, ReachedCampaign
+from app.common.ids import CampaignId, UserId
+from app.contexts.campaign.domain.character_access import CharacterAccess
 
 
 class CampaignNotReachable(NotAvailable):
@@ -29,9 +30,9 @@ class Campaign:
     """
 
     name: str
-    owner_id: UUID
+    owner_id: UserId
     description: str | None = None
-    id: UUID = field(default_factory=uuid4)
+    id: CampaignId = field(default_factory=lambda: CampaignId(uuid4()))
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,7 @@ class CampaignAccess(Access[Campaign]):
     it does.
     """
 
-    viewer_id: UUID
+    viewer_id: UserId
 
     not_available: ClassVar[type[NotAvailable]] = CampaignNotReachable
 
@@ -78,7 +79,4 @@ class CampaignAccess(Access[Campaign]):
         method every other read goes through, so there is no second copy of the rule to
         drift. #52 and #29 add a sibling each.
         """
-        return CharacterAccess(
-            campaign_id=ReachedCampaign(self.readable(campaign).id),
-            viewer_id=self.viewer_id,
-        )
+        return CharacterAccess(campaign_id=self.readable(campaign).id, viewer_id=self.viewer_id)

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from uuid import UUID
 
 from app.common.access import Unsafe
+from app.common.ids import SourceId, UserId
 from app.contexts.source.domain.source import Source
 
 
@@ -22,11 +22,11 @@ class SourceRepository(ABC):
     async def save(self, source: Source) -> Source: ...
 
     @abstractmethod
-    async def find_by_id(self, id: UUID) -> Unsafe[Source]: ...
+    async def find_by_id(self, id: SourceId) -> Unsafe[Source]: ...
 
     @abstractmethod
-    async def find_all_for(self, owner_id: UUID) -> list[Source]: ...
+    async def find_all_for(self, owner_id: UserId) -> list[Source]: ...
 
     @abstractmethod
-    async def delete(self, id: UUID) -> None:
+    async def delete(self, id: SourceId) -> None:
         """Unscoped on purpose: the caller reached this id through `editable` already."""

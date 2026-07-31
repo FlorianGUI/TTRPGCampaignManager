@@ -2,6 +2,7 @@ from uuid import UUID
 
 import jwt
 
+from app.common.ids import UserId
 from app.common.security.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.contexts.user.domain.ports.user_repository import UserRepository
 from app.contexts.user.domain.user import User
@@ -31,12 +32,12 @@ class UserService:
             raise InvalidCredentialsError(username)
         return create_access_token(subject=str(user.id))
 
-    async def get(self, id: UUID) -> User | None:
+    async def get(self, id: UserId) -> User | None:
         return await self._repository.find_by_id(id)
 
     async def get_by_token(self, token: str) -> User:
         try:
-            user_id = UUID(decode_access_token(token))
+            user_id = UserId(UUID(decode_access_token(token)))
         except (jwt.PyJWTError, ValueError):
             raise InvalidCredentialsError(token) from None
         user = await self._repository.find_by_id(user_id)

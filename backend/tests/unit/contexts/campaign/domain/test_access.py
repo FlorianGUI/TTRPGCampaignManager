@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from app.common.access import Unsafe
+from app.common.ids import UserId
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess, CampaignNotReachable
 from app.contexts.campaign.domain.character import Character, CharacterNotAvailable
 from app.contexts.campaign.domain.character_access import CharacterAccess
@@ -14,23 +15,23 @@ def _character_at(access: CharacterAccess, name: str) -> Character:
 
 class TestCampaignAccess:
     def test_the_owner_may_read_their_own_table(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
 
         assert CampaignAccess(owner_id).readable(Unsafe(Campaign(name="Greyfen", owner_id=owner_id))) is not None
 
     def test_nobody_else_may_read_it(self):
-        campaign = Campaign(name="Greyfen", owner_id=uuid.uuid4())
+        campaign = Campaign(name="Greyfen", owner_id=UserId(uuid.uuid4()))
 
         with pytest.raises(CampaignNotReachable):
-            CampaignAccess(uuid.uuid4()).readable(Unsafe(campaign))
+            CampaignAccess(UserId(uuid.uuid4())).readable(Unsafe(campaign))
 
     def test_a_campaign_that_is_not_there_answers_the_same_way(self):
         """The 404 decision, at the level where it is decided."""
         with pytest.raises(CampaignNotReachable):
-            CampaignAccess(uuid.uuid4()).readable(Unsafe(None))
+            CampaignAccess(UserId(uuid.uuid4())).readable(Unsafe(None))
 
     def test_the_owner_may_edit_and_delete_their_own_table(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
         campaign = Campaign(name="Greyfen", owner_id=owner_id)
         access = CampaignAccess(owner_id)
 
@@ -38,8 +39,8 @@ class TestCampaignAccess:
         assert access.deletable(Unsafe(campaign)) is campaign
 
     def test_nobody_else_may_edit_or_delete_it(self):
-        campaign = Campaign(name="Greyfen", owner_id=uuid.uuid4())
-        access = CampaignAccess(uuid.uuid4())
+        campaign = Campaign(name="Greyfen", owner_id=UserId(uuid.uuid4()))
+        access = CampaignAccess(UserId(uuid.uuid4()))
 
         with pytest.raises(CampaignNotReachable):
             access.editable(Unsafe(campaign))
@@ -51,7 +52,7 @@ class TestCharactersAt:
     """The one thing anywhere that builds a CharacterAccess."""
 
     def test_the_owner_is_handed_a_token_for_this_table(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
         campaign = Campaign(name="Greyfen", owner_id=owner_id)
 
         access = CampaignAccess(owner_id).characters_at(Unsafe(campaign))
@@ -70,7 +71,7 @@ class TestCharacterAccess:
 
     @pytest.fixture
     def access(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
         return CampaignAccess(owner_id).characters_at(Unsafe(Campaign(name="Greyfen", owner_id=owner_id)))
 
     def test_the_game_master_may_read_a_sheet_at_their_table(self, access: CharacterAccess):
@@ -111,12 +112,12 @@ class TestASheetAtAnotherTable:
 
     @pytest.fixture
     def access(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
         return CampaignAccess(owner_id).characters_at(Unsafe(Campaign(name="Greyfen", owner_id=owner_id)))
 
     @pytest.fixture
     def elsewhere(self):
-        owner_id = uuid.uuid4()
+        owner_id = UserId(uuid.uuid4())
         return CampaignAccess(owner_id).characters_at(Unsafe(Campaign(name="Fen Wardens", owner_id=owner_id)))
 
     def test_cannot_be_read(self, access: CharacterAccess, elsewhere: CharacterAccess):

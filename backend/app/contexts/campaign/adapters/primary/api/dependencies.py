@@ -1,8 +1,7 @@
-from uuid import UUID
-
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ids import CampaignId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.secondary.persistence.campaign_repository import SqlAlchemyCampaignRepository
 from app.contexts.campaign.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
@@ -24,7 +23,7 @@ def get_character_service(db: AsyncSession = Depends(get_db)) -> CharacterServic
 
 
 async def get_character_access(
-    campaign_id: UUID,
+    campaign_id: CampaignId,
     user: User = Depends(get_current_user),
     campaigns: CampaignService = Depends(get_campaign_service),
 ) -> CharacterAccess:
