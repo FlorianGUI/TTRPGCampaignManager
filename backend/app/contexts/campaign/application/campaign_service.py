@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.contexts.campaign.domain.access import CampaignAccess
+from app.contexts.campaign.domain.access import CampaignAccess, CampaignNotReachable
 from app.contexts.campaign.domain.campaign import Campaign
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
@@ -26,13 +26,16 @@ class CampaignService:
         campaign = Campaign(name=name, owner_id=owner_id, description=description)
         return await self._repository.save(campaign)
 
-    async def get_for(self, id: UUID, owner_id: UUID) -> Campaign | None:
-        return await self._repository.find_by_id_for(id, owner_id)
+    async def get_for(self, id: UUID, owner_id: UUID) -> Campaign:
+        campaign = await self._repository.find_by_id_for(id, owner_id)
+        if campaign is None:
+            raise CampaignNotReachable
+        return campaign
 
     async def list_for(self, owner_id: UUID) -> list[Campaign]:
         return await self._repository.find_all_for(owner_id)
 
-    async def access_to(self, id: UUID, viewer_id: UUID) -> CampaignAccess | None:
+    async def access_to(self, id: UUID, viewer_id: UUID) -> CampaignAccess:
         """The one authorisation helper for this context, and the door to everything inside it.
 
         Two questions in one call, and they stay distinct as the rules grow: the read
@@ -42,20 +45,17 @@ class CampaignService:
         was invited to, and `grant` is what starts telling a game master apart from a
         player — without this call site changing.
         """
-        campaign = await self._repository.find_by_id_for(id, viewer_id)
-        if campaign is None:
-            return None
-        return campaign.grant(viewer_id)
+        return (await self.get_for(id, viewer_id)).grant(viewer_id)
 
-    async def update(self, id: UUID, owner_id: UUID, name: str, description: str | None = None) -> Campaign | None:
+    async def update(self, id: UUID, owner_id: UUID, name: str, description: str | None = None) -> Campaign:
         campaign = await self._repository.find_by_id_for(id, owner_id)
         if campaign is None or not campaign.is_editable_by(owner_id):
-            return None
+            raise CampaignNotReachable
         campaign.name = name
         campaign.description = description
         return await self._repository.save(campaign)
 
-    async def delete(self, id: UUID, owner_id: UUID) -> bool:
+    async def delete(self, id: UUID, owner_id: UUID) -> None:
         """Take the table away, and the sheets at it with it.
 
         The cascade is a rule of the application, not an `ON DELETE CASCADE`: there is
@@ -68,7 +68,6 @@ class CampaignService:
         """
         campaign = await self._repository.find_by_id_for(id, owner_id)
         if campaign is None or not campaign.is_editable_by(owner_id):
-            return False
+            raise CampaignNotReachable
         await self._characters.delete_all_in(campaign.grant(owner_id))
         await self._repository.delete_for(id, owner_id)
-        return True

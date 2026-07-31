@@ -1,15 +1,20 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from app.common.errors import NotAvailable
 from app.contexts.campaign.domain.character import Character
 
 
-class CampaignNotReachable(Exception):
+class CampaignNotReachable(NotAvailable):
     """A viewer asked a campaign for access it cannot have.
 
-    Raised by `Campaign.grant` rather than returned, because there is no useful token
-    to hand back: the caller has nothing to do with a campaign it may not reach.
+    Raised rather than returned, because there is no useful token to hand back: the
+    caller has nothing to do with a campaign it may not reach. It travels all the way
+    out to the HTTP boundary untouched, where one handler turns it into the 404 that a
+    campaign which does not exist would also get.
     """
+
+    detail = "Campaign not found"
 
 
 @dataclass(frozen=True)

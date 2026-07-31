@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.contexts.campaign.domain.access import CampaignAccess
-from app.contexts.campaign.domain.character import Character
+from app.contexts.campaign.domain.character import Character, CharacterNotAvailable
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
 
 
@@ -27,8 +27,11 @@ class CharacterService:
     async def create(self, access: CampaignAccess, name: str, description: str | None = None) -> Character:
         return await self._repository.save(access.new_character(name, description))
 
-    async def get_for(self, id: UUID, access: CampaignAccess) -> Character | None:
-        return await self._repository.find_by_id_in(id, access)
+    async def get_for(self, id: UUID, access: CampaignAccess) -> Character:
+        character = await self._repository.find_by_id_in(id, access)
+        if character is None:
+            raise CharacterNotAvailable
+        return character
 
     async def list_for(self, access: CampaignAccess) -> list[Character]:
         return await self._repository.find_all_in(access)
@@ -39,17 +42,16 @@ class CharacterService:
         access: CampaignAccess,
         name: str,
         description: str | None = None,
-    ) -> Character | None:
+    ) -> Character:
         character = await self._repository.find_by_id_in(id, access)
         if character is None or not access.may_edit(character):
-            return None
+            raise CharacterNotAvailable
         character.name = name
         character.description = description
         return await self._repository.save(character)
 
-    async def delete(self, id: UUID, access: CampaignAccess) -> bool:
+    async def delete(self, id: UUID, access: CampaignAccess) -> None:
         character = await self._repository.find_by_id_in(id, access)
         if character is None or not access.may_delete(character):
-            return False
+            raise CharacterNotAvailable
         await self._repository.delete_in(id, access)
-        return True

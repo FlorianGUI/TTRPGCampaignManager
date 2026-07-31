@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
@@ -11,9 +11,6 @@ from app.contexts.campaign.application.character_service import CharacterService
 from app.contexts.campaign.domain.access import CampaignAccess
 from app.contexts.user.domain.user import User
 from app.database import get_db
-
-# A campaign the caller cannot reach answers exactly as one that does not exist.
-CAMPAIGN_NOT_FOUND = HTTPException(status_code=404, detail="Campaign not found")
 
 
 def get_campaign_service(db: AsyncSession = Depends(get_db)) -> CampaignService:
@@ -43,8 +40,9 @@ async def get_campaign_access(
     complains. What stops that being a leak is the token: a route without one cannot
     call a single repository method that touches a campaign's contents, because none of
     them accept anything else. Forgetting this fails closed rather than open.
+
+    Nothing is caught here. `access_to` raises `CampaignNotReachable` for a campaign
+    that is missing or not this viewer's, and it travels untouched to the handler that
+    turns it into a 404 — the same answer, in the same words, for either reason.
     """
-    access = await campaigns.access_to(campaign_id, user.id)
-    if access is None:
-        raise CAMPAIGN_NOT_FOUND
-    return access
+    return await campaigns.access_to(campaign_id, user.id)

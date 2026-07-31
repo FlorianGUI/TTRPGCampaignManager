@@ -4,6 +4,7 @@ from uuid import UUID
 import pytest
 
 from app.contexts.campaign.application.campaign_service import CampaignService
+from app.contexts.campaign.domain.access import CampaignNotReachable
 from tests.unit.contexts.campaign.application.fakes import FakeCharacterRepository
 
 
@@ -38,15 +39,17 @@ class TestGetFor:
 
         assert await service.get_for(created.id, owner_id) == created
 
-    async def test_returns_none_when_not_found(self, service: CampaignService, owner_id: UUID):
-        assert await service.get_for(uuid.uuid4(), owner_id) is None
+    async def test_raises_when_not_found(self, service: CampaignService, owner_id: UUID):
+        with pytest.raises(CampaignNotReachable):
+            await service.get_for(uuid.uuid4(), owner_id)
 
-    async def test_returns_none_when_owned_by_someone_else(
+    async def test_raises_when_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
-        assert await service.get_for(created.id, someone_else) is None
+        with pytest.raises(CampaignNotReachable):
+            await service.get_for(created.id, someone_else)
 
 
 class TestListFor:
@@ -75,14 +78,16 @@ class TestAccessTo:
         assert access.viewer_id == owner_id
 
     async def test_grants_nothing_for_a_campaign_that_does_not_exist(self, service: CampaignService, owner_id: UUID):
-        assert await service.access_to(uuid.uuid4(), owner_id) is None
+        with pytest.raises(CampaignNotReachable):
+            await service.access_to(uuid.uuid4(), owner_id)
 
     async def test_grants_nothing_for_a_campaign_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("The Hollow Beneath Greyfen", owner_id)
 
-        assert await service.access_to(created.id, someone_else) is None
+        with pytest.raises(CampaignNotReachable):
+            await service.access_to(created.id, someone_else)
 
 
 class TestUpdate:
@@ -103,41 +108,43 @@ class TestUpdate:
         assert updated is not None
         assert updated.description is None
 
-    async def test_returns_none_when_not_found(self, service: CampaignService, owner_id: UUID):
-        assert await service.update(uuid.uuid4(), owner_id, "Greyfen") is None
+    async def test_raises_when_not_found(self, service: CampaignService, owner_id: UUID):
+        with pytest.raises(CampaignNotReachable):
+            await service.update(uuid.uuid4(), owner_id, "Greyfen")
 
-    async def test_returns_none_when_owned_by_someone_else(
+    async def test_raises_when_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("Greyfen", owner_id)
 
-        assert await service.update(created.id, someone_else, "Not yours") is None
+        with pytest.raises(CampaignNotReachable):
+            await service.update(created.id, someone_else, "Not yours")
 
     async def test_leaves_a_campaign_owned_by_someone_else_untouched(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("Greyfen", owner_id)
 
-        await service.update(created.id, someone_else, "Not yours")
+        with pytest.raises(CampaignNotReachable):
+            await service.update(created.id, someone_else, "Not yours")
 
-        found = await service.get_for(created.id, owner_id)
-        assert found is not None
-        assert found.name == "Greyfen"
+        assert (await service.get_for(created.id, owner_id)).name == "Greyfen"
 
 
 class TestDelete:
     async def test_removes_the_campaign(self, service: CampaignService, owner_id: UUID):
         created = await service.create("Greyfen", owner_id)
 
-        assert await service.delete(created.id, owner_id) is True
-        assert await service.get_for(created.id, owner_id) is None
+        await service.delete(created.id, owner_id)
+
+        with pytest.raises(CampaignNotReachable):
+            await service.get_for(created.id, owner_id)
 
     async def test_takes_the_characters_at_that_table_with_it(
         self, service: CampaignService, characters: FakeCharacterRepository, owner_id: UUID
     ):
         created = await service.create("Greyfen", owner_id)
         access = await service.access_to(created.id, owner_id)
-        assert access is not None
         await characters.save(access.new_character("Aragorn"))
 
         await service.delete(created.id, owner_id)
@@ -150,7 +157,6 @@ class TestDelete:
         doomed = await service.create("Greyfen", owner_id)
         spared = await service.create("Fen Wardens", owner_id)
         elsewhere = await service.access_to(spared.id, owner_id)
-        assert elsewhere is not None
         await characters.save(elsewhere.new_character("Legolas"))
 
         await service.delete(doomed.id, owner_id)
@@ -160,24 +166,27 @@ class TestDelete:
     async def test_deleting_an_empty_campaign_is_not_an_error(self, service: CampaignService, owner_id: UUID):
         created = await service.create("Greyfen", owner_id)
 
-        assert await service.delete(created.id, owner_id) is True
+        await service.delete(created.id, owner_id)
 
-    async def test_returns_false_when_not_found(self, service: CampaignService, owner_id: UUID):
-        assert await service.delete(uuid.uuid4(), owner_id) is False
+    async def test_raises_when_not_found(self, service: CampaignService, owner_id: UUID):
+        with pytest.raises(CampaignNotReachable):
+            await service.delete(uuid.uuid4(), owner_id)
 
-    async def test_returns_false_when_owned_by_someone_else(
+    async def test_raises_when_owned_by_someone_else(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("Greyfen", owner_id)
 
-        assert await service.delete(created.id, someone_else) is False
+        with pytest.raises(CampaignNotReachable):
+            await service.delete(created.id, someone_else)
 
     async def test_leaves_a_campaign_owned_by_someone_else_standing(
         self, service: CampaignService, owner_id: UUID, someone_else: UUID
     ):
         created = await service.create("Greyfen", owner_id)
 
-        await service.delete(created.id, someone_else)
+        with pytest.raises(CampaignNotReachable):
+            await service.delete(created.id, someone_else)
 
         assert await service.get_for(created.id, owner_id) is not None
 
@@ -190,9 +199,9 @@ class TestDelete:
     ):
         created = await service.create("Greyfen", owner_id)
         access = await service.access_to(created.id, owner_id)
-        assert access is not None
         await characters.save(access.new_character("Aragorn"))
 
-        await service.delete(created.id, someone_else)
+        with pytest.raises(CampaignNotReachable):
+            await service.delete(created.id, someone_else)
 
         assert [c.name for c in await characters.find_all_in(access)] == ["Aragorn"]
