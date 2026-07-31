@@ -3,6 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.access import Unsafe
 from app.contexts.campaign.adapters.secondary.persistence.character_repository import SqlAlchemyCharacterRepository
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character import Character
@@ -29,12 +30,13 @@ def owner_id() -> uuid.UUID:
 
 @pytest.fixture
 def access(owner_id: uuid.UUID) -> CharacterAccess:
-    return CampaignAccess(owner_id).characters_at(Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id))
+    campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id)
+    return CampaignAccess(owner_id).characters_at(Unsafe(campaign))
 
 
 @pytest.fixture
 def other_access(owner_id: uuid.UUID) -> CharacterAccess:
-    return CampaignAccess(owner_id).characters_at(Campaign(name="Fen Wardens", owner_id=owner_id))
+    return CampaignAccess(owner_id).characters_at(Unsafe(Campaign(name="Fen Wardens", owner_id=owner_id)))
 
 
 class TestSave:
@@ -51,7 +53,7 @@ class TestSave:
         character = _character_at(access, "Aragorn", "A ranger of the North")
         await repository.save(character)
 
-        found = await repository.find_by_id(character.id)
+        found = (await repository.find_by_id(character.id)).unchecked
 
         assert found is not None
         assert found.name == "Aragorn"
@@ -68,7 +70,7 @@ class TestSave:
         character.name = "Strider"
         await repository.save(character)
 
-        found = await repository.find_by_id(character.id)
+        found = (await repository.find_by_id(character.id)).unchecked
         assert found is not None
         assert found.name == "Strider"
 
@@ -80,7 +82,7 @@ class TestFindById:
         character = _character_at(access, "Aragorn")
         await repository.save(character)
 
-        result = await repository.find_by_id(character.id)
+        result = (await repository.find_by_id(character.id)).unchecked
 
         assert result is not None
         assert result.id == character.id
@@ -88,7 +90,7 @@ class TestFindById:
     async def test_returns_none_for_unknown_id(
         self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess
     ):
-        assert await repository.find_by_id(uuid.uuid4()) is None
+        assert (await repository.find_by_id(uuid.uuid4())).unchecked is None
 
     async def test_finds_a_character_at_any_table(
         self,
@@ -103,7 +105,7 @@ class TestFindById:
         character = _character_at(other_access, "Aragorn")
         await repository.save(character)
 
-        assert await repository.find_by_id(character.id) is not None
+        assert (await repository.find_by_id(character.id)).unchecked is not None
 
 
 class TestFindAllIn:
@@ -142,7 +144,7 @@ class TestDelete:
 
         await repository.delete(character.id)
 
-        assert await repository.find_by_id(character.id) is None
+        assert (await repository.find_by_id(character.id)).unchecked is None
 
     async def test_leaves_the_other_sheets_at_the_table(
         self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess

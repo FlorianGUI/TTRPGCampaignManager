@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from app.common.access import Unsafe
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
@@ -61,5 +62,5 @@ class CampaignService:
         """
         access = CampaignAccess(owner_id)
         campaign = access.deletable(await self._repository.find_by_id(id))
-        await self._characters.delete_all_in(access.characters_at(campaign))
+        await self._characters.delete_all_in(access.characters_at(Unsafe(campaign)))
         await self._repository.delete(campaign.id)

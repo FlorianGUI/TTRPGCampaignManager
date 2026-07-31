@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from app.common.access import Unsafe
 from app.contexts.source.domain.source import Source
 
 
@@ -21,7 +22,7 @@ class SourceRepository(ABC):
     async def save(self, source: Source) -> Source: ...
 
     @abstractmethod
-    async def find_by_id(self, id: UUID) -> Source | None: ...
+    async def find_by_id(self, id: UUID) -> Unsafe[Source]: ...
 
     @abstractmethod
     async def find_all_for(self, owner_id: UUID) -> list[Source]: ...

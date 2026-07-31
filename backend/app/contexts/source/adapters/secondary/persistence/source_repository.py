@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.access import Unsafe
 from app.contexts.source.adapters.secondary.persistence.source_model import SourceModel
 from app.contexts.source.domain.ports.source_repository import SourceRepository
 from app.contexts.source.domain.source import Source
@@ -25,12 +26,10 @@ class SqlAlchemySourceRepository(SourceRepository):
         await self._session.commit()
         return source
 
-    async def find_by_id(self, id: UUID) -> Source | None:
+    async def find_by_id(self, id: UUID) -> Unsafe[Source]:
         result = await self._session.execute(select(SourceModel).where(SourceModel.id == id))
         model = result.scalar_one_or_none()
-        if model is None:
-            return None
-        return self._to_domain(model)
+        return Unsafe(self._to_domain(model) if model is not None else None)
 
     async def find_all_for(self, owner_id: UUID) -> list[Source]:
         # Filtered in the query, not after the fact: rows the caller may not see are

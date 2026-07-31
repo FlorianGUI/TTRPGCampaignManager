@@ -34,7 +34,7 @@ class TestSave:
         campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id, description="A drowned village")
         await repository.save(campaign)
 
-        found = await repository.find_by_id(campaign.id)
+        found = (await repository.find_by_id(campaign.id)).unchecked
 
         assert found is not None
         assert found.name == "The Hollow Beneath Greyfen"
@@ -50,7 +50,7 @@ class TestSave:
         campaign.name = "The Hollow Beneath Greyfen"
         await repository.save(campaign)
 
-        found = await repository.find_by_id(campaign.id)
+        found = (await repository.find_by_id(campaign.id)).unchecked
         assert found is not None
         assert found.name == "The Hollow Beneath Greyfen"
 
@@ -60,13 +60,13 @@ class TestFindById:
         campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=owner_id)
         await repository.save(campaign)
 
-        result = await repository.find_by_id(campaign.id)
+        result = (await repository.find_by_id(campaign.id)).unchecked
 
         assert result is not None
         assert result.id == campaign.id
 
     async def test_returns_none_for_unknown_id(self, repository: SqlAlchemyCampaignRepository):
-        assert await repository.find_by_id(uuid.uuid4()) is None
+        assert (await repository.find_by_id(uuid.uuid4())).unchecked is None
 
     async def test_finds_a_campaign_whoever_owns_it(
         self, repository: SqlAlchemyCampaignRepository, someone_else: uuid.UUID
@@ -80,7 +80,7 @@ class TestFindById:
         campaign = Campaign(name="Theirs", owner_id=someone_else)
         await repository.save(campaign)
 
-        assert await repository.find_by_id(campaign.id) is not None
+        assert (await repository.find_by_id(campaign.id)).unchecked is not None
 
 
 class TestFindAllFor:
@@ -111,7 +111,7 @@ class TestDelete:
 
         await repository.delete(campaign.id)
 
-        assert await repository.find_by_id(campaign.id) is None
+        assert (await repository.find_by_id(campaign.id)).unchecked is None
 
     async def test_leaves_the_owners_other_campaigns_alone(
         self, repository: SqlAlchemyCampaignRepository, owner_id: uuid.UUID

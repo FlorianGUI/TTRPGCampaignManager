@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from app.common.access import Unsafe
 from app.contexts.campaign.application.character_service import CharacterService
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character import CharacterNotAvailable
@@ -21,12 +22,13 @@ def game_master(owner_id: UUID):
 
 @pytest.fixture
 def access(game_master: UUID) -> CharacterAccess:
-    return CampaignAccess(game_master).characters_at(Campaign(name="The Hollow Beneath Greyfen", owner_id=game_master))
+    campaign = Campaign(name="The Hollow Beneath Greyfen", owner_id=game_master)
+    return CampaignAccess(game_master).characters_at(Unsafe(campaign))
 
 
 @pytest.fixture
 def other_access(game_master: UUID) -> CharacterAccess:
-    return CampaignAccess(game_master).characters_at(Campaign(name="Fen Wardens", owner_id=game_master))
+    return CampaignAccess(game_master).characters_at(Unsafe(Campaign(name="Fen Wardens", owner_id=game_master)))
 
 
 @pytest.fixture

@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.access import Unsafe
 from app.contexts.campaign.adapters.secondary.persistence.character_model import CharacterModel
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
@@ -34,12 +35,10 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
         await self._session.commit()
         return character
 
-    async def find_by_id(self, id: UUID) -> Character | None:
+    async def find_by_id(self, id: UUID) -> Unsafe[Character]:
         result = await self._session.execute(select(CharacterModel).where(CharacterModel.id == id))
         model = result.scalar_one_or_none()
-        if model is None:
-            return None
-        return self._to_domain(model)
+        return Unsafe(self._to_domain(model) if model is not None else None)
 
     async def find_all_in(self, access: CharacterAccess) -> list[Character]:
         result = await self._session.execute(
