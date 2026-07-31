@@ -4,7 +4,7 @@ from app.common.health.health_route import router as health_router
 from app.common.security.cors import setup_cors
 from app.common.security.rate_limiter import setup_rate_limiter
 from app.contexts.campaign.adapters.primary.api.routers.campaigns import router as campaigns_router
-from app.contexts.character.adapters.primary.api.routers.characters import router as characters_router
+from app.contexts.campaign.adapters.primary.api.routers.characters import router as characters_router
 from app.contexts.source.adapters.primary.api.routers.sources import router as sources_router
 from app.contexts.user.adapters.primary.api.routers.users import router as users_router
 
