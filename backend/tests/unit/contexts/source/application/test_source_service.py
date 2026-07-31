@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from app.common.access import Unsafe
 from app.contexts.source.application.source_service import SourceService
 from app.contexts.source.domain.ports.source_repository import SourceRepository
 from app.contexts.source.domain.source import Source, SourceNotAvailable
@@ -16,8 +17,8 @@ class FakeSourceRepository(SourceRepository):
         self._store[source.id] = source
         return source
 
-    async def find_by_id(self, id: UUID) -> Source | None:
-        return self._store.get(id)
+    async def find_by_id(self, id: UUID) -> Unsafe[Source]:
+        return Unsafe(self._store.get(id))
 
     async def find_all_for(self, owner_id: UUID) -> list[Source]:
         return [s for s in self._store.values() if s.owner_id == owner_id]

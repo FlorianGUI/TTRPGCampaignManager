@@ -1,7 +1,33 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import ClassVar
 
 from app.common.errors import NotAvailable
+
+
+@dataclass(frozen=True)
+class Unsafe[T]:
+    """A record straight out of a repository, or nothing. Nobody has checked it yet.
+
+    The marking is on the dangerous side on purpose. A repository cannot hand back a bare
+    record, so the only way to obtain one is to pass this through an `Access` method —
+    which makes forgetting the check a type error at the point of use rather than
+    something review has to notice.
+
+    Marking the *safe* side instead does not work, and it is worth saying why, because it
+    is the more obvious design. If repositories returned `T | None` and `Access` returned
+    some `Safe[T]`, the raw type would stay freely available and wrapping it would be
+    opt-in — a service could declare `-> T` and return the repository's answer directly,
+    and nothing would complain. The guarantee comes from the default being restrictive,
+    which is the same reason taint analysis marks the tainted value at the source rather
+    than blessing it at the sink.
+
+    `unchecked` is the way out, and it is named to read badly. Repository integration
+    tests use it, since asserting on what the repository returned is exactly their job.
+    Anywhere else it should look wrong, which is the whole of its design.
+    """
+
+    unchecked: T | None
 
 
 class Access[T](ABC):
@@ -16,10 +42,11 @@ class Access[T](ABC):
 
     What is left here is only mechanism, and it is the same everywhere:
 
-    - take `T | None`, because the record comes straight from a repository that may have
-      found nothing. Absorbing that here is the point — a record that is absent and a
-      record that is forbidden leave by the same door, so the caller cannot tell which
-      it was, which is the whole of the 404 decision in #12;
+    - take an `Unsafe[T]`, which is the only thing a repository can return, so nothing can
+      reach a record without coming through here. It may hold nothing, and absorbing that
+      is the point — a record that is absent and a record that is forbidden leave by the
+      same door, so the caller cannot tell which it was, which is the whole of the 404
+      decision in #12;
     - hand back the record rather than a yes or no, so a caller cannot take the answer
       and forget to act on it;
     - raise the context's own exception, named by `not_available`, so each keeps its own
@@ -44,17 +71,20 @@ class Access[T](ABC):
     @abstractmethod
     def may_delete(self, record: T) -> bool: ...
 
-    def readable(self, record: T | None) -> T:
+    def readable(self, found: Unsafe[T]) -> T:
+        record = found.unchecked
         if record is None or not self.may_read(record):
             raise self.not_available
         return record
 
-    def editable(self, record: T | None) -> T:
+    def editable(self, found: Unsafe[T]) -> T:
+        record = found.unchecked
         if record is None or not self.may_edit(record):
             raise self.not_available
         return record
 
-    def deletable(self, record: T | None) -> T:
+    def deletable(self, found: Unsafe[T]) -> T:
+        record = found.unchecked
         if record is None or not self.may_delete(record):
             raise self.not_available
         return record

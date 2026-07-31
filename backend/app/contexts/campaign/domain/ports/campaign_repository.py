@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from app.common.access import Unsafe
 from app.contexts.campaign.domain.campaign import Campaign
 
 
@@ -21,7 +22,7 @@ class CampaignRepository(ABC):
     async def save(self, campaign: Campaign) -> Campaign: ...
 
     @abstractmethod
-    async def find_by_id(self, id: UUID) -> Campaign | None: ...
+    async def find_by_id(self, id: UUID) -> Unsafe[Campaign]: ...
 
     @abstractmethod
     async def find_all_for(self, owner_id: UUID) -> list[Campaign]: ...

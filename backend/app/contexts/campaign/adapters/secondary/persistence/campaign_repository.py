@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.access import Unsafe
 from app.contexts.campaign.adapters.secondary.persistence.campaign_model import CampaignModel
 from app.contexts.campaign.domain.campaign import Campaign
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
@@ -25,12 +26,10 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
         await self._session.commit()
         return campaign
 
-    async def find_by_id(self, id: UUID) -> Campaign | None:
+    async def find_by_id(self, id: UUID) -> Unsafe[Campaign]:
         result = await self._session.execute(select(CampaignModel).where(CampaignModel.id == id))
         model = result.scalar_one_or_none()
-        if model is None:
-            return None
-        return self._to_domain(model)
+        return Unsafe(self._to_domain(model) if model is not None else None)
 
     async def find_all_for(self, owner_id: UUID) -> list[Campaign]:
         # The SQL twin of Campaign.is_visible_to. A contract test holds the two to the

@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 from uuid import UUID, uuid4
 
-from app.common.access import Access
+from app.common.access import Access, Unsafe
 from app.common.errors import NotAvailable
-from app.contexts.campaign.domain.character_access import CharacterAccess
+from app.contexts.campaign.domain.character_access import CharacterAccess, ReachedCampaign
 
 
 class CampaignNotReachable(NotAvailable):
@@ -70,7 +70,7 @@ class CampaignAccess(Access[Campaign]):
         stricter one. #31: owner only, most likely, even where `may_edit` widens."""
         return record.owner_id == self.viewer_id
 
-    def characters_at(self, campaign: Campaign | None) -> CharacterAccess:
+    def characters_at(self, campaign: Unsafe[Campaign]) -> CharacterAccess:
         """Hand out the right to work with the sheets at this table.
 
         The one door into everything inside a campaign, and the only thing anywhere that
@@ -78,4 +78,7 @@ class CampaignAccess(Access[Campaign]):
         method every other read goes through, so there is no second copy of the rule to
         drift. #52 and #29 add a sibling each.
         """
-        return CharacterAccess(campaign_id=self.readable(campaign).id, viewer_id=self.viewer_id)
+        return CharacterAccess(
+            campaign_id=ReachedCampaign(self.readable(campaign).id),
+            viewer_id=self.viewer_id,
+        )

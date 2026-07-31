@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
+from app.common.access import Unsafe
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
 
@@ -37,7 +38,7 @@ class CharacterRepository(ABC):
     async def save(self, character: Character) -> Character: ...
 
     @abstractmethod
-    async def find_by_id(self, id: UUID) -> Character | None: ...
+    async def find_by_id(self, id: UUID) -> Unsafe[Character]: ...
 
     @abstractmethod
     async def find_all_in(self, access: CharacterAccess) -> list[Character]: ...

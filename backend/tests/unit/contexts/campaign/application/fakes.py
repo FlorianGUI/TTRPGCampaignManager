@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from app.common.access import Unsafe
 from app.contexts.campaign.domain.campaign import Campaign
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
@@ -19,8 +20,8 @@ class FakeCampaignRepository(CampaignRepository):
         self._store[campaign.id] = campaign
         return campaign
 
-    async def find_by_id(self, id: UUID) -> Campaign | None:
-        return self._store.get(id)
+    async def find_by_id(self, id: UUID) -> Unsafe[Campaign]:
+        return Unsafe(self._store.get(id))
 
     async def find_all_for(self, owner_id: UUID) -> list[Campaign]:
         return [c for c in self._store.values() if c.owner_id == owner_id]
@@ -45,8 +46,8 @@ class FakeCharacterRepository(CharacterRepository):
         self._store[character.id] = character
         return character
 
-    async def find_by_id(self, id: UUID) -> Character | None:
-        return self._store.get(id)
+    async def find_by_id(self, id: UUID) -> Unsafe[Character]:
+        return Unsafe(self._store.get(id))
 
     async def find_all_in(self, access: CharacterAccess) -> list[Character]:
         return [c for c in self._store.values() if c.campaign_id == access.campaign_id]

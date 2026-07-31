@@ -36,7 +36,7 @@ class TestSave:
         source = Source(title="SRD 5.1", owner_id=owner_id)
         await repository.save(source)
 
-        found = await repository.find_by_id(source.id)
+        found = (await repository.find_by_id(source.id)).unchecked
 
         assert found is not None
         assert found.title == "SRD 5.1"
@@ -51,7 +51,7 @@ class TestSave:
         source.title = "SRD 5.1"
         await repository.save(source)
 
-        found = await repository.find_by_id(source.id)
+        found = (await repository.find_by_id(source.id)).unchecked
         assert found is not None
         assert found.title == "SRD 5.1"
 
@@ -61,13 +61,13 @@ class TestFindById:
         source = Source(title="Fen Wardens notes", owner_id=owner_id)
         await repository.save(source)
 
-        result = await repository.find_by_id(source.id)
+        result = (await repository.find_by_id(source.id)).unchecked
 
         assert result is not None
         assert result.id == source.id
 
     async def test_returns_none_for_unknown_id(self, repository: SqlAlchemySourceRepository):
-        assert await repository.find_by_id(uuid.uuid4()) is None
+        assert (await repository.find_by_id(uuid.uuid4())).unchecked is None
 
     async def test_finds_a_source_whoever_owns_it(
         self, repository: SqlAlchemySourceRepository, someone_else: uuid.UUID
@@ -76,7 +76,7 @@ class TestFindById:
         source = Source(title="Xanathars Guide", owner_id=someone_else)
         await repository.save(source)
 
-        assert await repository.find_by_id(source.id) is not None
+        assert (await repository.find_by_id(source.id)).unchecked is not None
 
 
 class TestFindAllFor:
@@ -108,7 +108,7 @@ class TestDelete:
 
         await repository.delete(source.id)
 
-        assert await repository.find_by_id(source.id) is None
+        assert (await repository.find_by_id(source.id)).unchecked is None
 
     async def test_leaves_the_rest_of_the_library_alone(
         self, repository: SqlAlchemySourceRepository, owner_id: uuid.UUID
