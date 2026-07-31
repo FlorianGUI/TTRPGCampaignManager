@@ -13,24 +13,31 @@ class SqlAlchemySourceRepository(SourceRepository):
         self._session = session
 
     async def save(self, source: Source) -> Source:
-        model = SourceModel(
-            id=source.id,
-            title=source.title,
-            owner_id=source.owner_id,
+        # merge() rather than add(): the port has a single save, used both to insert a
+        # new source and to write back one that was read and modified.
+        await self._session.merge(
+            SourceModel(
+                id=source.id,
+                title=source.title,
+                owner_id=source.owner_id,
+            )
         )
-        self._session.add(model)
         await self._session.commit()
         return source
 
-    async def find_by_id(self, id: UUID) -> Source | None:
-        result = await self._session.execute(select(SourceModel).where(SourceModel.id == id))
+    async def find_by_id_for(self, id: UUID, owner_id: UUID) -> Source | None:
+        result = await self._session.execute(
+            select(SourceModel).where(SourceModel.id == id, SourceModel.owner_id == owner_id)
+        )
         model = result.scalar_one_or_none()
         if model is None:
             return None
         return self._to_domain(model)
 
-    async def find_all(self) -> list[Source]:
-        result = await self._session.execute(select(SourceModel))
+    async def find_all_for(self, owner_id: UUID) -> list[Source]:
+        # Filtered in the query, not after the fact: rows the caller may not see are
+        # never loaded in the first place.
+        result = await self._session.execute(select(SourceModel).where(SourceModel.owner_id == owner_id))
         return [self._to_domain(m) for m in result.scalars().all()]
 
     @staticmethod
