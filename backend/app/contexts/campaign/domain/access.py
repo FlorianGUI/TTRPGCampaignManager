@@ -16,11 +16,16 @@ class CampaignNotReachable(Exception):
 class CampaignAccess:
     """Proof that a viewer may reach a campaign, and the answer to what they may do there.
 
-    Only `Campaign.grant` builds one, and every repository method that touches something
-    inside a campaign asks for one — so there is no bare `campaign_id` parameter left
-    anywhere to pass unchecked. Skipping the authorisation stops being a thing you can
-    forget and becomes a thing you cannot express, which is the trade #41 already made
-    when it dropped the unscoped repository reads.
+    `Campaign.grant` builds these and nothing else in the application does, while every
+    repository method that touches something inside a campaign asks for one — so there
+    is no bare `campaign_id` parameter left anywhere to pass unchecked. Skipping the
+    authorisation stops being a thing you can forget and becomes a thing you cannot
+    express, which is the trade #41 already made when it dropped the unscoped reads.
+
+    Being exact about the strength of that: this is an ordinary dataclass, so nothing
+    stops someone writing `CampaignAccess(...)` by hand. The bar worth clearing is that
+    it cannot happen *by accident* — a hand-built token is a deliberate line that reads
+    as strange in review, unlike a filter quietly left off a query.
 
     That matters more as the campaign grows: characters today, session notes (#52) and
     assets (#29) next. Each one is a new set of reads that would otherwise each have to
