@@ -1,8 +1,7 @@
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ids import UserId
 from app.contexts.user.adapters.secondary.persistence.user_model import UserModel
 from app.contexts.user.domain.ports.user_repository import UserRepository
 from app.contexts.user.domain.user import User
@@ -23,7 +22,7 @@ class SqlAlchemyUserRepository(UserRepository):
         await self._session.commit()
         return user
 
-    async def find_by_id(self, id: UUID) -> User | None:
+    async def find_by_id(self, id: UserId) -> User | None:
         result = await self._session.execute(select(UserModel).where(UserModel.id == id))
         model = result.scalar_one_or_none()
         if model is None:
@@ -40,7 +39,7 @@ class SqlAlchemyUserRepository(UserRepository):
     @staticmethod
     def _to_domain(model: UserModel) -> User:
         return User(
-            id=model.id,
+            id=UserId(model.id),
             username=model.username,
             email=model.email,
             hashed_password=model.hashed_password,

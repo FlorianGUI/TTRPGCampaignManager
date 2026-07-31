@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from uuid import UUID
 
 from app.common.access import Unsafe
+from app.common.ids import CampaignId, UserId
 from app.contexts.campaign.domain.campaign import Campaign
 
 
@@ -22,11 +22,11 @@ class CampaignRepository(ABC):
     async def save(self, campaign: Campaign) -> Campaign: ...
 
     @abstractmethod
-    async def find_by_id(self, id: UUID) -> Unsafe[Campaign]: ...
+    async def find_by_id(self, id: CampaignId) -> Unsafe[Campaign]: ...
 
     @abstractmethod
-    async def find_all_for(self, owner_id: UUID) -> list[Campaign]: ...
+    async def find_all_for(self, owner_id: UserId) -> list[Campaign]: ...
 
     @abstractmethod
-    async def delete(self, id: UUID) -> None:
+    async def delete(self, id: CampaignId) -> None:
         """Unscoped on purpose: the caller reached this id through `editable` already."""

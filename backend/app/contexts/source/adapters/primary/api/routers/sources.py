@@ -1,8 +1,7 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ids import SourceId
 from app.common.security.auth import get_current_user
 from app.contexts.source.adapters.primary.api.schemas.source import SourceCreate, SourceResponse, SourceUpdate
 from app.contexts.source.adapters.secondary.persistence.source_repository import SqlAlchemySourceRepository
@@ -41,7 +40,7 @@ async def list_sources(
 
 @router.get("/{source_id}", response_model=SourceResponse)
 async def get_source(
-    source_id: UUID,
+    source_id: SourceId,
     user: User = Depends(get_current_user),
     service: SourceService = Depends(get_service),
 ):
@@ -51,7 +50,7 @@ async def get_source(
 
 @router.put("/{source_id}", response_model=SourceResponse)
 async def update_source(
-    source_id: UUID,
+    source_id: SourceId,
     body: SourceUpdate,
     user: User = Depends(get_current_user),
     service: SourceService = Depends(get_service),
@@ -62,7 +61,7 @@ async def update_source(
 
 @router.delete("/{source_id}", status_code=204)
 async def delete_source(
-    source_id: UUID,
+    source_id: SourceId,
     user: User = Depends(get_current_user),
     service: SourceService = Depends(get_service),
 ):

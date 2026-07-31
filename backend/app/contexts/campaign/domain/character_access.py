@@ -1,24 +1,10 @@
 from dataclasses import dataclass
-from typing import ClassVar, NewType
-from uuid import UUID
+from typing import ClassVar
 
 from app.common.access import Access
 from app.common.errors import NotAvailable
+from app.common.ids import CampaignId, UserId
 from app.contexts.campaign.domain.character import Character, CharacterNotAvailable
-
-ReachedCampaign = NewType("ReachedCampaign", UUID)
-"""A campaign id that a viewer has been shown to reach. The proof is the type itself.
-
-`CampaignAccess.characters_at` mints these and nothing else does, so a value of this type
-cannot exist unless the check ran. Note it has to be its own type rather than a merely
-strongly-typed `CampaignId`: campaign ids arrive from path parameters and database rows
-all day without anyone having been authorised, so the ordinary one proves nothing.
-
-At runtime this is a plain UUID — `NewType` costs nothing and enforces nothing. The
-enforcement is mypy, which this project gates in pre-commit and in CI. It cannot stop
-someone determined, and is not meant to: writing `ReachedCampaign(some_id)` by hand is a
-deliberate, greppable line. What it stops is the accident, which is the bar that matters.
-"""
 
 
 @dataclass(frozen=True)
@@ -31,11 +17,11 @@ class CharacterAccess(Access[Character]):
     contents asks for one — there is no bare `campaign_id` parameter left anywhere to
     pass unchecked.
 
-    The proof is carried by the type rather than by convention: `campaign_id` is a
-    `ReachedCampaign`, minted only where the check happens. Constructing one of these
-    around an ordinary campaign id does not typecheck, so the accident is closed. Writing
-    `ReachedCampaign(some_id)` by hand still works, and is meant to — that is a
-    deliberate, greppable line, which is the bar rather than a hole in it.
+    What enforces that is `characters_at`'s signature: it takes an `Unsafe[Campaign]`,
+    so the only way to reach the one line that builds a token is through the check. An
+    earlier draft also gave `campaign_id` a distinct `ReachedCampaign` type to guard
+    direct construction; it was dropped as belt on top of braces, since a hand-built
+    token is the same deliberate, greppable line either way.
 
     `may_read` is the rule that used to be a WHERE clause in `find_by_id_in`. Having it
     here rather than in SQL is what makes it something you can read, test, and change in
@@ -50,8 +36,8 @@ class CharacterAccess(Access[Character]):
     afford to load what it will discard.
     """
 
-    campaign_id: ReachedCampaign
-    viewer_id: UUID
+    campaign_id: CampaignId
+    viewer_id: UserId
 
     not_available: ClassVar[type[NotAvailable]] = CharacterNotAvailable
 

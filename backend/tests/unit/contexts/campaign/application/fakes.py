@@ -1,6 +1,5 @@
-from uuid import UUID
-
 from app.common.access import Unsafe
+from app.common.ids import CampaignId, CharacterId, UserId
 from app.contexts.campaign.domain.campaign import Campaign
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
@@ -14,19 +13,19 @@ from app.contexts.campaign.domain.ports.character_repository import CharacterRep
 
 class FakeCampaignRepository(CampaignRepository):
     def __init__(self):
-        self._store: dict[UUID, Campaign] = {}
+        self._store: dict[CampaignId, Campaign] = {}
 
     async def save(self, campaign: Campaign) -> Campaign:
         self._store[campaign.id] = campaign
         return campaign
 
-    async def find_by_id(self, id: UUID) -> Unsafe[Campaign]:
+    async def find_by_id(self, id: CampaignId) -> Unsafe[Campaign]:
         return Unsafe(self._store.get(id))
 
-    async def find_all_for(self, owner_id: UUID) -> list[Campaign]:
+    async def find_all_for(self, owner_id: UserId) -> list[Campaign]:
         return [c for c in self._store.values() if c.owner_id == owner_id]
 
-    async def delete(self, id: UUID) -> None:
+    async def delete(self, id: CampaignId) -> None:
         self._store.pop(id, None)
 
 
@@ -40,19 +39,19 @@ class FakeCharacterRepository(CharacterRepository):
     """
 
     def __init__(self):
-        self._store: dict[UUID, Character] = {}
+        self._store: dict[CharacterId, Character] = {}
 
     async def save(self, character: Character) -> Character:
         self._store[character.id] = character
         return character
 
-    async def find_by_id(self, id: UUID) -> Unsafe[Character]:
+    async def find_by_id(self, id: CharacterId) -> Unsafe[Character]:
         return Unsafe(self._store.get(id))
 
     async def find_all_in(self, access: CharacterAccess) -> list[Character]:
         return [c for c in self._store.values() if c.campaign_id == access.campaign_id]
 
-    async def delete(self, id: UUID) -> None:
+    async def delete(self, id: CharacterId) -> None:
         self._store.pop(id, None)
 
     async def delete_all_in(self, access: CharacterAccess) -> None:

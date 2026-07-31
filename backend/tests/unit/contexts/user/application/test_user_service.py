@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from app.common.ids import UserId
 from app.common.security.security import create_access_token, decode_access_token
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
@@ -80,7 +81,7 @@ class TestGet:
         assert found == created
 
     async def test_returns_none_when_not_found(self, service: UserService):
-        result = await service.get(uuid.uuid4())
+        result = await service.get(UserId(uuid.uuid4()))
 
         assert result is None
 
@@ -99,7 +100,7 @@ class TestGetByToken:
             await service.get_by_token("not-a-valid-token")
 
     async def test_raises_when_user_no_longer_exists(self, service: UserService):
-        token = create_access_token(subject=str(uuid.uuid4()))
+        token = create_access_token(subject=str(UserId(uuid.uuid4())))
 
         with pytest.raises(InvalidCredentialsError):
             await service.get_by_token(token)

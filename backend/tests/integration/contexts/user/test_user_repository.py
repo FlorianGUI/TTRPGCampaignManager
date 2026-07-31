@@ -3,6 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.ids import UserId
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
 from app.contexts.user.domain.user import User
 
@@ -42,7 +43,7 @@ class TestFindById:
         assert result.id == user.id
 
     async def test_returns_none_for_unknown_id(self, repository: SqlAlchemyUserRepository):
-        result = await repository.find_by_id(uuid.uuid4())
+        result = await repository.find_by_id(UserId(uuid.uuid4()))
 
         assert result is None
 

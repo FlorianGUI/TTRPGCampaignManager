@@ -2,18 +2,19 @@ import uuid
 
 import pytest
 
+from app.common.ids import UserId
 from app.contexts.campaign.application.campaign_service import CampaignService
 from tests.unit.contexts.campaign.application.fakes import FakeCampaignRepository, FakeCharacterRepository
 
 
 @pytest.fixture
-def owner_id():
-    return uuid.uuid4()
+def owner_id() -> UserId:
+    return UserId(uuid.uuid4())
 
 
 @pytest.fixture
-def someone_else():
-    return uuid.uuid4()
+def someone_else() -> UserId:
+    return UserId(uuid.uuid4())
 
 
 @pytest.fixture

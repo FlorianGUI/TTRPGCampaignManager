@@ -1,7 +1,6 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 
+from app.common.ids import CampaignId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_campaign_service
 from app.contexts.campaign.adapters.primary.api.schemas.campaign import (
@@ -37,7 +36,7 @@ async def list_campaigns(
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
-    campaign_id: UUID,
+    campaign_id: CampaignId,
     user: User = Depends(get_current_user),
     service: CampaignService = Depends(get_campaign_service),
 ):
@@ -47,7 +46,7 @@ async def get_campaign(
 
 @router.put("/{campaign_id}", response_model=CampaignResponse)
 async def update_campaign(
-    campaign_id: UUID,
+    campaign_id: CampaignId,
     body: CampaignUpdate,
     user: User = Depends(get_current_user),
     service: CampaignService = Depends(get_campaign_service),
@@ -58,7 +57,7 @@ async def update_campaign(
 
 @router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(
-    campaign_id: UUID,
+    campaign_id: CampaignId,
     user: User = Depends(get_current_user),
     service: CampaignService = Depends(get_campaign_service),
 ):

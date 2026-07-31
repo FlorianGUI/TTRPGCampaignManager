@@ -1,5 +1,4 @@
-from uuid import UUID
-
+from app.common.ids import CharacterId
 from app.contexts.campaign.domain.character import Character
 from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
@@ -71,7 +70,7 @@ class CharacterService:
         )
         return await self._repository.save(character)
 
-    async def get_for(self, id: UUID, access: CharacterAccess) -> Character:
+    async def get_for(self, id: CharacterId, access: CharacterAccess) -> Character:
         return access.readable(await self._repository.find_by_id(id))
 
     async def list_for(self, access: CharacterAccess) -> list[Character]:
@@ -81,7 +80,7 @@ class CharacterService:
 
     async def update(
         self,
-        id: UUID,
+        id: CharacterId,
         access: CharacterAccess,
         name: str,
         description: str | None = None,
@@ -91,6 +90,6 @@ class CharacterService:
         character.description = description
         return await self._repository.save(character)
 
-    async def delete(self, id: UUID, access: CharacterAccess) -> None:
+    async def delete(self, id: CharacterId, access: CharacterAccess) -> None:
         character = access.deletable(await self._repository.find_by_id(id))
         await self._repository.delete(character.id)

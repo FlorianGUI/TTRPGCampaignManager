@@ -1,7 +1,6 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends
 
+from app.common.ids import CharacterId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_character_access, get_character_service
 from app.contexts.campaign.adapters.primary.api.schemas.character import (
@@ -46,7 +45,7 @@ async def list_characters(
 
 @router.get("/{character_id}", response_model=CharacterResponse)
 async def get_character(
-    character_id: UUID,
+    character_id: CharacterId,
     access: CharacterAccess = Depends(get_character_access),
     service: CharacterService = Depends(get_character_service),
 ):
@@ -56,7 +55,7 @@ async def get_character(
 
 @router.put("/{character_id}", response_model=CharacterResponse)
 async def update_character(
-    character_id: UUID,
+    character_id: CharacterId,
     body: CharacterUpdate,
     access: CharacterAccess = Depends(get_character_access),
     service: CharacterService = Depends(get_character_service),
@@ -67,7 +66,7 @@ async def update_character(
 
 @router.delete("/{character_id}", status_code=204)
 async def delete_character(
-    character_id: UUID,
+    character_id: CharacterId,
     access: CharacterAccess = Depends(get_character_access),
     service: CharacterService = Depends(get_character_service),
 ):

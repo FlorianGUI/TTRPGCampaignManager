@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from app.common.errors import NotAvailable
+from app.common.ids import CampaignId, CharacterId, UserId
 
 
 class CharacterNotAvailable(NotAvailable):
@@ -30,7 +31,7 @@ class Character:
     """
 
     name: str
-    owner_id: UUID
-    campaign_id: UUID
+    owner_id: UserId
+    campaign_id: CampaignId
     description: str | None = None
-    id: UUID = field(default_factory=uuid4)
+    id: CharacterId = field(default_factory=lambda: CharacterId(uuid4()))
