@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from app.common.error_handlers import not_available_responses
 from app.common.ids import CampaignId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_campaign_service
@@ -13,6 +14,8 @@ from app.contexts.user.domain.user import User
 
 # A campaign the caller does not own raises CampaignNotReachable exactly as one that
 # does not exist, and one handler turns that into a 404.
+NOT_FOUND = not_available_responses("Campaign not found")
+
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], dependencies=[Depends(get_current_user)])
 
 
@@ -34,7 +37,7 @@ async def list_campaigns(
     return [CampaignResponse(**c.__dict__) for c in await service.list_for(user.id)]
 
 
-@router.get("/{campaign_id}", response_model=CampaignResponse)
+@router.get("/{campaign_id}", response_model=CampaignResponse, responses=NOT_FOUND)
 async def get_campaign(
     campaign_id: CampaignId,
     user: User = Depends(get_current_user),
@@ -44,7 +47,7 @@ async def get_campaign(
     return CampaignResponse(**campaign.__dict__)
 
 
-@router.put("/{campaign_id}", response_model=CampaignResponse)
+@router.put("/{campaign_id}", response_model=CampaignResponse, responses=NOT_FOUND)
 async def update_campaign(
     campaign_id: CampaignId,
     body: CampaignUpdate,
@@ -55,7 +58,7 @@ async def update_campaign(
     return CampaignResponse(**campaign.__dict__)
 
 
-@router.delete("/{campaign_id}", status_code=204)
+@router.delete("/{campaign_id}", status_code=204, responses=NOT_FOUND)
 async def delete_campaign(
     campaign_id: CampaignId,
     user: User = Depends(get_current_user),

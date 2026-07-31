@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.error_handlers import not_available_responses
 from app.common.ids import SourceId
 from app.common.security.auth import get_current_user
 from app.contexts.source.adapters.primary.api.schemas.source import SourceCreate, SourceResponse, SourceUpdate
@@ -13,6 +14,8 @@ from app.database import get_db
 # not exist, and one handler turns that into a 404 — so the response never confirms that
 # an id belongs to someone. Nothing here decides that; there is nothing here to get
 # wrong.
+NOT_FOUND = not_available_responses("Source not found")
+
 router = APIRouter(prefix="/sources", tags=["sources"], dependencies=[Depends(get_current_user)])
 
 
@@ -38,7 +41,7 @@ async def list_sources(
     return [SourceResponse(**s.__dict__) for s in await service.list_for(user.id)]
 
 
-@router.get("/{source_id}", response_model=SourceResponse)
+@router.get("/{source_id}", response_model=SourceResponse, responses=NOT_FOUND)
 async def get_source(
     source_id: SourceId,
     user: User = Depends(get_current_user),
@@ -48,7 +51,7 @@ async def get_source(
     return SourceResponse(**source.__dict__)
 
 
-@router.put("/{source_id}", response_model=SourceResponse)
+@router.put("/{source_id}", response_model=SourceResponse, responses=NOT_FOUND)
 async def update_source(
     source_id: SourceId,
     body: SourceUpdate,
@@ -59,7 +62,7 @@ async def update_source(
     return SourceResponse(**source.__dict__)
 
 
-@router.delete("/{source_id}", status_code=204)
+@router.delete("/{source_id}", status_code=204, responses=NOT_FOUND)
 async def delete_source(
     source_id: SourceId,
     user: User = Depends(get_current_user),
