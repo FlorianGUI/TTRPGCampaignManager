@@ -5,6 +5,7 @@ Feature: Source Management
 
   Background:
     Given I am logged in as a game master
+    And another game master owns a source titled "Xanathars Guide"
 
   Scenario: Create and retrieve a source
     Given I create a source titled "SRD 5.1"
@@ -20,6 +21,22 @@ Feature: Source Management
     Then I should see "SRD 5.1" in the list
     And I should see "Fen Wardens notes" in the list
     And I should see "Dragon Magazine issue 4" in the list
+    And I should not see "Xanathars Guide" in the list
+
+  Scenario: Rename one of my sources
+    Given I create a source titled "SRD 5.0"
+    When I rename my source to "SRD 5.1"
+    And I retrieve the source by its ID
+    Then I should see a source titled "SRD 5.1"
+
+  Scenario: Read a source owned by another game master
+    When I retrieve the other game masters source
+    Then I should get a not found error
+
+  Scenario: Rename a source owned by another game master
+    When I rename the other game masters source to "Xanathars Guide to Nothing"
+    Then I should get a not found error
+    And the other game masters source should still be titled "Xanathars Guide"
 
   Scenario: Request a source that does not exist
     When I request a source with an unknown ID
