@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from app.common.error_handlers import not_available_responses
 from app.common.ids import CharacterId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_character_access, get_character_service
@@ -18,6 +19,11 @@ from app.contexts.campaign.domain.character_access import CharacterAccess
 #
 # Whether the table or the sheet was the thing the caller could not have is answered by
 # which exception comes back, not by anything decided here.
+# Every route here can answer for the table as well as for the sheet: the campaign is
+# authorised by a dependency, which raises before any handler body runs.
+NO_CAMPAIGN = not_available_responses("Campaign not found")
+NOT_FOUND = not_available_responses("Campaign not found", "Character not found")
+
 router = APIRouter(
     prefix="/campaigns/{campaign_id}/characters",
     tags=["characters"],
@@ -25,7 +31,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=CharacterResponse, status_code=201)
+@router.post("/", response_model=CharacterResponse, status_code=201, responses=NO_CAMPAIGN)
 async def create_character(
     body: CharacterCreate,
     access: CharacterAccess = Depends(get_character_access),
@@ -35,7 +41,7 @@ async def create_character(
     return CharacterResponse(**character.__dict__)
 
 
-@router.get("/", response_model=list[CharacterResponse])
+@router.get("/", response_model=list[CharacterResponse], responses=NO_CAMPAIGN)
 async def list_characters(
     access: CharacterAccess = Depends(get_character_access),
     service: CharacterService = Depends(get_character_service),
@@ -43,7 +49,7 @@ async def list_characters(
     return [CharacterResponse(**c.__dict__) for c in await service.list_for(access)]
 
 
-@router.get("/{character_id}", response_model=CharacterResponse)
+@router.get("/{character_id}", response_model=CharacterResponse, responses=NOT_FOUND)
 async def get_character(
     character_id: CharacterId,
     access: CharacterAccess = Depends(get_character_access),
@@ -53,7 +59,7 @@ async def get_character(
     return CharacterResponse(**character.__dict__)
 
 
-@router.put("/{character_id}", response_model=CharacterResponse)
+@router.put("/{character_id}", response_model=CharacterResponse, responses=NOT_FOUND)
 async def update_character(
     character_id: CharacterId,
     body: CharacterUpdate,
@@ -64,7 +70,7 @@ async def update_character(
     return CharacterResponse(**character.__dict__)
 
 
-@router.delete("/{character_id}", status_code=204)
+@router.delete("/{character_id}", status_code=204, responses=NOT_FOUND)
 async def delete_character(
     character_id: CharacterId,
     access: CharacterAccess = Depends(get_character_access),
