@@ -127,18 +127,3 @@ def other_game_masters_source_is_unchanged(client: AsyncClient, context: dict, t
         client.get(f"/sources/{other['source']['id']}", headers=_headers(other["token"]))
     )
     assert response.json()["title"] == title
-
-
-@then("I should get a not found error")
-def get_not_found_error(context: dict):
-    assert context["response"].status_code == 404
-
-
-@then("I should get a validation error")
-def get_validation_error(context: dict):
-    assert context["response"].status_code == 422
-
-
-@then("I should be told I am not authenticated")
-def get_unauthenticated_error(context: dict):
-    assert context["response"].status_code == 401
