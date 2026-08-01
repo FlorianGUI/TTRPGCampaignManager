@@ -18,21 +18,20 @@ def register_user(client: AsyncClient):
     Scenarios that need a second person — someone whose data I must not be able to
     reach — take their token from here rather than through the login step, which
     would overwrite the one identifying "me".
+
+    One call, because #33 made registering return a token. It used to be register then
+    login, which is the same two-step every client would have had to write.
     """
 
     def _register() -> str:
         username = f"user-{uuid.uuid4().hex[:8]}"
-        password = "testpass123"
-        asyncio.get_event_loop().run_until_complete(
+        response = asyncio.get_event_loop().run_until_complete(
             client.post(
                 "/users/register",
-                json={"username": username, "email": f"{username}@example.com", "password": password},
+                json={"username": username, "email": f"{username}@example.com", "password": "testpass123"},
             )
         )
-        response = asyncio.get_event_loop().run_until_complete(
-            client.post("/users/login", data={"username": username, "password": password})
-        )
-        return response.json()["access_token"]
+        return str(response.json()["access_token"])
 
     return _register
 

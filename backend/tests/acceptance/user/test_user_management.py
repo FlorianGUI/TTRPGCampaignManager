@@ -13,6 +13,8 @@ def register(client: AsyncClient, context: dict, username: str, email: str, pass
         client.post("/users/register", json={"username": username, "email": email, "password": password})
     )
     context["response"] = response
+    if response.status_code == 201:
+        context["token"] = response.json()["access_token"]
 
 
 @given(parsers.parse('I log in as "{username}" with password "{password}"'))
@@ -55,6 +57,18 @@ def get_conflict_error(context: dict):
 def receive_access_token(context: dict):
     assert context["response"].status_code == 200
     assert "access_token" in context["response"].json()
+
+
+@then("my account is created and I receive an access token")
+def account_created_with_access_token(context: dict):
+    assert context["response"].status_code == 201
+    assert context["response"].json()["token_type"] == "bearer"
+    assert context["response"].json()["access_token"]
+
+
+@then("I should not receive an access token")
+def no_access_token(context: dict):
+    assert "access_token" not in context["response"].json()
 
 
 @then("I should get an unauthorized error")
