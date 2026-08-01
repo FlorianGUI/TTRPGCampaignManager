@@ -35,16 +35,26 @@ def service():
 
 
 class TestRegister:
-    async def test_returns_user_with_correct_fields(self, service: UserService):
-        user = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+    async def test_saves_a_user_with_the_given_fields(self, service: UserService):
+        token = await service.register("aragorn", "aragorn@gondor.test", "strider123")
 
+        user = await service.get_by_token(token)
         assert user.username == "aragorn"
         assert user.email == "aragorn@gondor.test"
 
     async def test_hashes_the_password(self, service: UserService):
-        user = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        token = await service.register("aragorn", "aragorn@gondor.test", "strider123")
 
+        user = await service.get_by_token(token)
         assert user.hashed_password != "strider123"
+
+    async def test_returns_a_token_that_signs_the_new_user_in(self, service: UserService):
+        """The point of the change: no second call between signing up and being signed in."""
+        token = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+
+        assert await service.get_by_token(token) == await service.get_by_token(
+            await service.authenticate("aragorn", "strider123")
+        )
 
     async def test_raises_when_username_already_exists(self, service: UserService):
         await service.register("aragorn", "aragorn@gondor.test", "strider123")
@@ -55,7 +65,7 @@ class TestRegister:
 
 class TestAuthenticate:
     async def test_returns_a_valid_token_for_correct_credentials(self, service: UserService):
-        user = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        user = await service.get_by_token(await service.register("aragorn", "aragorn@gondor.test", "strider123"))
 
         token = await service.authenticate("aragorn", "strider123")
 
@@ -74,7 +84,7 @@ class TestAuthenticate:
 
 class TestGet:
     async def test_returns_user_when_found(self, service: UserService):
-        created = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        created = await service.get_by_token(await service.register("aragorn", "aragorn@gondor.test", "strider123"))
 
         found = await service.get(created.id)
 
@@ -88,7 +98,8 @@ class TestGet:
 
 class TestGetByToken:
     async def test_returns_user_for_valid_token(self, service: UserService):
-        created = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        registered = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+        created = await service.get_by_token(registered)
         token = create_access_token(subject=str(created.id))
 
         found = await service.get_by_token(token)

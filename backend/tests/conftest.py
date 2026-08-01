@@ -95,6 +95,22 @@ def test_database():
         raise RuntimeError(f"Could not migrate the test database:\n{migration.stdout}\n{migration.stderr}")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def rate_limiting_off():
+    """Take the rate limiter out of the suite's way.
+
+    Two hundred tests hitting one in-process app inside half a minute look exactly like
+    the traffic the limiter exists to turn away, and `/users/register` is the endpoint
+    they all go through — every scenario needs an account before it can do anything. The
+    suite had crept to within a couple of registrations of the 100/minute default, which
+    made "add a scenario" a way to break unrelated tests.
+
+    Disabling it here rather than raising the limit keeps the production number honest:
+    it is chosen for real callers, not padded until the tests fit under it.
+    """
+    app.state.limiter.enabled = False
+
+
 @pytest.fixture
 async def db_connection():
     """Give each test its own connection, inside a transaction that is never committed.

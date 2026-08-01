@@ -19,11 +19,10 @@ PASSWORD = "testpass123"
 
 async def _register(client: AsyncClient) -> str:
     username = f"user-{uuid.uuid4().hex[:8]}"
-    await client.post(
+    response = await client.post(
         "/users/register",
         json={"username": username, "email": f"{username}@example.com", "password": PASSWORD},
     )
-    response = await client.post("/users/login", data={"username": username, "password": PASSWORD})
     return str(response.json()["access_token"])
 
 
@@ -32,8 +31,8 @@ def _documented_404_fields(path: str) -> set[str]:
 
     Checked against a real response rather than on its own, because documentation that
     has drifted from behaviour is worse than none. It rides along with an existing
-    assertion instead of taking a test of its own: every test here registers users, and
-    the suite already sits close to the rate limiter on /users/register.
+    assertion instead of taking a test of its own, which also keeps the number of accounts
+    this file creates down to what it actually needs.
     """
     schema = app.openapi()
     model = schema["paths"][path]["get"]["responses"]["404"]["content"]["application/json"]["schema"]

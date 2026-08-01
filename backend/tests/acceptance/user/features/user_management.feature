@@ -5,12 +5,18 @@ Feature: User Management
 
   Scenario: Register a new user
     When I register as "aragorn" with email "aragorn@gondor.com" and password "strider123"
-    Then I should see a user named "aragorn" with email "aragorn@gondor.com"
+    Then my account is created and I receive an access token
+
+  Scenario: Registering signs me in, with no second step
+    Given I register as "arwen" with email "arwen@rivendell.com" and password "evenstar1"
+    When I request my profile
+    Then I should see a user named "arwen" with email "arwen@rivendell.com"
 
   Scenario: Register with a username that is already taken
     Given I register as "legolas" with email "legolas@woodland.com" and password "greenleaf1"
     When I register as "legolas" with email "other@woodland.com" and password "otherpass"
     Then I should get a conflict error
+    And I should not receive an access token
 
   Scenario: Log in with correct credentials
     Given I register as "gimli" with email "gimli@erebor.com" and password "axeandbeard"

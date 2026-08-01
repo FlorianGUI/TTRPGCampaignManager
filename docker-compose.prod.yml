@@ -23,6 +23,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
     depends_on:
       db:
         condition: service_healthy
