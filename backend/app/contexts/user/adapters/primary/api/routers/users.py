@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
 from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
+from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
-    return UserService(SqlAlchemyUserRepository(db))
+    return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
 
 
 @router.post(
@@ -39,10 +40,10 @@ async def register(body: UserCreate, service: UserService = Depends(get_service)
     conflicting condition here has to arrive with a machine-readable discriminator.
     """
     try:
-        access_token = await service.register(body.username, body.email, body.password)
+        session = await service.register(body.username, body.email, body.password)
     except UsernameAlreadyExistsError:
         raise HTTPException(status_code=409, detail="Username already exists") from None
-    return Token(access_token=access_token)
+    return Token(access_token=session.access_token)
 
 
 @router.post("/login", response_model=Token)
@@ -57,10 +58,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), service: UserS
     in the frontend HTTP client (#34) against a working Authorize button here.
     """
     try:
-        access_token = await service.authenticate(form_data.username, form_data.password)
+        session = await service.authenticate(form_data.username, form_data.password)
     except InvalidCredentialsError:
         raise HTTPException(status_code=401, detail="Incorrect username or password") from None
-    return Token(access_token=access_token)
+    return Token(access_token=session.access_token)
 
 
 @router.get("/me", response_model=UserResponse)
