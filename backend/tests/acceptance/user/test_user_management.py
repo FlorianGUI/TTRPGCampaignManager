@@ -3,6 +3,8 @@ import asyncio
 from httpx import AsyncClient
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from app.contexts.user.adapters.primary.api.refresh_cookie import REFRESH_COOKIE_NAME
+
 scenarios("features/user_management.feature")
 
 
@@ -74,3 +76,20 @@ def no_access_token(context: dict):
 @then("I should get an unauthorized error")
 def get_unauthorized_error(context: dict):
     assert context["response"].status_code == 401
+
+
+@then("the refresh cookie is httpOnly, secure, same-site and scoped to /users")
+def refresh_cookie_is_protected(context: dict):
+    """All four attributes, because three of them are worth very little on their own.
+
+    httpOnly is what an XSS runs into, Secure is what a downgraded connection runs into,
+    SameSite is what a cross-site request runs into, and the path keeps the cookie off
+    every request that has no business carrying a thirty-day credential.
+    """
+    header = context["response"].headers["set-cookie"]
+
+    assert header.startswith(f"{REFRESH_COOKIE_NAME}=")
+    assert "HttpOnly" in header
+    assert "Secure" in header
+    assert "SameSite=strict" in header
+    assert "Path=/users" in header

@@ -139,6 +139,12 @@ async def client(db_connection):
             yield session
 
     app.dependency_overrides[get_db] = _override_get_db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    # https, not http, and the refresh cookie is why. It is set `Secure`, and httpx's
+    # cookie jar enforces that the way a browser does: it will accept the cookie over a
+    # plain http base URL and then never send it back, so every refresh test would fail
+    # with a missing cookie rather than for any reason to do with the code under test.
+    # The transport is in-process either way — the scheme is a claim about the connection,
+    # and https is the true one for every deployment this runs in.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as ac:
         yield ac
     app.dependency_overrides.clear()

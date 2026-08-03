@@ -37,3 +37,7 @@ Feature: User Management
   Scenario: Access my profile without a token
     When I request my profile without a token
     Then I should get an unauthorized error
+
+  Scenario: The refresh token is not something a script can read
+    When I register as "theoden" with email "theoden@rohan.com" and password "snowmane123"
+    Then the refresh cookie is httpOnly, secure, same-site and scoped to /users
