@@ -38,6 +38,41 @@ Feature: User Management
     When I request my profile without a token
     Then I should get an unauthorized error
 
+  Scenario: Stay signed in once the access token has run out
+    Given I register as "eowyn" with email "eowyn@rohan.com" and password "shieldmaiden1"
+    And I log in as "eowyn" with password "shieldmaiden1"
+    When I refresh my session
+    And I request my profile
+    Then I should see a user named "eowyn" with email "eowyn@rohan.com"
+
+  Scenario: Refreshing hands back a new access token
+    Given I register as "eomer" with email "eomer@rohan.com" and password "firefoot123"
+    When I refresh my session
+    Then I should receive an access token
+
+  Scenario: Refreshing with no refresh cookie
+    When I refresh my session
+    Then I should get an unauthorized error
+
   Scenario: The refresh token is not something a script can read
     When I register as "theoden" with email "theoden@rohan.com" and password "snowmane123"
     Then the refresh cookie is httpOnly, secure, same-site and scoped to /users
+
+  Scenario: Refreshing replaces the refresh token it was given
+    Given I register as "hama" with email "hama@rohan.com" and password "doorward123"
+    When I refresh my session
+    Then I should hold a different refresh token
+
+  Scenario: A refresh token cannot be spent twice
+    Given I register as "grima" with email "grima@rohan.com" and password "wormtongue1"
+    And someone takes a copy of my refresh cookie
+    And I refresh my session
+    When the copy is presented
+    Then I should get an unauthorized error
+
+  Scenario: A replayed refresh token takes the whole session down with it
+    Given I register as "saruman" with email "saruman@isengard.com" and password "manycolours"
+    And someone takes a copy of my refresh cookie
+    And I refresh my session
+    When the copy is presented
+    Then my session can no longer be refreshed

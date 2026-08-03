@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
-from app.contexts.user.adapters.primary.api.refresh_cookie import set_refresh_cookie
+from app.contexts.user.adapters.primary.api.refresh_cookie import REFRESH_COOKIE_NAME, set_refresh_cookie
 from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
 from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
+    SessionNotRenewableError,
     UsernameAlreadyExistsError,
     UserService,
 )
@@ -18,6 +19,12 @@ from app.database import get_db
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+# What every endpoint that turns a refresh cookie away says, and it says the same thing for
+# a missing cookie, an unknown token, an expired one and a replayed one. A caller can do
+# nothing differently between them, and separating them would tell whoever stole a token
+# which of those it was holding.
+_CANNOT_RENEW = "Could not renew the session"
+
 
 def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
@@ -26,9 +33,9 @@ def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
 def _signed_in(response: Response, session: Session) -> Token:
     """Split one session across the two channels it travels on.
 
-    Shared by both ways in, so neither can return an access token while forgetting the
-    cookie that outlives it — which fails quietly, as a client that works right up
-    until the moment it first reloads.
+    Shared by all three ways a session is handed out, so none of them can
+    return an access token while forgetting the cookie that outlives it — which fails
+    quietly, as a client that works right up until the moment it first reloads.
     """
     set_refresh_cookie(response, session.refresh_token, session.expires_at)
     return Token(access_token=session.access_token)
@@ -78,6 +85,43 @@ async def login(
         session = await service.authenticate(form_data.username, form_data.password)
     except InvalidCredentialsError:
         raise HTTPException(status_code=401, detail="Incorrect username or password") from None
+    return _signed_in(response, session)
+
+
+@router.post(
+    "/refresh",
+    response_model=Token,
+    responses={401: {"description": "The refresh cookie is missing, expired, revoked, or has already been spent"}},
+)
+async def refresh(
+    response: Response,
+    refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    service: UserService = Depends(get_service),
+):
+    """Get a new access token from the refresh cookie, with no `Authorization` header.
+
+    Deliberately not behind `get_current_user`: the entire reason this endpoint exists is
+    to be callable once the access token has expired, which is precisely when that
+    dependency would turn it away. The cookie is the credential, and the browser attaches
+    it on its own — a caller sends nothing.
+
+    Every failure is a 401 rather than a 500, including the interesting one. A token that
+    has already been spent revokes the whole session on its way out (see
+    `UserService.refresh`), so a client that raced itself and lost is signed out and has
+    to log in again. That is intended rather than a rough edge to soften: the alternative
+    is leaving a leaked token working.
+
+    Rate limiting is the application-wide 100/minute from `app/common/security/rate_limiter.py`,
+    and nothing tighter is warranted. There is no guessing attack to slow down — the token
+    is 256 bits of randomness, so this has none of the shape of credential stuffing — which
+    leaves volume, and volume is what the global limit is there for.
+    """
+    if refresh is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW)
+    try:
+        session = await service.refresh(refresh)
+    except SessionNotRenewableError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW) from None
     return _signed_in(response, session)
 
 
