@@ -15,7 +15,10 @@ from app.contexts.campaign.adapters.secondary.persistence import (
     character_model,  # noqa: F401
 )
 from app.contexts.source.adapters.secondary.persistence import source_model  # noqa: F401
-from app.contexts.user.adapters.secondary.persistence import user_model  # noqa: F401
+from app.contexts.user.adapters.secondary.persistence import (
+    refresh_token_model,  # noqa: F401
+    user_model,  # noqa: F401
+)
 from app.database import Base
 
 load_dotenv()
