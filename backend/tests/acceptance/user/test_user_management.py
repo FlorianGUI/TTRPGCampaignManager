@@ -66,6 +66,11 @@ def present_the_copy(client: AsyncClient, context: dict):
     context["response"] = response
 
 
+@when("I log out")
+def log_out(client: AsyncClient, context: dict):
+    context["response"] = asyncio.get_event_loop().run_until_complete(client.post("/users/logout"))
+
+
 @when("I request my profile")
 def request_profile(client: AsyncClient, context: dict):
     headers = {"Authorization": f"Bearer {context['token']}"}
@@ -148,3 +153,14 @@ def session_is_dead(client: AsyncClient, context: dict):
     """
     response = asyncio.get_event_loop().run_until_complete(client.post("/users/refresh"))
     assert response.status_code == 401
+
+
+@then("I should no longer hold a refresh cookie")
+def refresh_cookie_is_gone(client: AsyncClient):
+    assert held_refresh_cookie(client) is None
+
+
+@then("I should be told nothing about whether there was one")
+def logout_says_nothing(context: dict):
+    assert context["response"].status_code == 204
+    assert context["response"].content == b""

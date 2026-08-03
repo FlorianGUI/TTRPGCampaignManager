@@ -76,3 +76,18 @@ Feature: User Management
     And I refresh my session
     When the copy is presented
     Then my session can no longer be refreshed
+
+  Scenario: Logging out ends the session
+    Given I register as "denethor" with email "denethor@gondor.com" and password "palantir1234"
+    When I log out
+    And I refresh my session
+    Then I should get an unauthorized error
+
+  Scenario: Logging out clears the refresh cookie
+    Given I register as "beregond" with email "beregond@gondor.com" and password "guardsman12"
+    When I log out
+    Then I should no longer hold a refresh cookie
+
+  Scenario: Logging out with no session at all
+    When I log out
+    Then I should be told nothing about whether there was one
