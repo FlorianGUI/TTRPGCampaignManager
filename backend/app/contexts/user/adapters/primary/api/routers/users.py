@@ -3,7 +3,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
-from app.contexts.user.adapters.primary.api.refresh_cookie import REFRESH_COOKIE_NAME, set_refresh_cookie
+from app.contexts.user.adapters.primary.api.refresh_cookie import (
+    REFRESH_COOKIE_NAME,
+    clear_refresh_cookie,
+    set_refresh_cookie,
+)
 from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
 from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
@@ -33,7 +37,7 @@ def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
 def _signed_in(response: Response, session: Session) -> Token:
     """Split one session across the two channels it travels on.
 
-    Shared by all three ways a session is handed out, so none of them can
+    Shared by the three endpoints that start or continue a session, so none of them can
     return an access token while forgetting the cookie that outlives it — which fails
     quietly, as a client that works right up until the moment it first reloads.
     """
@@ -123,6 +127,30 @@ async def refresh(
     except SessionNotRenewableError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW) from None
     return _signed_in(response, session)
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    response: Response,
+    refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    service: UserService = Depends(get_service),
+) -> None:
+    """End this session: revoke it server-side, then clear the cookie.
+
+    Both halves matter. Clearing the cookie alone would leave a live token wherever else a
+    copy of it had got to; revoking alone would leave the browser presenting a dead one on
+    every reload. The row is what makes logging out mean something.
+
+    Always 204, with no cookie or an unrecognised one just the same. Logging out is not a
+    place to find out whether a token was real, and someone whose session the server has
+    already revoked is trying to do the right thing — a 401 would fail them for it.
+
+    This device only. Other browsers keep their sessions, which is the point of them being
+    separate sessions.
+    """
+    if refresh is not None:
+        await service.log_out(refresh)
+    clear_refresh_cookie(response)
 
 
 @router.get("/me", response_model=UserResponse)

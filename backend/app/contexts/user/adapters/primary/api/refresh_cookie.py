@@ -47,3 +47,14 @@ def set_refresh_cookie(response: Response, token: str, expires_at: datetime) -> 
     """
     max_age = max(int((expires_at - datetime.now(UTC)).total_seconds()), 0)
     response.set_cookie(REFRESH_COOKIE_NAME, token, max_age=max_age, **_ATTRIBUTES)
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    """Ask the browser to drop the cookie.
+
+    Only ever the second half of logging out. The token is already revoked server-side by
+    the time this runs, so a client that ignores the header is left holding something
+    dead rather than a working session — the cookie is the convenience, the row is the
+    truth.
+    """
+    response.delete_cookie(REFRESH_COOKIE_NAME, **_ATTRIBUTES)
