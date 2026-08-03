@@ -7,6 +7,16 @@ from app.contexts.user.adapters.primary.api.refresh_cookie import REFRESH_COOKIE
 
 scenarios("features/user_management.feature")
 
+# The refresh cookie is never touched by hand in these scenarios: the client keeps a
+# cookie jar, so it arrives at /users/refresh the same way a browser would send it, and
+# the tests exercise the round trip rather than a header we assembled ourselves. The one
+# exception is the stolen copy, which has to be presented deliberately — that is the whole
+# point of it.
+
+
+def held_refresh_cookie(client: AsyncClient) -> str | None:
+    return client.cookies.get(REFRESH_COOKIE_NAME)
+
 
 @given(parsers.parse('I register as "{username}" with email "{email}" and password "{password}"'))
 @when(parsers.parse('I register as "{username}" with email "{email}" and password "{password}"'))
@@ -17,6 +27,7 @@ def register(client: AsyncClient, context: dict, username: str, email: str, pass
     context["response"] = response
     if response.status_code == 201:
         context["token"] = response.json()["access_token"]
+        context["refresh"] = held_refresh_cookie(client)
 
 
 @given(parsers.parse('I log in as "{username}" with password "{password}"'))
@@ -28,6 +39,31 @@ def login(client: AsyncClient, context: dict, username: str, password: str):
     context["response"] = response
     if response.status_code == 200:
         context["token"] = response.json()["access_token"]
+        context["refresh"] = held_refresh_cookie(client)
+
+
+@given("I refresh my session")
+@when("I refresh my session")
+def refresh_session(client: AsyncClient, context: dict):
+    """No Authorization header, deliberately — the cookie is the whole credential here."""
+    response = asyncio.get_event_loop().run_until_complete(client.post("/users/refresh"))
+    context["response"] = response
+    if response.status_code == 200:
+        context["token"] = response.json()["access_token"]
+
+
+@given("someone takes a copy of my refresh cookie")
+def copy_refresh_cookie(client: AsyncClient, context: dict):
+    context["stolen"] = held_refresh_cookie(client)
+
+
+@when("the copy is presented")
+def present_the_copy(client: AsyncClient, context: dict):
+    """Sent as an explicit header so the jar's own, newer cookie stays out of the way."""
+    response = asyncio.get_event_loop().run_until_complete(
+        client.post("/users/refresh", headers={"Cookie": f"{REFRESH_COOKIE_NAME}={context['stolen']}"})
+    )
+    context["response"] = response
 
 
 @when("I request my profile")
@@ -93,3 +129,22 @@ def refresh_cookie_is_protected(context: dict):
     assert "Secure" in header
     assert "SameSite=strict" in header
     assert "Path=/users" in header
+
+
+@then("I should hold a different refresh token")
+def refresh_token_was_replaced(client: AsyncClient, context: dict):
+    now_held = held_refresh_cookie(client)
+    assert now_held is not None
+    assert now_held != context["refresh"]
+
+
+@then("my session can no longer be refreshed")
+def session_is_dead(client: AsyncClient, context: dict):
+    """The token the replay was racing is gone too, which is the point of the family sweep.
+
+    The cookie in the jar here is the *legitimate* one, handed out by the refresh that
+    happened before the copy was presented. It stops working because the replay condemned
+    the whole session, not just the token that was replayed.
+    """
+    response = asyncio.get_event_loop().run_until_complete(client.post("/users/refresh"))
+    assert response.status_code == 401
