@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
+from app.contexts.user.adapters.primary.api.refresh_cookie import set_refresh_cookie
 from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
 from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
@@ -11,6 +12,7 @@ from app.contexts.user.application.user_service import (
     UsernameAlreadyExistsError,
     UserService,
 )
+from app.contexts.user.domain.session import Session
 from app.contexts.user.domain.user import User
 from app.database import get_db
 
@@ -21,13 +23,24 @@ def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
 
 
+def _signed_in(response: Response, session: Session) -> Token:
+    """Split one session across the two channels it travels on.
+
+    Shared by both ways in, so neither can return an access token while forgetting the
+    cookie that outlives it — which fails quietly, as a client that works right up
+    until the moment it first reloads.
+    """
+    set_refresh_cookie(response, session.refresh_token, session.expires_at)
+    return Token(access_token=session.access_token)
+
+
 @router.post(
     "/register",
     response_model=Token,
     status_code=201,
     responses={409: {"description": "Username already exists"}},
 )
-async def register(body: UserCreate, service: UserService = Depends(get_service)):
+async def register(body: UserCreate, response: Response, service: UserService = Depends(get_service)):
     """Create an account and sign it in, in one call.
 
     Registration is open: anyone reaching this endpoint can create an account. That is a
@@ -43,11 +56,15 @@ async def register(body: UserCreate, service: UserService = Depends(get_service)
         session = await service.register(body.username, body.email, body.password)
     except UsernameAlreadyExistsError:
         raise HTTPException(status_code=409, detail="Username already exists") from None
-    return Token(access_token=session.access_token)
+    return _signed_in(response, session)
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), service: UserService = Depends(get_service)):
+async def login(
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    service: UserService = Depends(get_service),
+):
     """Sign in with a username and password.
 
     This one takes `application/x-www-form-urlencoded`, not JSON, and deliberately stays
@@ -61,7 +78,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), service: UserS
         session = await service.authenticate(form_data.username, form_data.password)
     except InvalidCredentialsError:
         raise HTTPException(status_code=401, detail="Incorrect username or password") from None
-    return Token(access_token=session.access_token)
+    return _signed_in(response, session)
 
 
 @router.get("/me", response_model=UserResponse)
