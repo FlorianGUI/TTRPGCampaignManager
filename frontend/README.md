@@ -50,6 +50,8 @@ frontend/
       base.css                     # element defaults, prose, ornament
       fonts.css                    # @font-face for the self-hosted families
       fonts/                       # woff2, latin + latin-ext subsets
+    api/
+      http.js                      # the transport: one request, no auth state
     stores/
       theme.js                     # theme + density state, persisted
     design-system/
@@ -150,6 +152,18 @@ Some things worth knowing before touching any of it:
 
 `App.vue` holds the shell and renders `<RouterView>` inside it, so the top bar
 and sidebar are not torn down on navigation.
+
+## Talking to the API
+
+`VITE_API_URL` sets the base URL (see `.env.example`), defaulting to
+`http://localhost:8000`. Vite substitutes it at **build** time, so production is
+set where the artifact is built — `.github/workflows/frontend-ci.yml` — and
+cannot be changed on the server afterwards.
+
+**Every request sends `credentials: 'include'`.** The backend keeps the session
+in an `httpOnly` cookie (#35), and dev is `:5173` against `:8000`, which is
+cross-origin: without it the browser neither stores that cookie nor sends it
+back, and every session would end at the first reload.
 
 ## Testing
 
