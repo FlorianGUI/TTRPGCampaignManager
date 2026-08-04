@@ -1,8 +1,16 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
+from app.common.security.rate_limiter import (
+    LOGIN_RATE_LIMIT,
+    REGISTER_RATE_LIMIT,
+    TOO_MANY_LOGIN_ATTEMPTS,
+    TOO_MANY_REGISTRATIONS,
+    limiter,
+    too_many_requests_responses,
+)
 from app.contexts.user.adapters.primary.api.refresh_cookie import (
     REFRESH_COOKIE_NAME,
     clear_refresh_cookie,
@@ -49,14 +57,26 @@ def _signed_in(response: Response, session: Session) -> Token:
     "/register",
     response_model=Token,
     status_code=201,
-    responses={409: {"description": "Username already exists"}},
+    responses={
+        409: {"description": "Username already exists"},
+        **too_many_requests_responses(TOO_MANY_REGISTRATIONS),
+    },
 )
-async def register(body: UserCreate, response: Response, service: UserService = Depends(get_service)):
+@limiter.limit(REGISTER_RATE_LIMIT, error_message=TOO_MANY_REGISTRATIONS)
+async def register(request: Request, body: UserCreate, response: Response, service: UserService = Depends(get_service)):
     """Create an account and sign it in, in one call.
 
     Registration is open: anyone reaching this endpoint can create an account. That is a
     deliberate "for now" — an invite-only campaign manager is a plausible destination, and
     it is cheaper to decide before there are accounts to migrate.
+
+    Open, but not a faucet: `REGISTER_RATE_LIMIT` caps accounts per address per hour, which
+    is the axis account spam actually runs along. Per hour rather than per minute because
+    nobody signs up twice in a minute, and a per-minute cap loose enough to look harmless
+    still adds up to hundreds of accounts an hour from one address.
+
+    The `request` argument is unused here and is the limiter's — slowapi reads the caller's
+    address off it, and refuses to decorate a function that has no way to hand it one.
 
     The 409 is the sign-up form's; a taken username belongs on the username field rather
     than in a banner. It needs no error code to be told apart, because this endpoint has
@@ -70,13 +90,28 @@ async def register(body: UserCreate, response: Response, service: UserService = 
     return _signed_in(response, session)
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, responses=too_many_requests_responses(TOO_MANY_LOGIN_ATTEMPTS))
+@limiter.limit(LOGIN_RATE_LIMIT, error_message=TOO_MANY_LOGIN_ATTEMPTS)
 async def login(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     service: UserService = Depends(get_service),
 ):
     """Sign in with a username and password.
+
+    `LOGIN_RATE_LIMIT` is what makes the 401 below cost something. A password check that
+    can be repeated a hundred times a minute is a password check an attacker can run
+    through a word list; ten is more than a person retyping a password they half remember
+    needs. The key is the caller's address, never the username — one address guessing many
+    passwords is the shape being defended, and keying on the username would let an attacker
+    lock a victim out of their own account by failing to log in as them.
+
+    The 429 says the same thing whatever was typed, for the same reason the 401 does: a
+    limit that bit sooner for real usernames than unknown ones would be an account-existence
+    oracle sitting directly on top of the answer the 401 refuses to give.
+
+    The `request` argument is the limiter's, not this function's — see `register`.
 
     This one takes `application/x-www-form-urlencoded`, not JSON, and deliberately stays
     that way. `OAuth2PasswordBearer(tokenUrl="/users/login")` in `app/common/security/auth.py`
@@ -115,10 +150,20 @@ async def refresh(
     to log in again. That is intended rather than a rough edge to soften: the alternative
     is leaving a leaked token working.
 
-    Rate limiting is the application-wide 100/minute from `app/common/security/rate_limiter.py`,
-    and nothing tighter is warranted. There is no guessing attack to slow down — the token
-    is 256 bits of randomness, so this has none of the shape of credential stuffing — which
-    leaves volume, and volume is what the global limit is there for.
+    Rate limiting is deliberately still the application-wide `GLOBAL_RATE_LIMIT`, and the
+    tighter numbers #61 put on login and register must not be extended here. There is no
+    guessing attack to slow down — the token is 256 bits of randomness, so this has none of
+    the shape of credential stuffing — which leaves volume, and volume is what the global
+    limit is for. The traffic is the wrong shape for a tight limit besides: login is a
+    human typing a password a few times, this is a browser on a fifteen-minute timer, once
+    per open tab plus once per page load.
+
+    The client contract, which matters because this endpoint has two ways to fail and only
+    one of them means anything: **a 429 here is not a dead session.** A 401 means the
+    cookie is finished and the right response is to sign the user out and send them to
+    /login. A 429 means the client asked too often, and signing someone out for being busy
+    is a worse failure than the one the limit prevents — back off for `Retry-After` and try
+    the same cookie again, which will still be good.
     """
     if refresh is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW)
