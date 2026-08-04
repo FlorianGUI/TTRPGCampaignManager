@@ -50,13 +50,14 @@ frontend/
       base.css                     # element defaults, prose, ornament
       fonts.css                    # @font-face for the self-hosted families
       fonts/                       # woff2, latin + latin-ext subsets
+    stores/
+      theme.js                     # theme + density state, persisted
     design-system/
       preset.js                    # composes the three layers into the preset
       tokens/
         primitives.js              # raw ramps and scales, no meaning, no imports
         semantic.js                # roles, the two schemes, app tokens
         components.js              # per-component overrides
-      useTheme.js                  # theme + density state, persisted
     components/
       AppShell.vue                 # top bar + context sidebar + content area
       AppNav.vue                   # the nav list, shared by sidebar and drawer
