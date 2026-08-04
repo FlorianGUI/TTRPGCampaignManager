@@ -15,4 +15,10 @@ def setup_cors(app: FastAPI) -> None:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # `allow_headers` is about the request; this is about the response, and a browser
+        # hides every header not named here from the page's JavaScript. Retry-After is the
+        # one thing a 429 tells a client that it cannot work out for itself — without this
+        # the frontend can see the status and not how long to wait, which turns the backoff
+        # documented on /users/refresh into a guess.
+        expose_headers=["Retry-After"],
     )

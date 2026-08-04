@@ -5,6 +5,32 @@ import pytest
 from httpx import AsyncClient
 from pytest_bdd import given, then
 
+from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def rate_limiting_off():
+    """No acceptance scenario can trip a rate limit, however many the suite grows to.
+
+    These files describe what a game master can do. A scenario that fails on the ninety-
+    ninth account is testing infrastructure by accident, and the failure lands on whoever
+    added the scenario rather than on whoever changed a limit. Every scenario also opens by
+    registering — that is how it gets someone to be — so registration is precisely the call
+    they all make, and it is the one carrying the tightest limit in the app.
+
+    Clearing the budget per test, as `tests/conftest.py` does, is not enough here: a
+    scenario needing a second person registers twice in one test, and #35's session
+    scenarios spend several requests each, so the ratio of requests to scenarios is no
+    longer roughly one. A single scenario can outgrow an hourly limit on its own.
+
+    Scoped to this package rather than the session, which is the whole point: the limiter
+    stays live for `tests/system/`, where throttling is turned on deliberately and the 429
+    is asserted. Restored on teardown so it is still live for whatever runs after.
+    """
+    app.state.limiter.enabled = False
+    yield
+    app.state.limiter.enabled = True
+
 
 @pytest.fixture
 def context():

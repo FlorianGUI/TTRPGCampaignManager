@@ -95,20 +95,25 @@ def test_database():
         raise RuntimeError(f"Could not migrate the test database:\n{migration.stdout}\n{migration.stderr}")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def rate_limiting_off():
-    """Take the rate limiter out of the suite's way.
+@pytest.fixture(autouse=True)
+def rate_limiter_budget():
+    """Give every test the limiter's full budget, rather than switching the limiter off.
 
     Two hundred tests hitting one in-process app inside half a minute look exactly like
-    the traffic the limiter exists to turn away, and `/users/register` is the endpoint
-    they all go through — every scenario needs an account before it can do anything. The
-    suite had crept to within a couple of registrations of the 100/minute default, which
-    made "add a scenario" a way to break unrelated tests.
+    the traffic the limiter exists to turn away, and they share a key: the ASGI transport
+    reports the same client address for all of them. #33 answered that by disabling the
+    limiter for the whole session, which left nothing exercising it — `rate_limiter.py`
+    read as fully covered while no test had ever seen a 429.
 
-    Disabling it here rather than raising the limit keeps the production number honest:
-    it is chosen for real callers, not padded until the tests fit under it.
+    Clearing the storage between tests answers it without that: the limiter stays on and
+    real everywhere, so a test that wants to prove throttling just makes the calls, and no
+    test can be pushed over an edge by traffic that belongs to another one. Test order and
+    suite size stop mattering, which is what made adding a scenario dangerous before.
+
+    Not enough on its own for the BDD suite — one scenario can register more accounts than
+    an hourly limit allows all by itself. See `tests/acceptance/conftest.py`.
     """
-    app.state.limiter.enabled = False
+    app.state.limiter.reset()
 
 
 @pytest.fixture
