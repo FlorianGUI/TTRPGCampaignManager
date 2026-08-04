@@ -53,6 +53,7 @@ frontend/
     api/
       http.js                      # the transport: one request, no auth state
     stores/
+      auth.js                      # current user, in-memory access token
       theme.js                     # theme + density state, persisted
     design-system/
       preset.js                    # composes the three layers into the preset
@@ -164,6 +165,22 @@ cannot be changed on the server afterwards.
 in an `httpOnly` cookie (#35), and dev is `:5173` against `:8000`, which is
 cross-origin: without it the browser neither stores that cookie nor sends it
 back, and every session would end at the first reload.
+
+### Sessions
+
+The backend issues a short access token in the response body and a long-lived
+refresh token in an `httpOnly` cookie (#35). Two things follow, both easy to
+undo by accident:
+
+- **The auth store persists nothing.** The access token lives in memory only. A
+  reload restores the session from the cookie, so there is no long-lived
+  credential on disk for an XSS to reach. Don't add `localStorage` here — the
+  reason it looks like it needs it is the reason it must not have it.
+- **Refreshes are serialised, per tab and across tabs.** The backend rotates the
+  refresh token on every use and treats a re-presented one as a leak, revoking
+  the whole session. So two refreshes racing do not waste a request — they sign
+  the user out. `stores/auth.js` holds one in-flight promise per tab and takes a
+  Web Lock across them; both are covered by tests, and neither is optional.
 
 ## Testing
 
