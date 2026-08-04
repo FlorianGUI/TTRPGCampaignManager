@@ -155,7 +155,13 @@ Some things worth knowing before touching any of it:
 `App.vue` holds the shell and renders `<RouterView>` inside it, so the top bar
 and sidebar are not torn down on navigation.
 
-## Talking to the API
+## State and the API
+
+Pinia is the single state pattern; there is no second way to hold shared state.
+Stores live in `src/stores/`, and `installTheme()` still runs from `main.js`
+before mount so the theme class is on `<html>` before first paint.
+
+### Talking to the API
 
 Two modules, and the split between them is load-bearing:
 
@@ -174,26 +180,28 @@ That is what stops it looping.
 set where the artifact is built — `.github/workflows/frontend-ci.yml` — and
 cannot be changed on the server afterwards.
 
-**Every request sends `credentials: 'include'`.** The backend keeps the session
-in an `httpOnly` cookie (#35), and dev is `:5173` against `:8000`, which is
-cross-origin: without it the browser neither stores that cookie nor sends it
-back, and every session would end at the first reload.
-
 ### Sessions
 
 The backend issues a short access token in the response body and a long-lived
-refresh token in an `httpOnly` cookie (#35). Two things follow, both easy to
-undo by accident:
+refresh token in an `httpOnly` cookie (#35). Three things follow, all of which
+are easy to undo by accident:
 
-- **The auth store persists nothing.** The access token lives in memory only. A
-  reload restores the session from the cookie, so there is no long-lived
-  credential on disk for an XSS to reach. Don't add `localStorage` here — the
-  reason it looks like it needs it is the reason it must not have it.
+- **Nothing is persisted by the auth store.** The access token lives in memory
+  only. A reload restores the session from the cookie, so there is no
+  long-lived credential on disk for an XSS to reach. Don't add `localStorage`
+  here — the reason it looks like it needs it is the reason it must not have it.
+- **Every request sends `credentials: 'include'`.** Dev is `:5173` against
+  `:8000`, which is cross-origin: without it the cookie is neither stored nor
+  sent, and every session ends at the first reload.
 - **Refreshes are serialised, per tab and across tabs.** The backend rotates the
   refresh token on every use and treats a re-presented one as a leak, revoking
   the whole session. So two refreshes racing do not waste a request — they sign
   the user out. `stores/auth.js` holds one in-flight promise per tab and takes a
   Web Lock across them; both are covered by tests, and neither is optional.
+
+The first render waits on `auth.ready`, which the boot refresh flips when it
+settles either way. Rendering earlier means a returning user sees a signed-out
+app for a moment before it corrects itself.
 
 ## Testing
 
