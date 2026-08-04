@@ -18,13 +18,32 @@ services:
     build: ./backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Bound to loopback, not 0.0.0.0. nginx proxies to 127.0.0.1:8000 from the same host,
+      # so it still reaches this — but nothing on the internet does. Published on all
+      # interfaces, as it was, the API answered directly on port 8000 over plain HTTP,
+      # skipping TLS and the proxy entirely (the container logs were full of scanners that
+      # had found it). It is also what makes trusting X-Forwarded-For below safe: only the
+      # proxy can reach the app, so nobody can arrive with a forged one.
+      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       CORS_ORIGINS: ${CORS_ORIGINS}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
+      REGISTER_RATE_LIMIT: ${REGISTER_RATE_LIMIT:-5/hour}
+      # Whose X-Forwarded-For uvicorn believes. Nothing here reaches it from 127.0.0.1 — the
+      # published port above is forwarded by docker-proxy, so the peer is the bridge gateway
+      # (172.18.0.1 today). uvicorn's default of 127.0.0.1 therefore trusts nobody and the
+      # header is dropped, leaving every caller keyed on that one gateway address.
+      #
+      # The whole private /12 rather than the gateway itself, because Docker picks the
+      # subnet and renumbers it whenever the network is recreated — pinning 172.18.0.1 would
+      # silently revert to one-shared-bucket on the day that changed. Trusting the range is
+      # safe here precisely because of the loopback binding above: the only thing that can
+      # reach this container is docker-proxy relaying from nginx.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1,172.16.0.0/12}
     depends_on:
       db:
         condition: service_healthy
