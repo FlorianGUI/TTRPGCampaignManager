@@ -52,6 +52,7 @@ frontend/
       fonts/                       # woff2, latin + latin-ext subsets
     api/
       http.js                      # the transport: one request, no auth state
+      client.js                    # what features call: token + refresh-on-401
     stores/
       auth.js                      # current user, in-memory access token
       theme.js                     # theme + density state, persisted
@@ -155,6 +156,18 @@ Some things worth knowing before touching any of it:
 and sidebar are not torn down on navigation.
 
 ## Talking to the API
+
+Two modules, and the split between them is load-bearing:
+
+| module          | what it does                                                       |
+| --------------- | ------------------------------------------------------------------ |
+| `api/http.js`   | builds and sends one request; knows nothing about who is signed in |
+| `api/client.js` | attaches the access token, and renews it on a 401                  |
+
+**Feature stores call `request` from `client.js`.** The auth store is the one
+exception: signing in, refreshing and signing out go straight to `apiFetch`, so
+a refresh can never be intercepted by the 401 handling that exists to serve it.
+That is what stops it looping.
 
 `VITE_API_URL` sets the base URL (see `.env.example`), defaulting to
 `http://localhost:8000`. Vite substitutes it at **build** time, so production is
