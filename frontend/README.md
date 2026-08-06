@@ -24,10 +24,8 @@ rules for `.vue` and JS files. Prettier owns formatting; `@vue/eslint-config-pre
 disables any ESLint rules that would conflict with it. Prettier settings live in
 `.prettierrc.json`.
 
-The dev (5173) and preview (4173) ports both proxy `/api` to the API on 8000, so
-the browser only ever talks to one origin — see **State and the API** below. They
-remain in the API's `CORS_ORIGINS` (`app/common/security/cors.py`) for anything
-that calls it directly, which the app itself no longer does.
+The dev (5173) and preview (4173) ports match the origins allowed by the API's
+CORS configuration (`CORS_ORIGINS`, see `app/common/security/cors.py`).
 
 ## Structure
 
@@ -52,18 +50,13 @@ frontend/
       base.css                     # element defaults, prose, ornament
       fonts.css                    # @font-face for the self-hosted families
       fonts/                       # woff2, latin + latin-ext subsets
-    api/
-      http.js                      # the transport: one request, no auth state
-      client.js                    # what features call: token + refresh-on-401
-    stores/
-      auth.js                      # current user, in-memory access token
-      theme.js                     # theme + density state, persisted
     design-system/
       preset.js                    # composes the three layers into the preset
       tokens/
         primitives.js              # raw ramps and scales, no meaning, no imports
         semantic.js                # roles, the two schemes, app tokens
         components.js              # per-component overrides
+      useTheme.js                  # theme + density state, persisted
     components/
       AppShell.vue                 # top bar + context sidebar + content area
       AppNav.vue                   # the nav list, shared by sidebar and drawer
@@ -156,69 +149,6 @@ Some things worth knowing before touching any of it:
 
 `App.vue` holds the shell and renders `<RouterView>` inside it, so the top bar
 and sidebar are not torn down on navigation.
-
-## State and the API
-
-Pinia is the single state pattern; there is no second way to hold shared state.
-Stores live in `src/stores/`, and `installTheme()` still runs from `main.js`
-before mount so the theme class is on `<html>` before first paint.
-
-### Talking to the API
-
-Two modules, and the split between them is load-bearing:
-
-| module          | what it does                                                       |
-| --------------- | ------------------------------------------------------------------ |
-| `api/http.js`   | builds and sends one request; knows nothing about who is signed in |
-| `api/client.js` | attaches the access token, and renews it on a 401                  |
-
-**Feature stores call `request` from `client.js`.** The auth store is the one
-exception: signing in, refreshing and signing out go straight to `apiFetch`, so
-a refresh can never be intercepted by the 401 handling that exists to serve it.
-That is what stops it looping.
-
-**The API is same-origin, at `/api`.** Nothing in the bundle names a host: nginx
-proxies `/api` to the API in production (`nginx/lastdawn.fr.conf`) and
-`vite.config.js` does the same in dev and preview. That is deliberate — Vite
-substitutes `VITE_*` at **build** time, so any host in there makes the artifact
-correct in exactly one environment and silently wrong in the others. `.env.example`
-documents `VITE_API_URL` as an override for pointing a local build elsewhere;
-CI does not set it, and production must not.
-
-Two things follow, and both are load-bearing:
-
-- **The proxy strips the prefix.** `/api/users/login` reaches the backend as
-  `/users/login`, so the backend stays unaware it sits behind a prefix and
-  `api.lastdawn.fr` keeps serving identical paths for Swagger.
-- **So the refresh cookie's path has to be rewritten.** The backend scopes it
-  `Path=/users`; a browser that received it from `/api/users` would store it and
-  then never send it. `proxy_cookie_path` in nginx and `cookiePathRewrite` in
-  `vite.config.js` are the same fix on both sides. Remove either and the session
-  ends at the first reload, with nothing failing loudly.
-
-### Sessions
-
-The backend issues a short access token in the response body and a long-lived
-refresh token in an `httpOnly` cookie (#35). Three things follow, all of which
-are easy to undo by accident:
-
-- **Nothing is persisted by the auth store.** The access token lives in memory
-  only. A reload restores the session from the cookie, so there is no
-  long-lived credential on disk for an XSS to reach. Don't add `localStorage`
-  here — the reason it looks like it needs it is the reason it must not have it.
-- **Every request sends `credentials: 'include'`.** Same-origin `/api` would
-  carry the cookie without it, but it costs nothing there and is the difference
-  between working and losing every session at the first reload as soon as
-  `VITE_API_URL` points at another origin.
-- **Refreshes are serialised, per tab and across tabs.** The backend rotates the
-  refresh token on every use and treats a re-presented one as a leak, revoking
-  the whole session. So two refreshes racing do not waste a request — they sign
-  the user out. `stores/auth.js` holds one in-flight promise per tab and takes a
-  Web Lock across them; both are covered by tests, and neither is optional.
-
-The first render waits on `auth.ready`, which the boot refresh flips when it
-settles either way. Rendering earlier means a returning user sees a signed-out
-app for a moment before it corrects itself.
 
 ## Testing
 

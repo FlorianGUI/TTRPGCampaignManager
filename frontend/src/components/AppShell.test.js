@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import AppShell from './AppShell.vue'
 import AppNav from './AppNav.vue'
@@ -22,8 +21,7 @@ const sections = [
 function mountShell() {
   return mount(AppShell, {
     props: { sections, active: 'Session notes' },
-    // A fresh pinia per mount: the shell reads the theme store for its toggles.
-    global: { plugins: [PrimeVue, createPinia()] },
+    global: { plugins: [PrimeVue] },
   })
 }
 

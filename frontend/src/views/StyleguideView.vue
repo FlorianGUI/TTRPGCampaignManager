@@ -36,15 +36,10 @@ import {
   scrying,
 } from '../design-system/tokens/primitives.js'
 import { light, dark } from '../design-system/tokens/semantic.js'
-import { storeToRefs } from 'pinia'
-import { useThemeStore } from '../stores/theme.js'
+import { useTheme } from '../design-system/useTheme.js'
 import { owlbear } from '../content/sample.js'
 
-// storeToRefs keeps the two values reactive; actions are taken off the store
-// directly, which is the Pinia idiom and what plain destructuring would break.
-const themeStore = useThemeStore()
-const { theme, density } = storeToRefs(themeStore)
-const { toggleTheme, toggleDensity } = themeStore
+const { theme, density, toggleTheme, toggleDensity } = useTheme()
 
 const RAMPS = { ink, vellum, gold, blood, moss, torch, scrying }
 
