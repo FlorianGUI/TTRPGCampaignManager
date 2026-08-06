@@ -25,11 +25,26 @@ describe('apiFetch', () => {
     expect(fetch).toHaveBeenCalledWith(`${API_URL}/users/me`, expect.anything())
   })
 
+  // Skipped for anyone who has deliberately overridden the base in .env.local;
+  // CI has no such file, which is the run that matters here.
+  it.skipIf(import.meta.env.VITE_API_URL)(
+    'defaults to a same-origin base, so no API host is baked into the build',
+    () => {
+      /*
+       * The guard on the one thing here that fails only in production: a base
+       * URL carrying a scheme and host is a bundle correct in exactly one
+       * environment, and silently wrong in every other.
+       */
+      expect(API_URL).toBe('/api')
+    },
+  )
+
   it('always sends credentials, so the refresh cookie travels', async () => {
     /*
-     * Not a precaution. Dev is :5173 against :8000, which is cross-origin, and
-     * without this the browser neither stores the cookie nor sends it back —
-     * so every session would end at the first reload.
+     * Same-origin would send the cookie without this, but the base URL is
+     * overridable: point VITE_API_URL at another host and the browser stops
+     * storing or returning the cookie, ending every session at the first
+     * reload.
      */
     const fetch = spyFetch()
 
