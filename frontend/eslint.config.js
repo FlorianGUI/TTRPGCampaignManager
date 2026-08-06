@@ -31,8 +31,11 @@ export default [
     },
   },
   {
+    // vite.config.js belongs here for the same reason scripts/ does: it runs in
+    // Node, not the browser, so it may read process.env — which is exactly how
+    // the dev server learns the API host without it reaching the bundle.
     name: 'app/node-scripts',
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'vite.config.js'],
     languageOptions: {
       globals: {
         ...globals.node,

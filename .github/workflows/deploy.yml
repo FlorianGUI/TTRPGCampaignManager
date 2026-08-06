@@ -33,6 +33,34 @@ jobs:
           strip_components: 1
           rm: true
 
+      # Must run after the scp above, which uses `rm: true` and would delete this
+      # file along with the rest of the old build.
+      #
+      # The host lives in /opt/dnd/.env on the server rather than in a workflow
+      # secret, for the same reason the rate limits do (#63): where the API
+      # answers is deployment's to know, and this way moving it is an edit and a
+      # re-run of this step, with nothing rebuilt and no commit.
+      #
+      # `:?` and script_stop mean an unset FRONTEND_API_URL fails the deploy here
+      # rather than shipping a config the app will refuse to boot with. Unset is
+      # never the quiet choice.
+      - name: Write runtime config
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 49191
+          script_stop: true
+          script: |
+            set -a
+            . /opt/dnd/.env
+            set +a
+            : "${FRONTEND_API_URL:?not set in /opt/dnd/.env — the SPA has no API to call}"
+            printf 'window.__CONFIG__ = { apiUrl: "%s" }\n' "$FRONTEND_API_URL" \
+              > /opt/dnd/frontend-dist/config.js
+            cat /opt/dnd/frontend-dist/config.js
+
       - name: Deploy backend
         uses: appleboy/ssh-action@v1
         with:
