@@ -60,6 +60,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build
+        # No VITE_API_URL, deliberately. The SPA calls a same-origin /api, which
+        # nginx proxies to the API (nginx/lastdawn.fr.conf), so the artifact
+        # carries no API host at all. Setting it here would bake one back in and
+        # make the build environment-specific again — which is a thing Vite can
+        # only get wrong at build time, where it fails in production and nowhere
+        # else.
         run: npm run build
       - name: Upload frontend build
         uses: actions/upload-artifact@v4

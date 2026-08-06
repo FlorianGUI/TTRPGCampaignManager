@@ -4,7 +4,8 @@ import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import InputText from 'primevue/inputtext'
 import AppNav from './AppNav.vue'
-import { useTheme } from '../design-system/useTheme.js'
+import { storeToRefs } from 'pinia'
+import { useThemeStore } from '../stores/theme.js'
 
 /*
  * Dark leather chrome (top bar + sidebar) framing a parchment reading surface.
@@ -24,7 +25,11 @@ defineProps({
   active: { type: String, default: null },
 })
 
-const { theme, density, toggleTheme, toggleDensity } = useTheme()
+// storeToRefs keeps the two values reactive; actions are taken off the store
+// directly, which is the Pinia idiom and what plain destructuring would break.
+const themeStore = useThemeStore()
+const { theme, density } = storeToRefs(themeStore)
+const { toggleTheme, toggleDensity } = themeStore
 
 /* Kept in sync with the max-width: 900px breakpoint below. */
 const WIDE_QUERY = '(min-width: 901px)'
