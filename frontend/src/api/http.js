@@ -8,16 +8,35 @@
  * handling they exist to serve.
  */
 
-// Relative, and that is the point: the API is reached at a same-origin /api,
-// which nginx proxies in production and the Vite server proxies in development.
-// A relative base means no API host is baked into the bundle, so the artifact CI
-// builds is correct wherever it is served — the failure mode being avoided is a
-// deploy that ships a build carrying the wrong host, which breaks only in
-// production and only for everyone.
-//
-// VITE_API_URL still overrides it, for pointing a local build at an API
-// somewhere else. Nothing in CI sets it, and production must not.
-export const API_URL = import.meta.env.VITE_API_URL ?? '/api'
+/*
+ * Where the API lives, read at runtime rather than compiled in.
+ *
+ * `config.js` is written on the server at deploy time from an environment
+ * variable there, and `index.html` loads it before this module runs. Vite would
+ * otherwise substitute a host at build time, which makes the artifact correct in
+ * exactly one environment — the bug that shipped a bundle calling
+ * localhost:8000. Nothing in the bundle names a host now, so the same dist/ is
+ * deployable anywhere and moving the API is an env var and a restart.
+ *
+ * It fails closed. A production build with no config has nothing sensible to
+ * fall back to: falling back to localhost would reintroduce exactly the failure
+ * this exists to prevent, and it would do it silently, in production, for
+ * everyone. Better to refuse to start and say why.
+ */
+function resolveApiUrl() {
+  const configured = globalThis.__CONFIG__?.apiUrl
+
+  if (configured) return configured
+
+  if (import.meta.env.DEV) return 'http://localhost:8000'
+
+  throw new Error(
+    'No apiUrl in window.__CONFIG__. /config.js is written by the deploy from ' +
+      'FRONTEND_API_URL on the server — it is missing, empty, or was not served.',
+  )
+}
+
+export const API_URL = resolveApiUrl()
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -45,13 +64,12 @@ async function detailOf(response) {
  * Send one request. Returns the parsed body, `null` for a 204, or throws
  * `ApiError`.
  *
- * `credentials: 'include'` outlives the same-origin proxy that made it
- * redundant. Same-origin would carry the refresh cookie under the default
- * `same-origin` policy anyway, but `include` is also correct there, and it is
- * the difference between working and silently ending every session at the first
- * reload the moment VITE_API_URL points somewhere else. The backend answers with
- * `allow_credentials=True` against an explicit origin list, which is what makes
- * that legal when it happens.
+ * `credentials: 'include'` is not optional and is not a precaution. The API is a
+ * different origin in every environment — `api.lastdawn.fr` from `lastdawn.fr`,
+ * `:8000` from `:5173` — so without it the browser neither stores the refresh
+ * cookie nor sends it back, and every session ends at the first reload. The
+ * backend answers with `allow_credentials=True` against an explicit origin list,
+ * which is what makes that legal.
  */
 export async function apiFetch(
   path,

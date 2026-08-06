@@ -24,10 +24,9 @@ rules for `.vue` and JS files. Prettier owns formatting; `@vue/eslint-config-pre
 disables any ESLint rules that would conflict with it. Prettier settings live in
 `.prettierrc.json`.
 
-The dev (5173) and preview (4173) ports both proxy `/api` to the API on 8000, so
-the browser only ever talks to one origin — see **State and the API** below. They
-remain in the API's `CORS_ORIGINS` (`app/common/security/cors.py`) for anything
-that calls it directly, which the app itself no longer does.
+The dev (5173) and preview (4173) ports match the origins allowed by the API's
+CORS configuration (`CORS_ORIGINS`, see `app/common/security/cors.py`) — the API
+is a separate origin, so that list is what lets the session cookie work at all.
 
 ## Structure
 
@@ -177,24 +176,32 @@ exception: signing in, refreshing and signing out go straight to `apiFetch`, so
 a refresh can never be intercepted by the 401 handling that exists to serve it.
 That is what stops it looping.
 
-**The API is same-origin, at `/api`.** Nothing in the bundle names a host: nginx
-proxies `/api` to the API in production (`nginx/lastdawn.fr.conf`) and
-`vite.config.js` does the same in dev and preview. That is deliberate — Vite
-substitutes `VITE_*` at **build** time, so any host in there makes the artifact
-correct in exactly one environment and silently wrong in the others. `.env.example`
-documents `VITE_API_URL` as an override for pointing a local build elsewhere;
-CI does not set it, and production must not.
+**The API host is runtime configuration, not part of the build.** `index.html`
+loads `/config.js` before the app, and that file sets
+`window.__CONFIG__ = { apiUrl }`. `api/http.js` reads it once at import.
 
-Two things follow, and both are load-bearing:
+| where         | who writes `/config.js`                                           | from                                                |
+| ------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| production    | the `Write runtime config` step in `.github/workflows/deploy.yml` | `FRONTEND_API_URL` in `/opt/dnd/.env` on the server |
+| dev / preview | the `dev-runtime-config` plugin in `vite.config.js`               | `VITE_API_URL`, else `http://localhost:8000`        |
 
-- **The proxy strips the prefix.** `/api/users/login` reaches the backend as
-  `/users/login`, so the backend stays unaware it sits behind a prefix and
-  `api.lastdawn.fr` keeps serving identical paths for Swagger.
-- **So the refresh cookie's path has to be rewritten.** The backend scopes it
-  `Path=/users`; a browser that received it from `/api/users` would store it and
-  then never send it. `proxy_cookie_path` in nginx and `cookiePathRewrite` in
-  `vite.config.js` are the same fix on both sides. Remove either and the session
-  ends at the first reload, with nothing failing loudly.
+Vite substitutes `VITE_*` at **build** time, so a host in the bundle makes the
+artifact correct in exactly one environment and silently wrong in every other —
+which is how a build once shipped calling `localhost:8000`. Nothing in `dist/`
+names a host now, so the same artifact deploys anywhere and moving the API is an
+env var and a re-run of that step.
+
+Three things follow, and all three are load-bearing:
+
+- **It fails closed.** A production build that finds no `apiUrl` throws at import
+  rather than falling back to localhost. A fallback there would be the original
+  bug again, in production, silently. The deploy fails the same way if
+  `FRONTEND_API_URL` is unset — unset is never the quiet choice.
+- **`/config.js` must not be cached.** It carries no content hash, unlike
+  everything under `/assets/`, so `nginx/lastdawn.fr.conf` serves it `no-cache`.
+  Without that a browser can keep pointing at yesterday's API host.
+- **The script tag is deliberately not a module.** It has to have run before the
+  app's first import; `type="module"` defers it and it would not have.
 
 ### Sessions
 
@@ -206,10 +213,10 @@ are easy to undo by accident:
   only. A reload restores the session from the cookie, so there is no
   long-lived credential on disk for an XSS to reach. Don't add `localStorage`
   here — the reason it looks like it needs it is the reason it must not have it.
-- **Every request sends `credentials: 'include'`.** Same-origin `/api` would
-  carry the cookie without it, but it costs nothing there and is the difference
-  between working and losing every session at the first reload as soon as
-  `VITE_API_URL` points at another origin.
+- **Every request sends `credentials: 'include'`.** The API is a different origin
+  in every environment — `api.lastdawn.fr` from `lastdawn.fr`, `:8000` from
+  `:5173` — so without it the cookie is neither stored nor sent, and every
+  session ends at the first reload.
 - **Refreshes are serialised, per tab and across tabs.** The backend rotates the
   refresh token on every use and treats a re-presented one as a leak, revoking
   the whole session. So two refreshes racing do not waste a request — they sign

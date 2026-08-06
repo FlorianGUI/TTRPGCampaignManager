@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TTRPG Campaign Manager</title>
+    <!--
+      Runtime configuration, written on the server at deploy time and served
+      no-cache. Deliberately a plain blocking script and not a module: it has to
+      have run before the app's first import reads window.__CONFIG__.
+
+      In development the Vite server answers this from vite.config.js, so the
+      shape is the same in both places rather than only existing in production.
+    -->
+    <script src="/config.js"></script>
   </head>
   <body>
     <div id="app"></div>

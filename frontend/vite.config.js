@@ -1,39 +1,59 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 /*
- * The API, same-origin, exactly as nginx serves it in production
- * (nginx/lastdawn.fr.conf). Development that talked to :8000 directly would be
- * testing a topology we do not ship: no proxy, and CORS in the path.
+ * `/config.js` in development, standing in for the file the deploy writes on the
+ * server. index.html asks for it in both places, so development exercises the
+ * same boot sequence production does — a missing config.js is then a broken dev
+ * server rather than a surprise only production can discover.
  *
- * `cookiePathRewrite` is the one line here that is not a convenience. The
- * backend sets the refresh cookie `Path=/users`, because that is where it lives
- * behind the proxy — but the browser sees it arrive from /api/users and would
- * never send it back to a path it was not scoped to. Without this the session
- * ends at the first reload, and only the browser can tell you so.
+ * VITE_API_URL is honoured here, and only here: it configures this dev-server
+ * response, never the bundle. That is the distinction the whole arrangement
+ * rests on — the host is something the environment says at runtime, not
+ * something the build remembers.
  */
-const apiProxy = {
-  '/api': {
-    target: 'http://localhost:8000',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api/, ''),
-    cookiePathRewrite: { '/users': '/api/users' },
-  },
+function devRuntimeConfig(apiUrl) {
+  const body = `window.__CONFIG__ = ${JSON.stringify({ apiUrl })}\n`
+
+  // The braces matter: `middlewares.use` returns the connect app, which is
+  // itself a function, and Vite treats a function returned from these hooks as a
+  // post-hook to call later — with no arguments, which crashes on startup.
+  return {
+    name: 'dev-runtime-config',
+    configureServer(server) {
+      server.middlewares.use('/config.js', serve)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/config.js', serve)
+    },
+  }
+
+  function serve(_request, response) {
+    response.setHeader('Content-Type', 'application/javascript')
+    response.setHeader('Cache-Control', 'no-cache')
+    response.end(body)
+  }
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [vue()],
-  server: {
-    port: 5173,
-    proxy: apiProxy,
-  },
-  preview: {
-    port: 4173,
-    proxy: apiProxy,
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-  },
+export default defineConfig(({ mode }) => {
+  // loadEnv rather than process.env: Vite reads .env files into import.meta.env
+  // for the client and leaves process.env alone, so a VITE_API_URL sitting in
+  // .env.local — which is what .env.example tells you to write — would be
+  // invisible here otherwise.
+  const env = loadEnv(mode, import.meta.dirname, 'VITE_')
+
+  return {
+    plugins: [vue(), devRuntimeConfig(env.VITE_API_URL || 'http://localhost:8000')],
+    server: {
+      port: 5173,
+    },
+    preview: {
+      port: 4173,
+    },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+    },
+  }
 })

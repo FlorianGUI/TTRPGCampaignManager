@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { API_URL, ApiError, apiFetch } from './http.js'
 
 function respond(status, body) {
@@ -25,26 +25,11 @@ describe('apiFetch', () => {
     expect(fetch).toHaveBeenCalledWith(`${API_URL}/users/me`, expect.anything())
   })
 
-  // Skipped for anyone who has deliberately overridden the base in .env.local;
-  // CI has no such file, which is the run that matters here.
-  it.skipIf(import.meta.env.VITE_API_URL)(
-    'defaults to a same-origin base, so no API host is baked into the build',
-    () => {
-      /*
-       * The guard on the one thing here that fails only in production: a base
-       * URL carrying a scheme and host is a bundle correct in exactly one
-       * environment, and silently wrong in every other.
-       */
-      expect(API_URL).toBe('/api')
-    },
-  )
-
   it('always sends credentials, so the refresh cookie travels', async () => {
     /*
-     * Same-origin would send the cookie without this, but the base URL is
-     * overridable: point VITE_API_URL at another host and the browser stops
-     * storing or returning the cookie, ending every session at the first
-     * reload.
+     * Not a precaution. The API is a different origin everywhere it runs, so
+     * without this the browser neither stores the cookie nor sends it back —
+     * and every session would end at the first reload.
      */
     const fetch = spyFetch()
 
@@ -126,5 +111,48 @@ describe('apiFetch', () => {
     expect(error.status).toBe(502)
     expect(error.detail).toBeNull()
     expect(error.message).toContain('502')
+  })
+})
+
+/*
+ * The base URL is decided once, when the module is first imported, so each of
+ * these has to import it fresh against a different environment. `resetModules`
+ * is what makes that possible — without it the second case would keep the first
+ * one's answer.
+ */
+describe('API_URL', () => {
+  afterEach(() => {
+    delete globalThis.__CONFIG__
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  async function freshApiUrl() {
+    vi.resetModules()
+    return (await import('./http.js')).API_URL
+  }
+
+  it('takes the host the server put in window.__CONFIG__', async () => {
+    globalThis.__CONFIG__ = { apiUrl: 'https://api.lastdawn.fr' }
+
+    expect(await freshApiUrl()).toBe('https://api.lastdawn.fr')
+  })
+
+  it('falls back to the local API in development, where there is no deploy to write one', async () => {
+    vi.stubEnv('DEV', true)
+
+    expect(await freshApiUrl()).toBe('http://localhost:8000')
+  })
+
+  it('refuses to start a production build with no config, rather than guessing', async () => {
+    /*
+     * The whole point of the change, and the one case that can only go wrong in
+     * production. Falling back to localhost here would be the original bug
+     * again: every visitor's browser calling their own machine, silently, and
+     * only once it is deployed.
+     */
+    vi.stubEnv('DEV', false)
+
+    await expect(freshApiUrl()).rejects.toThrow(/config\.js/)
   })
 })
