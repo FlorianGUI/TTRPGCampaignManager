@@ -1,52 +1,53 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { COMPACT_CLASS, DARK_CLASS, DENSITY_STORAGE_KEY, THEME_STORAGE_KEY } from './useTheme.js'
+import { createPinia, setActivePinia } from 'pinia'
+import {
+  COMPACT_CLASS,
+  DARK_CLASS,
+  DENSITY_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  installTheme,
+  useThemeStore,
+} from './theme.js'
 
 /*
- * The module reads localStorage at import time, so each case re-imports it
- * against a freshly seeded store.
+ * The same six cases this had before Pinia (#34), against the store instead of
+ * module-level refs. They no longer need vi.resetModules(): the state
+ * initialiser runs when the store is first used, so a fresh pinia per test is
+ * enough to re-read a freshly seeded localStorage.
  */
-async function loadTheme() {
-  vi.resetModules()
-  return import('./useTheme.js')
-}
 
-describe('useTheme', () => {
+describe('theme store', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.className = ''
+    setActivePinia(createPinia())
   })
 
-  it('defaults to candlelight when nothing is stored', async () => {
-    const { theme } = await loadTheme()
-
-    expect(theme.value).toBe('candlelight')
+  it('defaults to candlelight when nothing is stored', () => {
+    expect(useThemeStore().theme).toBe('candlelight')
   })
 
-  it('restores the stored theme over the default', async () => {
+  it('restores the stored theme over the default', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'parchment')
 
-    const { theme } = await loadTheme()
-
-    expect(theme.value).toBe('parchment')
+    expect(useThemeStore().theme).toBe('parchment')
   })
 
-  it('ignores a stored value that is not a known theme', async () => {
+  it('ignores a stored value that is not a known theme', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'neon')
 
-    const { theme } = await loadTheme()
-
-    expect(theme.value).toBe('candlelight')
+    expect(useThemeStore().theme).toBe('candlelight')
   })
 
   it('puts the dark class on the root and persists the choice', async () => {
-    const { installTheme, toggleTheme } = await loadTheme()
+    const store = useThemeStore()
     installTheme()
     await nextTick()
 
     expect(document.documentElement.classList.contains(DARK_CLASS)).toBe(true)
 
-    toggleTheme()
+    store.toggleTheme()
     await nextTick()
 
     expect(document.documentElement.classList.contains(DARK_CLASS)).toBe(false)
@@ -54,16 +55,16 @@ describe('useTheme', () => {
   })
 
   it('toggles density independently of the theme', async () => {
-    const { installTheme, toggleDensity, density } = await loadTheme()
+    const store = useThemeStore()
     installTheme()
     await nextTick()
 
     expect(document.documentElement.classList.contains(COMPACT_CLASS)).toBe(false)
 
-    toggleDensity()
+    store.toggleDensity()
     await nextTick()
 
-    expect(density.value).toBe('compact')
+    expect(store.density).toBe('compact')
     expect(document.documentElement.classList.contains(COMPACT_CLASS)).toBe(true)
     expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBe('compact')
   })
@@ -76,11 +77,11 @@ describe('useTheme', () => {
       throw new Error('storage disabled')
     })
 
-    const { installTheme, theme } = await loadTheme()
+    const store = useThemeStore()
     installTheme()
     await nextTick()
 
-    expect(theme.value).toBe('candlelight')
+    expect(store.theme).toBe('candlelight')
     expect(document.documentElement.classList.contains(DARK_CLASS)).toBe(true)
 
     vi.restoreAllMocks()
