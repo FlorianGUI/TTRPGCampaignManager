@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { request } from './client.js'
+import { API_URL, request } from './client.js'
 import { useAuthStore } from '../stores/auth.js'
 
 function respond(status, body) {
@@ -11,11 +11,14 @@ function respond(status, body) {
  * Routes answer from a queue, so one path can give a different answer the
  * second time — which is the whole subject here: a request that 401s, then
  * succeeds once the token behind it has been renewed.
+ *
+ * Keys drop the base, so a route reads as the API's own path rather than the
+ * /api prefix the proxy adds in front of it.
  */
 function serve(routes) {
   const calls = []
   globalThis.fetch = vi.fn(async (url, init = {}) => {
-    const key = `${init.method ?? 'GET'} ${new URL(url).pathname}`
+    const key = `${init.method ?? 'GET'} ${url.slice(API_URL.length)}`
     calls.push({ key, token: init.headers.Authorization })
     const answers = routes[key]
     if (!answers) throw new Error(`no route for ${key}`)

@@ -24,8 +24,10 @@ rules for `.vue` and JS files. Prettier owns formatting; `@vue/eslint-config-pre
 disables any ESLint rules that would conflict with it. Prettier settings live in
 `.prettierrc.json`.
 
-The dev (5173) and preview (4173) ports match the origins allowed by the API's
-CORS configuration (`CORS_ORIGINS`, see `app/common/security/cors.py`).
+The dev (5173) and preview (4173) ports both proxy `/api` to the API on 8000, so
+the browser only ever talks to one origin — see **State and the API** below. They
+remain in the API's `CORS_ORIGINS` (`app/common/security/cors.py`) for anything
+that calls it directly, which the app itself no longer does.
 
 ## Structure
 
@@ -175,10 +177,24 @@ exception: signing in, refreshing and signing out go straight to `apiFetch`, so
 a refresh can never be intercepted by the 401 handling that exists to serve it.
 That is what stops it looping.
 
-`VITE_API_URL` sets the base URL (see `.env.example`), defaulting to
-`http://localhost:8000`. Vite substitutes it at **build** time, so production is
-set where the artifact is built — `.github/workflows/frontend-ci.yml` — and
-cannot be changed on the server afterwards.
+**The API is same-origin, at `/api`.** Nothing in the bundle names a host: nginx
+proxies `/api` to the API in production (`nginx/lastdawn.fr.conf`) and
+`vite.config.js` does the same in dev and preview. That is deliberate — Vite
+substitutes `VITE_*` at **build** time, so any host in there makes the artifact
+correct in exactly one environment and silently wrong in the others. `.env.example`
+documents `VITE_API_URL` as an override for pointing a local build elsewhere;
+CI does not set it, and production must not.
+
+Two things follow, and both are load-bearing:
+
+- **The proxy strips the prefix.** `/api/users/login` reaches the backend as
+  `/users/login`, so the backend stays unaware it sits behind a prefix and
+  `api.lastdawn.fr` keeps serving identical paths for Swagger.
+- **So the refresh cookie's path has to be rewritten.** The backend scopes it
+  `Path=/users`; a browser that received it from `/api/users` would store it and
+  then never send it. `proxy_cookie_path` in nginx and `cookiePathRewrite` in
+  `vite.config.js` are the same fix on both sides. Remove either and the session
+  ends at the first reload, with nothing failing loudly.
 
 ### Sessions
 
@@ -190,9 +206,10 @@ are easy to undo by accident:
   only. A reload restores the session from the cookie, so there is no
   long-lived credential on disk for an XSS to reach. Don't add `localStorage`
   here — the reason it looks like it needs it is the reason it must not have it.
-- **Every request sends `credentials: 'include'`.** Dev is `:5173` against
-  `:8000`, which is cross-origin: without it the cookie is neither stored nor
-  sent, and every session ends at the first reload.
+- **Every request sends `credentials: 'include'`.** Same-origin `/api` would
+  carry the cookie without it, but it costs nothing there and is the difference
+  between working and losing every session at the first reload as soon as
+  `VITE_API_URL` points at another origin.
 - **Refreshes are serialised, per tab and across tabs.** The backend rotates the
   refresh token on every use and treats a re-presented one as a leak, revoking
   the whole session. So two refreshes racing do not waste a request — they sign

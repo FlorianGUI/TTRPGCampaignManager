@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from './auth.js'
-import { ApiError } from '../api/http.js'
+import { API_URL, ApiError } from '../api/http.js'
 
 /*
  * These drive the real transport against a stubbed `fetch`, rather than mocking
@@ -21,11 +21,17 @@ function respond(status, body) {
 const A_SESSION = respond(200, { access_token: 'fresh-token', token_type: 'bearer' })
 const A_USER = respond(200, { id: 'u-1', username: 'aragorn', email: 'aragorn@gondor.test' })
 
-/* A fake API, keyed by "METHOD /path". Every call is recorded in order. */
+/*
+ * A fake API, keyed by "METHOD /path". Every call is recorded in order.
+ *
+ * The key drops the base, so routes read as the API's own paths rather than the
+ * /api prefix nginx and the dev server proxy under — that prefix is deployment,
+ * not something these tests have an opinion about.
+ */
 function serve(routes) {
   const calls = []
   globalThis.fetch = vi.fn(async (url, init = {}) => {
-    const key = `${init.method ?? 'GET'} ${new URL(url).pathname}`
+    const key = `${init.method ?? 'GET'} ${url.slice(API_URL.length)}`
     calls.push(key)
     const handler = routes[key]
     if (!handler) throw new Error(`no route for ${key}`)

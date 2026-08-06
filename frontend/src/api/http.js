@@ -8,9 +8,16 @@
  * handling they exist to serve.
  */
 
-// The dev default is the API's own port, and the two Vite ports (5173, 4173)
-// are already in the backend's CORS_ORIGINS — see frontend/README.md.
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Relative, and that is the point: the API is reached at a same-origin /api,
+// which nginx proxies in production and the Vite server proxies in development.
+// A relative base means no API host is baked into the bundle, so the artifact CI
+// builds is correct wherever it is served — the failure mode being avoided is a
+// deploy that ships a build carrying the wrong host, which breaks only in
+// production and only for everyone.
+//
+// VITE_API_URL still overrides it, for pointing a local build at an API
+// somewhere else. Nothing in CI sets it, and production must not.
+export const API_URL = import.meta.env.VITE_API_URL ?? '/api'
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -38,11 +45,13 @@ async function detailOf(response) {
  * Send one request. Returns the parsed body, `null` for a 204, or throws
  * `ApiError`.
  *
- * `credentials: 'include'` is not optional and is not a precaution: dev runs
- * the SPA on :5173 against an API on :8000, which is cross-origin, so without
- * it the browser neither stores the refresh cookie nor sends it back. The
- * backend already answers with `allow_credentials=True` against an explicit
- * origin list, which is what makes that legal.
+ * `credentials: 'include'` outlives the same-origin proxy that made it
+ * redundant. Same-origin would carry the refresh cookie under the default
+ * `same-origin` policy anyway, but `include` is also correct there, and it is
+ * the difference between working and silently ending every session at the first
+ * reload the moment VITE_API_URL points somewhere else. The backend answers with
+ * `allow_credentials=True` against an explicit origin list, which is what makes
+ * that legal when it happens.
  */
 export async function apiFetch(
   path,
