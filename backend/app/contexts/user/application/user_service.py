@@ -62,8 +62,21 @@ class UserService:
         return await self._begin_session(saved)
 
     async def authenticate(self, username: str, password: str) -> Session:
+        """Sign in with a username and password, for the accounts that have one.
+
+        The middle condition is the one worth reading. An account created through a
+        provider has no password at all (#37), and `verify_password` against `None` raises
+        rather than returning False — so without it, presenting any password for an
+        SSO-only username is a 500 instead of a 401. That is both a crash and an account
+        oracle: an error where every other username gives "incorrect" tells an attacker
+        the account exists and how it signs in.
+
+        Passwordless accounts therefore fail exactly as a wrong password does. There is no
+        separate "this account uses Google" answer for the same reason /users/login says
+        nothing else it knows.
+        """
         user = await self._repository.find_by_username(username)
-        if user is None or not verify_password(password, user.hashed_password):
+        if user is None or user.hashed_password is None or not verify_password(password, user.hashed_password):
             raise InvalidCredentialsError(username)
         return await self._begin_session(user)
 
