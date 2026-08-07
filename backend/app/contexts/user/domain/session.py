@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.common.ids import SessionId
+
 
 @dataclass(frozen=True)
 class Session:
@@ -24,3 +26,7 @@ class Session:
     access_token: str
     refresh_token: str
     expires_at: datetime
+    # Which session these belong to — the same value across every rotation of the pair.
+    # Carried here so a caller can attach something to the session that started, which is
+    # what the verification re-send cap counts against (#38).
+    session_id: SessionId

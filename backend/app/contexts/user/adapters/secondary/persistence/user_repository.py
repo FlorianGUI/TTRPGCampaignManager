@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,6 +58,10 @@ class SqlAlchemyUserRepository(UserRepository):
         if model is None:
             return None
         return self._to_domain(model)
+
+    async def mark_email_verified(self, id: UserId) -> None:
+        await self._session.execute(update(UserModel).where(UserModel.id == id).values(email_verified=True))
+        await self._session.commit()
 
     async def find_by_username(self, username: str) -> User | None:
         result = await self._session.execute(select(UserModel).where(UserModel.username == username))

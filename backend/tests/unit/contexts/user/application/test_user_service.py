@@ -42,6 +42,11 @@ class FakeUserRepository(UserRepository):
     async def find_by_username(self, username: str) -> User | None:
         return next((u for u in self._store.values() if u.username == username), None)
 
+    async def mark_email_verified(self, id: UUID) -> None:
+        stored = self._store.get(id)
+        if stored is not None:
+            stored.email_verified = True
+
 
 class FakeRefreshTokenRepository(RefreshTokenRepository):
     def __init__(self):
@@ -454,3 +459,17 @@ class TestRegisterRacingOnTheIndex:
 
         with pytest.raises(UsernameAlreadyExistsError):
             await service.register("aragorn", "aragorn@gondor.test", "strider123")
+
+
+class TestSessionOf:
+    async def test_names_the_session_a_cookie_belongs_to(self, service: UserService):
+        """An access token carries only a subject, so it cannot say which of a person's
+        sessions is asking. The cookie can, and that is what the verification re-send cap
+        counts against (#38)."""
+        session = await service.register("aragorn", "aragorn@gondor.test", "strider123")
+
+        assert await service.session_of(session.refresh_token) == session.session_id
+
+    async def test_refuses_a_token_naming_no_session(self, service: UserService):
+        with pytest.raises(SessionNotRenewableError):
+            await service.session_of("never-issued")

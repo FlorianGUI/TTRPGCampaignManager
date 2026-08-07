@@ -201,10 +201,11 @@ class UserService:
         """
         secret = create_refresh_token()
         deadline = expires_at or datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        belongs_to = session_id or SessionId(uuid4())
         await self._sessions.save(
             RefreshToken(
                 user_id=user.id,
-                session_id=session_id or SessionId(uuid4()),
+                session_id=belongs_to,
                 token_hash=hash_refresh_token(secret),
                 expires_at=deadline,
             )
@@ -213,7 +214,21 @@ class UserService:
             access_token=create_access_token(subject=str(user.id)),
             refresh_token=secret,
             expires_at=deadline,
+            session_id=belongs_to,
         )
+
+    async def session_of(self, refresh_token: str) -> SessionId:
+        """Which session a refresh cookie belongs to.
+
+        The access token carries only a subject, so an authenticated request cannot say
+        which of a person's sessions it is — but the cookie can, and it is sent to
+        everything under /users by its own Path. Needed by the verification re-send cap,
+        which counts per session so that signing in starts the count again (#38).
+        """
+        found = await self._sessions.find_by_hash(hash_refresh_token(refresh_token))
+        if found is None:
+            raise SessionNotRenewableError
+        return found.session_id
 
     async def get(self, id: UserId) -> User | None:
         return await self._repository.find_by_id(id)

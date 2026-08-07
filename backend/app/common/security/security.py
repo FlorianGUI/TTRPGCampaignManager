@@ -48,6 +48,20 @@ def decode_access_token(token: str) -> str:
     return payload["sub"]
 
 
+def create_opaque_token() -> str:
+    """A bearer secret with no structure: 256 bits from the OS CSPRNG, url-safe.
+
+    Shared by refresh tokens and verification links, which want exactly the same thing —
+    something unguessable that means nothing until a row is found for it.
+    """
+    return secrets.token_urlsafe(32)
+
+
+def hash_opaque_token(token: str) -> str:
+    """What the database is allowed to hold instead of the secret itself."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def create_refresh_token() -> str:
     """A refresh token is a random secret, not a JWT, and carries no claims at all.
 
@@ -57,7 +71,7 @@ def create_refresh_token() -> str:
     with no structure is therefore the honest representation — 256 bits from the OS CSPRNG,
     url-safe so it survives a cookie unencoded.
     """
-    return secrets.token_urlsafe(32)
+    return create_opaque_token()
 
 
 def hash_refresh_token(token: str) -> str:
@@ -73,4 +87,4 @@ def hash_refresh_token(token: str) -> str:
     What the hash buys is that a leaked database dump is not a drawer full of live
     sessions. Never store or log the token itself.
     """
-    return hashlib.sha256(token.encode()).hexdigest()
+    return hash_opaque_token(token)
