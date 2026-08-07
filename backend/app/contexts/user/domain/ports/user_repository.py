@@ -34,3 +34,13 @@ class UserRepository(ABC):
 
     @abstractmethod
     async def find_by_username(self, username: str) -> User | None: ...
+
+    @abstractmethod
+    async def mark_email_verified(self, id: UserId) -> None:
+        """Record that this address has been proved.
+
+        Its own method rather than a general `update`, because `save` here inserts — a
+        second one for an existing user collides on the primary key. A targeted write is
+        also the right shape for this particular change: it touches one column, so it
+        cannot lose a concurrent edit to another one the way a read-modify-write would.
+        """

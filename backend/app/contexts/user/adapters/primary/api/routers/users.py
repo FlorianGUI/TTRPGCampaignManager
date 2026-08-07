@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +19,17 @@ from app.contexts.user.adapters.primary.api.refresh_cookie import (
     set_refresh_cookie,
 )
 from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
+from app.contexts.user.adapters.secondary.email.brevo_email_sender import BrevoEmailSender
+from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
+    SqlAlchemyEmailVerificationRepository,
+)
 from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
+from app.contexts.user.application.email_verification_service import (
+    EmailVerificationService,
+    TooManyVerificationRequestsError,
+    VerificationLinkUnusableError,
+)
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
     SessionNotRenewableError,
@@ -37,9 +48,23 @@ router = APIRouter(prefix="/users", tags=["users"])
 # which of those it was holding.
 _CANNOT_RENEW = "Could not renew the session"
 
+# Where the link in the message points. The API's own address rather than the SPA's,
+# because following it is a GET that has to reach this router — the page a browser lands
+# on afterwards is the frontend's business (#10 owns the routes, this owns the endpoint).
+VERIFY_EMAIL_URL = os.environ.get("VERIFY_EMAIL_URL") or "http://localhost:8000/users/verify-email"
+
 
 def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
+
+
+def get_verification_service(db: AsyncSession = Depends(get_db)) -> EmailVerificationService:
+    return EmailVerificationService(
+        SqlAlchemyUserRepository(db),
+        SqlAlchemyEmailVerificationRepository(db),
+        BrevoEmailSender(),
+        verify_url=VERIFY_EMAIL_URL,
+    )
 
 
 def _signed_in(response: Response, session: Session) -> Token:
@@ -63,7 +88,13 @@ def _signed_in(response: Response, session: Session) -> Token:
     },
 )
 @limiter.limit(REGISTER_RATE_LIMIT, error_message=TOO_MANY_REGISTRATIONS)
-async def register(request: Request, body: UserCreate, response: Response, service: UserService = Depends(get_service)):
+async def register(
+    request: Request,
+    body: UserCreate,
+    response: Response,
+    service: UserService = Depends(get_service),
+    verification: EmailVerificationService = Depends(get_verification_service),
+):
     """Create an account and sign it in, in one call.
 
     Registration is open: anyone reaching this endpoint can create an account. That is a
@@ -87,6 +118,17 @@ async def register(request: Request, body: UserCreate, response: Response, servi
         session = await service.register(body.username, body.email, body.password)
     except UsernameAlreadyExistsError:
         raise HTTPException(status_code=409, detail="Username already exists") from None
+
+    # Re-read rather than returned by `register`, which hands back tokens on purpose (#33).
+    # One extra query at the one moment nobody is measuring, and it keeps the service's
+    # contract as it was.
+    registered = await service.get_by_token(session.access_token)
+    # Composed here rather than inside `register` so that a provider outage cannot fail
+    # account creation, and so every unit test of signing up does not need a mail fake.
+    # `send_for_registration` swallows a delivery failure for the same reason: the account
+    # and the link both exist, and re-send is the way back.
+    await verification.send_for_registration(registered, session.session_id)
+
     return _signed_in(response, session)
 
 
@@ -201,3 +243,84 @@ async def logout(
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
     return UserResponse(id=user.id, username=user.username, email=user.email)
+
+
+@router.get(
+    "/verify-email",
+    response_model=UserResponse,
+    responses={400: {"description": "The link is unknown, expired, or already used"}},
+)
+async def verify_email(token: str, verification: EmailVerificationService = Depends(get_verification_service)):
+    """Follow the link from the message and mark the address verified.
+
+    A GET because it is a link in an email, which is the one place a state change over GET
+    is unavoidable — a mail client will not POST. The token in the query string is what
+    makes that safe: it is a 256-bit secret rather than an ambient credential, so nothing
+    else on the internet can cause this to happen to somebody.
+
+    Unauthenticated on purpose. Someone who registers on a laptop and opens the mail on a
+    phone is not signed in there, and requiring a session would make the common case fail.
+
+    One 400 for unknown, expired and already-used, matching how /users/refresh answers:
+    nothing can be done differently between them — ask for another link — and separating
+    them would confirm to whoever is guessing that a token existed.
+
+    No rate limit of its own beyond the global one. Guessing is not the shape of attack
+    here; the token is 256 bits of randomness, and the thing worth limiting is sending,
+    which is limited where sending happens.
+    """
+    try:
+        user = await verification.verify(token)
+    except VerificationLinkUnusableError:
+        raise HTTPException(status_code=400, detail="This link is no longer valid") from None
+    return user
+
+
+@router.post(
+    "/verify-email/resend",
+    status_code=204,
+    responses={429: {"description": "Too many verification emails requested"}},
+)
+async def resend_verification(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
+    service: UserService = Depends(get_service),
+    verification: EmailVerificationService = Depends(get_verification_service),
+):
+    """Send another link to the signed-in user's own address.
+
+    Authenticated, and the address comes from the session rather than from the request.
+    That is what keeps this from being a way to send mail to strangers — the worst thing a
+    verification feature can turn into — and it is why nothing here has to be careful about
+    disclosing whether an address is registered.
+
+    Two limits, and they are not redundant (#38). The count of three is per session, so
+    signing in starts it again; the cooldown is per account and resets for nothing, which
+    is what stops a script cycling sign-in to keep sending. The cap alone would be
+    decoration.
+
+    The session comes from the refresh cookie, because an access token carries only a
+    subject and cannot say which session is asking. A caller holding a valid access token
+    but no cookie is answered 401 rather than allowed through uncounted.
+
+    204 whether or not a message went out — an already-verified account is answered the
+    same as a fresh send, since there is nothing to tell and nothing to do.
+    """
+    if refresh is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW)
+    try:
+        session_id = await service.session_of(refresh)
+    except SessionNotRenewableError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW) from None
+
+    try:
+        await verification.resend(current_user, session_id)
+    except TooManyVerificationRequestsError as error:
+        if error.retry_after is not None:
+            response.headers["Retry-After"] = str(error.retry_after)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many verification emails requested. Try again shortly.",
+            headers={"Retry-After": str(error.retry_after)} if error.retry_after else None,
+        ) from None

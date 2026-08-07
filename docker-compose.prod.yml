@@ -31,6 +31,15 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      # Mail (#38). No defaults for the first three: a deployment that forgets them should
+      # fail loudly at startup rather than send from the wrong address or not at all.
+      BREVO_API_KEY: ${BREVO_API_KEY}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+      VERIFY_EMAIL_URL: ${VERIFY_EMAIL_URL:-https://api.lastdawn.fr/users/verify-email}
+      VERIFICATION_TOKEN_EXPIRE_HOURS: ${VERIFICATION_TOKEN_EXPIRE_HOURS:-24}
+      RESENDS_PER_SESSION: ${RESENDS_PER_SESSION:-3}
+      RESEND_COOLDOWN_SECONDS: ${RESEND_COOLDOWN_SECONDS:-120}
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
       REGISTER_RATE_LIMIT: ${REGISTER_RATE_LIMIT:-5/hour}
       # Whose X-Forwarded-For uvicorn believes. Nothing here reaches it from 127.0.0.1 — the

@@ -14,32 +14,7 @@ scenarios("features/user_management.feature")
 # point of it.
 
 
-def held_refresh_cookie(client: AsyncClient) -> str | None:
-    return client.cookies.get(REFRESH_COOKIE_NAME)
-
-
-@given(parsers.parse('I register as "{username}" with email "{email}" and password "{password}"'))
-@when(parsers.parse('I register as "{username}" with email "{email}" and password "{password}"'))
-def register(client: AsyncClient, context: dict, username: str, email: str, password: str):
-    response = asyncio.get_event_loop().run_until_complete(
-        client.post("/users/register", json={"username": username, "email": email, "password": password})
-    )
-    context["response"] = response
-    if response.status_code == 201:
-        context["token"] = response.json()["access_token"]
-        context["refresh"] = held_refresh_cookie(client)
-
-
-@given(parsers.parse('I log in as "{username}" with password "{password}"'))
-@when(parsers.parse('I log in as "{username}" with password "{password}"'))
-def login(client: AsyncClient, context: dict, username: str, password: str):
-    response = asyncio.get_event_loop().run_until_complete(
-        client.post("/users/login", data={"username": username, "password": password})
-    )
-    context["response"] = response
-    if response.status_code == 200:
-        context["token"] = response.json()["access_token"]
-        context["refresh"] = held_refresh_cookie(client)
+from tests.acceptance.user.conftest import held_refresh_cookie  # noqa: E402
 
 
 @given("I refresh my session")

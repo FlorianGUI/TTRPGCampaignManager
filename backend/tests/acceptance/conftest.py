@@ -2,9 +2,19 @@ import asyncio
 import uuid
 
 import pytest
+from fastapi import Depends
 from httpx import AsyncClient
 from pytest_bdd import given, then
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contexts.user.adapters.primary.api.routers.users import get_verification_service
+from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
+    SqlAlchemyEmailVerificationRepository,
+)
+from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
+from app.contexts.user.application.email_verification_service import EmailVerificationService
+from app.contexts.user.domain.ports.email_sender import EmailSender
+from app.database import get_db
 from app.main import app
 
 
@@ -86,3 +96,39 @@ def get_validation_error(context: dict):
 @then("I should be told I am not authenticated")
 def get_unauthenticated_error(context: dict):
     assert context["response"].status_code == 401
+
+
+@pytest.fixture
+def outbox() -> list[dict[str, str]]:
+    """Every message the app tried to send during a scenario."""
+    return []
+
+
+@pytest.fixture(autouse=True)
+def no_real_mail(outbox: list[dict[str, str]]):
+    """Nothing in this suite reaches a mail provider, ever.
+
+    Autouse rather than opt-in, and that is the point: registering sends a verification
+    link (#38), and every scenario in every feature registers somebody. A test that had to
+    remember to disable mail would be one forgotten fixture away from posting to Brevo —
+    with real addresses from the fixtures — on somebody's laptop or in CI.
+
+    The repositories stay real, so the rows a scenario asserts on are the rows the app
+    actually wrote. Only the outbound edge is replaced.
+    """
+
+    class RecordingEmailSender(EmailSender):
+        async def send(self, to: str, subject: str, text: str, html: str | None = None) -> None:
+            outbox.append({"to": to, "subject": subject, "text": text})
+
+    def override(db: AsyncSession = Depends(get_db)) -> EmailVerificationService:
+        return EmailVerificationService(
+            SqlAlchemyUserRepository(db),
+            SqlAlchemyEmailVerificationRepository(db),
+            RecordingEmailSender(),
+            verify_url="http://testserver/users/verify-email",
+        )
+
+    app.dependency_overrides[get_verification_service] = override
+    yield
+    app.dependency_overrides.pop(get_verification_service, None)
