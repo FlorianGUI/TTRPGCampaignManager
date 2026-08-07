@@ -1,9 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import AppShell from './AppShell.vue'
 import AppNav from './AppNav.vue'
+import { useAuthStore } from '../stores/auth.js'
+
+const router = { push: vi.fn() }
+
+vi.mock('vue-router', () => ({
+  useRouter: () => router,
+}))
 
 /*
  * Covers the small-screen navigation contract from issue #25: below the
@@ -20,10 +27,15 @@ const sections = [
 ]
 
 function mountShell() {
+  // A fresh pinia per mount: the shell reads the theme store for its toggles
+  // and the auth store for signing out. setActivePinia as well as the plugin,
+  // so a test can reach the same store the component will.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+
   return mount(AppShell, {
     props: { sections, active: 'Session notes' },
-    // A fresh pinia per mount: the shell reads the theme store for its toggles.
-    global: { plugins: [PrimeVue, createPinia()] },
+    global: { plugins: [PrimeVue, pinia] },
   })
 }
 
@@ -96,5 +108,34 @@ describe('AppShell', () => {
     await wrapper.get('.shell__search-toggle').trigger('click')
 
     expect(wrapper.find('#shell-search-row').exists()).toBe(true)
+  })
+
+  describe('signing out', () => {
+    beforeEach(() => {
+      router.push.mockClear()
+    })
+
+    it('revokes the session server-side, then returns to the login page', async () => {
+      const wrapper = mountShell()
+      const auth = useAuthStore()
+      const logOut = vi.spyOn(auth, 'logOut').mockResolvedValue()
+
+      await wrapper.get('.shell__sign-out').trigger('click')
+      await wrapper.vm.$nextTick()
+
+      /*
+       * Through the store, which calls POST /users/logout before clearing.
+       * Clearing locally alone would leave a working refresh cookie behind —
+       * the one way to log out that does not log you out (#35).
+       */
+      expect(logOut).toHaveBeenCalled()
+      expect(router.push).toHaveBeenCalledWith({ name: 'login' })
+    })
+
+    it('is reachable and labelled without relying on the icon', () => {
+      const button = mountShell().get('.shell__sign-out')
+
+      expect(button.attributes('aria-label')).toBe('Sign out')
+    })
   })
 })
