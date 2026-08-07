@@ -91,3 +91,7 @@ Feature: User Management
   Scenario: Logging out with no session at all
     When I log out
     Then I should be told nothing about whether there was one
+  Scenario: My profile says whether my address is confirmed
+    Given I register as "erkenbrand" with email "erkenbrand@westfold.com" and password "helmsdeep12"
+    When I request my profile
+    Then I should be told my address is not confirmed yet

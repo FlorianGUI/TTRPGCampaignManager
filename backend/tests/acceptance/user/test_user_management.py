@@ -124,3 +124,9 @@ def refresh_cookie_is_gone(client: AsyncClient):
 def logout_says_nothing(context: dict):
     assert context["response"].status_code == 204
     assert context["response"].content == b""
+
+
+@then("I should be told my address is not confirmed yet")
+def address_not_confirmed(context: dict):
+    """The frontend has no other way to know it should ask (#72)."""
+    assert context["response"].json()["email_verified"] is False

@@ -120,3 +120,39 @@ class TestRefreshIsNotTightened:
         for _ in range(11):
             response = await client.post("/users/refresh")
             assert response.status_code == 401
+
+
+class TestForgotPasswordRateLimit:
+    """The limiter is *on* here, which is the whole point of these living in tests/system.
+
+    Acceptance turns it off so scenarios cannot trip it, and that blindness has teeth: a
+    `@limiter.limit` decorator does work on every call, not only on a throttled one, and
+    an endpoint that does not satisfy it fails on the first request rather than the sixth.
+    That is exactly what happened to `/users/forgot-password` — slowapi writes its headers
+    into a `Response` parameter and raises when the signature has none, so every call was
+    a 500 and no acceptance scenario could see it.
+    """
+
+    async def test_an_ordinary_request_is_answered_normally(self, client: AsyncClient):
+        response = await client.post("/users/forgot-password", json={"identifier": "nobody-at-all"})
+
+        assert response.status_code == 204
+
+    async def test_still_answers_the_same_way_for_an_account_that_exists(self, client: AsyncClient):
+        account = _new_account()
+        await client.post("/users/register", json=account)
+
+        response = await client.post("/users/forgot-password", json={"identifier": account["username"]})
+
+        assert response.status_code == 204
+
+    async def test_past_the_limit_it_says_so_without_saying_anything_else(self, rate_limited_client: AsyncClient):
+        """Two calls is the whole budget for this client, so the third is refused — and the
+        refusal says nothing about whether any of them matched an account."""
+        await rate_limited_client.post("/users/forgot-password", json={"identifier": "nobody-at-all"})
+        await rate_limited_client.post("/users/forgot-password", json={"identifier": "nobody-at-all"})
+
+        response = await rate_limited_client.post("/users/forgot-password", json={"identifier": "nobody-at-all"})
+
+        assert response.status_code == 429
+        assert "nobody-at-all" not in response.text

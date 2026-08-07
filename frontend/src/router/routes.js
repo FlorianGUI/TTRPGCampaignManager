@@ -34,6 +34,22 @@ export const routes = [
     component: () => import('../views/SignupView.vue'),
     meta: { title: 'Create an account', public: true, layout: 'auth' },
   },
+  {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('../views/ForgotPasswordView.vue'),
+    meta: { title: 'Reset your password', public: true, layout: 'auth' },
+  },
+  /*
+   * Where a reset link lands, and public for the same reason /verify-email is:
+   * whoever follows it is by definition unable to sign in.
+   */
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/ResetPasswordView.vue'),
+    meta: { title: 'Choose a new password', public: true, layout: 'auth' },
+  },
   /*
    * Where a verification link lands. Public because the common case is opening
    * the mail on a phone that has never signed in — a guard here would turn a
