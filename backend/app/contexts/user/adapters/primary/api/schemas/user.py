@@ -15,6 +15,17 @@ class UserResponse(BaseModel):
     email: str
 
 
+class VerifyEmail(BaseModel):
+    """The token, in a body rather than a query string.
+
+    Query strings end up in access logs, in `Referer` headers and in browser history. This
+    one is a credential — it verifies an address by itself — so it travels where those do
+    not reach.
+    """
+
+    token: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

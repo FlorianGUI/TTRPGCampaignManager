@@ -35,21 +35,21 @@ def no_cooldown(monkeypatch: pytest.MonkeyPatch):
 def follow_link(client: AsyncClient, context: dict, outbox: list[dict[str, str]]):
     context["followed"] = token_from(outbox[-1])
     context["response"] = asyncio.get_event_loop().run_until_complete(
-        client.get("/users/verify-email", params={"token": context["followed"]})
+        client.post("/users/verify-email", json={"token": context["followed"]})
     )
 
 
 @when("I follow the verification link again")
 def follow_link_again(client: AsyncClient, context: dict):
     context["response"] = asyncio.get_event_loop().run_until_complete(
-        client.get("/users/verify-email", params={"token": context["followed"]})
+        client.post("/users/verify-email", json={"token": context["followed"]})
     )
 
 
 @when("I follow a verification link I made up")
 def follow_invented_link(client: AsyncClient, context: dict):
     context["response"] = asyncio.get_event_loop().run_until_complete(
-        client.get("/users/verify-email", params={"token": "not-a-real-token"})
+        client.post("/users/verify-email", json={"token": "not-a-real-token"})
     )
 
 

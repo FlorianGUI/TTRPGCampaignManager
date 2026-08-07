@@ -18,7 +18,7 @@ from app.contexts.user.adapters.primary.api.refresh_cookie import (
     clear_refresh_cookie,
     set_refresh_cookie,
 )
-from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse
+from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse, VerifyEmail
 from app.contexts.user.adapters.secondary.email.brevo_email_sender import BrevoEmailSender
 from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
     SqlAlchemyEmailVerificationRepository,
@@ -48,10 +48,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 # which of those it was holding.
 _CANNOT_RENEW = "Could not renew the session"
 
-# Where the link in the message points. The API's own address rather than the SPA's,
-# because following it is a GET that has to reach this router — the page a browser lands
-# on afterwards is the frontend's business (#10 owns the routes, this owns the endpoint).
-VERIFY_EMAIL_URL = os.environ.get("VERIFY_EMAIL_URL") or "http://localhost:8000/users/verify-email"
+# Where the link in the message points: the SPA, not this router. A mail scanner that
+# prefetches it loads a page and changes nothing, and the page then calls the endpoint
+# above. Pointing it here would let a scanner spend the token before the person clicks.
+VERIFY_EMAIL_URL = os.environ.get("VERIFY_EMAIL_URL") or "http://localhost:5173/verify-email"
 
 
 def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
@@ -245,21 +245,26 @@ async def me(user: User = Depends(get_current_user)):
     return UserResponse(id=user.id, username=user.username, email=user.email)
 
 
-@router.get(
+@router.post(
     "/verify-email",
     response_model=UserResponse,
     responses={400: {"description": "The link is unknown, expired, or already used"}},
 )
-async def verify_email(token: str, verification: EmailVerificationService = Depends(get_verification_service)):
-    """Follow the link from the message and mark the address verified.
+async def verify_email(body: VerifyEmail, verification: EmailVerificationService = Depends(get_verification_service)):
+    """Spend a verification token and mark the address verified.
 
-    A GET because it is a link in an email, which is the one place a state change over GET
-    is unavoidable — a mail client will not POST. The token in the query string is what
-    makes that safe: it is a 256-bit secret rather than an ambient credential, so nothing
-    else on the internet can cause this to happen to somebody.
+    A POST, and the link in the message does not point here — it points at the SPA, which
+    reads the token out of its own URL and calls this.
+
+    That indirection is not architectural tidiness, it is the only way this survives
+    contact with real mail. Security scanners fetch every URL in a message before a human
+    sees it — Outlook Safe Links, corporate gateways, antivirus — and a GET that spends a
+    single-use token is spent by the scanner. The person then clicks and is told the link
+    is no longer valid, and re-sending does not help because the next one is eaten too.
+    Pointing the link at a page means a prefetch loads a page and changes nothing.
 
     Unauthenticated on purpose. Someone who registers on a laptop and opens the mail on a
-    phone is not signed in there, and requiring a session would make the common case fail.
+    phone is not signed in there, and requiring a session would fail the common case.
 
     One 400 for unknown, expired and already-used, matching how /users/refresh answers:
     nothing can be done differently between them — ask for another link — and separating
@@ -270,7 +275,7 @@ async def verify_email(token: str, verification: EmailVerificationService = Depe
     which is limited where sending happens.
     """
     try:
-        user = await verification.verify(token)
+        user = await verification.verify(body.token)
     except VerificationLinkUnusableError:
         raise HTTPException(status_code=400, detail="This link is no longer valid") from None
     return user
