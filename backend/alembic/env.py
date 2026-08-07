@@ -16,6 +16,7 @@ from app.contexts.campaign.adapters.secondary.persistence import (
 )
 from app.contexts.source.adapters.secondary.persistence import source_model  # noqa: F401
 from app.contexts.user.adapters.secondary.persistence import (
+    identity_model,  # noqa: F401
     refresh_token_model,  # noqa: F401
     user_model,  # noqa: F401
 )
