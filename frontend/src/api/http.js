@@ -11,12 +11,12 @@
 /*
  * Where the API lives, read at runtime rather than compiled in.
  *
- * `config.js` is written on the server at deploy time from an environment
- * variable there, and `index.html` loads it before this module runs. Vite would
+ * `config.js` is a file on the server, served from outside the directory a
+ * deploy replaces, and `index.html` loads it before this module runs. Vite would
  * otherwise substitute a host at build time, which makes the artifact correct in
  * exactly one environment — the bug that shipped a bundle calling
  * localhost:8000. Nothing in the bundle names a host now, so the same dist/ is
- * deployable anywhere and moving the API is an env var and a restart.
+ * deployable anywhere and moving the API is one line on the server.
  *
  * It fails closed. A production build with no config has nothing sensible to
  * fall back to: falling back to localhost would reintroduce exactly the failure
@@ -31,8 +31,8 @@ function resolveApiUrl() {
   if (import.meta.env.DEV) return 'http://localhost:8000'
 
   throw new Error(
-    'No apiUrl in window.__CONFIG__. /config.js is written by the deploy from ' +
-      'FRONTEND_API_URL on the server — it is missing, empty, or was not served.',
+    'No apiUrl in window.__CONFIG__. /config.js lives at /opt/dnd/config on the ' +
+      'server — it is missing, empty, or nginx is not serving it.',
   )
 }
 
