@@ -73,6 +73,10 @@ async function submit() {
       No account yet?
       <RouterLink :to="{ name: 'signup' }">Create one</RouterLink>.
     </p>
+
+    <p class="auth-form__aside">
+      <RouterLink :to="{ name: 'forgot-password' }">Forgot your password?</RouterLink>
+    </p>
   </form>
 </template>
 

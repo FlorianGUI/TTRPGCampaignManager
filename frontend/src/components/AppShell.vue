@@ -5,6 +5,7 @@ import Drawer from 'primevue/drawer'
 import InputText from 'primevue/inputtext'
 import { useRouter } from 'vue-router'
 import AppNav from './AppNav.vue'
+import VerificationNotice from './VerificationNotice.vue'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '../stores/theme.js'
 import { useAuthStore } from '../stores/auth.js'
@@ -169,6 +170,10 @@ watch(searchOpen, async (open) => {
         />
       </div>
     </header>
+
+    <!-- Under the bar and above everything else, so it is seen once per page rather
+         than competing with the content it sits over. -->
+    <VerificationNotice />
 
     <div class="shell__body">
       <nav class="shell__sidebar texture-grain" aria-label="Campaign">

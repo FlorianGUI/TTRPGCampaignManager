@@ -269,7 +269,14 @@ async def logout(
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
-    return UserResponse(id=user.id, username=user.username, email=user.email)
+    """The signed-in account.
+
+    Returns the domain object and lets `response_model` narrow it, rather than building the
+    response field by field. The hand-written version silently omitted `email_verified`
+    when the schema gained it — a constructor listing every field is a list that goes stale
+    without anything failing to compile.
+    """
+    return user
 
 
 @router.post(
@@ -366,6 +373,7 @@ async def resend_verification(
 @limiter.limit(FORGOT_PASSWORD_RATE_LIMIT, error_message=TOO_MANY_RESET_REQUESTS)
 async def forgot_password(
     request: Request,
+    response: Response,
     body: ForgotPassword,
     service: PasswordResetService = Depends(get_password_reset_service),
 ):
@@ -387,7 +395,11 @@ async def forgot_password(
     amplifier the re-send in #38 was careful not to be. The 429 says nothing about whether
     anything matched, for the same reason the 204 does not.
 
-    The `request` argument is the limiter's, not this function's — see `register`.
+    Both `request` and `response` belong to the limiter rather than to this function.
+    slowapi reads the caller's address off the first and writes its headers into the
+    second — and it raises if the endpoint does not accept one, which is a 500 on every
+    call rather than only on a throttled one. `register` and `login` have a `Response`
+    incidentally, because they set cookies; this one has to ask for it deliberately.
     """
     await service.request(body.identifier)
 
