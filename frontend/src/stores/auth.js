@@ -95,16 +95,28 @@ export const useAuthStore = defineStore('auth', () => {
    * a first-time visitor gets, and what anyone gets thirty days after signing
    * in, since the refresh window is absolute and does not slide. Either way the
    * app boots signed out, which is a state it has to handle regardless.
+   *
+   * Idempotent, and it returns the same promise to everyone who asks. Two
+   * callers want it now — main.js starts it before mount, and the route guard
+   * has to wait for it before it can tell a signed-out visitor from one whose
+   * session simply has not come back yet. Without that, the first navigation
+   * races the refresh and sends a signed-in user to the login page.
    */
-  async function boot() {
-    try {
-      await renew()
-      await loadUser()
-    } catch {
-      clear()
-    } finally {
-      ready.value = true
-    }
+  let booting = null
+
+  function boot() {
+    booting ??= (async () => {
+      try {
+        await renew()
+        await loadUser()
+      } catch {
+        clear()
+      } finally {
+        ready.value = true
+      }
+    })()
+
+    return booting
   }
 
   async function logIn(username, password) {

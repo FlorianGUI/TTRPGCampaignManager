@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
 import { routes } from './routes.js'
 import { createAppRouter, APP_TITLE } from './index.js'
+import { useAuthStore } from '../stores/auth.js'
 
 /*
  * Guards the routing conventions rather than the routes themselves: those will
@@ -52,7 +54,20 @@ describe('routes', () => {
 })
 
 describe('createAppRouter', () => {
+  /*
+   * Every route but /login and /signup is behind the guard now, and the guard
+   * reads the auth store — so these need a pinia, and the ones that navigate
+   * need someone signed in or they end up on the login page instead.
+   */
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('sets the document title from the matched route', async () => {
+    const auth = useAuthStore()
+    auth.ready = true
+    auth.user = { id: 'u-1', username: 'aragorn' }
+
     const router = createAppRouter(createMemoryHistory())
 
     // not-found rather than styleguide: it is the one route present in every
