@@ -106,6 +106,16 @@ class TestSendingForRegistration:
         assert email.sent[0]["to"] == "aragorn@gondor.test"
         assert email.last_link.startswith("https://api.test/users/verify-email?token=")
 
+    async def test_the_link_points_where_it_was_configured_to(self, users, verifications, email, session_id):
+        """The URL is the SPA's, not the API's, and a scanner prefetching it must reach a
+        page rather than an endpoint that spends the token."""
+        service = EmailVerificationService(users, verifications, email, verify_url="https://lastdawn.fr/verify-email")
+        user = await a_user(users)
+
+        await service.send_for_registration(user, session_id)
+
+        assert email.last_link.startswith("https://lastdawn.fr/verify-email?token=")
+
     async def test_stores_only_the_hash_of_the_token(self, service, users, email, verifications, session_id):
         """A database dump should not be a drawer full of working links."""
         user = await a_user(users)
