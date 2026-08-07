@@ -49,6 +49,18 @@ class SqlAlchemyRefreshTokenRepository(RefreshTokenRepository):
         )
         await self._session.commit()
 
+    async def revoke_all_for_user(self, user_id: UserId, at: datetime) -> None:
+        # Same shape as revoking one session, keyed on the account instead. The
+        # `revoked_at IS NULL` predicate matters for the same reason: tokens rotation
+        # already retired keep the moment they actually stopped working, which is the only
+        # record of when a session ended.
+        await self._session.execute(
+            update(RefreshTokenModel)
+            .where(RefreshTokenModel.user_id == user_id, RefreshTokenModel.revoked_at.is_(None))
+            .values(revoked_at=at)
+        )
+        await self._session.commit()
+
     @staticmethod
     def _to_domain(model: RefreshTokenModel) -> RefreshToken:
         return RefreshToken(

@@ -1,7 +1,7 @@
 import asyncio
 
 from httpx import AsyncClient
-from pytest_bdd import given, parsers, when
+from pytest_bdd import given, parsers, then, when
 
 from app.contexts.user.adapters.primary.api.refresh_cookie import REFRESH_COOKIE_NAME
 
@@ -40,3 +40,18 @@ def login(client: AsyncClient, context: dict, username: str, password: str):
     if response.status_code == 200:
         context["token"] = response.json()["access_token"]
         context["refresh"] = held_refresh_cookie(client)
+
+
+@given("I refresh my session")
+@when("I refresh my session")
+def refresh_session(client: AsyncClient, context: dict):
+    """No Authorization header, deliberately — the cookie is the whole credential here."""
+    response = asyncio.get_event_loop().run_until_complete(client.post("/users/refresh"))
+    context["response"] = response
+    if response.status_code == 200:
+        context["token"] = response.json()["access_token"]
+
+
+@then("I should get an unauthorized error")
+def get_unauthorized_error(context: dict):
+    assert context["response"].status_code == 401

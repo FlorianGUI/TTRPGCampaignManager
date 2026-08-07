@@ -12,12 +12,22 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.contexts.user.adapters.primary.api.routers.users import get_verification_service
+from app.contexts.user.adapters.primary.api.routers.users import (
+    get_password_reset_service,
+    get_verification_service,
+)
 from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
     SqlAlchemyEmailVerificationRepository,
 )
+from app.contexts.user.adapters.secondary.persistence.password_reset_repository import (
+    SqlAlchemyPasswordResetRepository,
+)
+from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import (
+    SqlAlchemyRefreshTokenRepository,
+)
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
 from app.contexts.user.application.email_verification_service import EmailVerificationService
+from app.contexts.user.application.password_reset_service import PasswordResetService
 from app.contexts.user.domain.ports.email_sender import EmailSender
 from app.database import get_db
 from app.main import app
@@ -199,6 +209,20 @@ def no_real_mail(outbox: list[dict[str, str]]):
             verify_url="http://testserver/users/verify-email",
         )
 
+    def override_reset(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
+        return PasswordResetService(
+            SqlAlchemyUserRepository(db),
+            SqlAlchemyPasswordResetRepository(db),
+            SqlAlchemyRefreshTokenRepository(db),
+            RecordingEmailSender(),
+            reset_url="http://testserver/reset-password",
+        )
+
+    # Every service that sends, not just the first one. Adding a sender and forgetting this
+    # is exactly how the suite started reaching for a real API key again — it failed
+    # loudly this time, but the failure it is guarding against is the quiet one.
     app.dependency_overrides[get_verification_service] = override
+    app.dependency_overrides[get_password_reset_service] = override_reset
     yield
     app.dependency_overrides.pop(get_verification_service, None)
+    app.dependency_overrides.pop(get_password_reset_service, None)

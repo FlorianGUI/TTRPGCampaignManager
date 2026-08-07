@@ -36,6 +36,24 @@ class UserRepository(ABC):
     async def find_by_username(self, username: str) -> User | None: ...
 
     @abstractmethod
+    async def find_by_email(self, email: str) -> User | None:
+        """The other way to name an account.
+
+        Password reset accepts either an address or a username (#71), because someone who
+        has forgotten their password may equally not remember which address they signed up
+        with — and login asks for the username, so demanding the address there would be a
+        second thing to remember at the worst possible moment.
+        """
+
+    @abstractmethod
+    async def set_password(self, id: UserId, hashed_password: str) -> None:
+        """Replace the password, or give one to an account that never had it.
+
+        Targeted like `mark_email_verified` and for the same reasons: `save` inserts here,
+        and a write touching one column cannot lose a concurrent edit to another.
+        """
+
+    @abstractmethod
     async def mark_email_verified(self, id: UserId) -> None:
         """Record that this address has been proved.
 

@@ -42,6 +42,14 @@ class FakeUserRepository(UserRepository):
     async def find_by_username(self, username: str) -> User | None:
         return next((u for u in self._store.values() if u.username == username), None)
 
+    async def find_by_email(self, email: str) -> User | None:
+        return next((u for u in self._store.values() if u.email == email), None)
+
+    async def set_password(self, id: UUID, hashed_password: str) -> None:
+        stored = self._store.get(id)
+        if stored is not None:
+            stored.hashed_password = hashed_password
+
     async def mark_email_verified(self, id: UUID) -> None:
         stored = self._store.get(id)
         if stored is not None:
@@ -62,6 +70,11 @@ class FakeRefreshTokenRepository(RefreshTokenRepository):
     async def revoke_session(self, session_id: SessionId, at: datetime) -> None:
         for token in self._store.values():
             if token.session_id == session_id:
+                token.revoke(at)
+
+    async def revoke_all_for_user(self, user_id: UserId, at: datetime) -> None:
+        for token in self._store.values():
+            if token.user_id == user_id:
                 token.revoke(at)
 
 

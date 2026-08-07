@@ -26,6 +26,17 @@ class VerifyEmail(BaseModel):
     token: str
 
 
+class ForgotPassword(BaseModel):
+    """An email address or a username — whichever the person remembers (#71)."""
+
+    identifier: str
+
+
+class ResetPassword(BaseModel):
+    token: str
+    password: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

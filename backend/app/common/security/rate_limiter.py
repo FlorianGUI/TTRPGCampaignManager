@@ -27,9 +27,16 @@ GLOBAL_RATE_LIMIT = "100/minute"
 # The defaults are the safe end, so an unset variable is never the loose choice.
 _DEFAULT_LOGIN_RATE_LIMIT = "10/minute"
 _DEFAULT_REGISTER_RATE_LIMIT = "5/hour"
+# Password reset is the one endpoint here that will send mail to an address supplied by
+# whoever called it, which makes it the outbound-spam amplifier the re-send in #38 was
+# careful not to be. Per hour rather than per minute for the same reason as register:
+# nobody legitimately asks twice in a minute, and a per-minute cap loose enough to look
+# harmless still adds up to hundreds of messages an hour aimed at one inbox.
+_DEFAULT_FORGOT_PASSWORD_RATE_LIMIT = "5/hour"
 
 LOGIN_RATE_LIMIT = os.environ.get("LOGIN_RATE_LIMIT") or _DEFAULT_LOGIN_RATE_LIMIT
 REGISTER_RATE_LIMIT = os.environ.get("REGISTER_RATE_LIMIT") or _DEFAULT_REGISTER_RATE_LIMIT
+FORGOT_PASSWORD_RATE_LIMIT = os.environ.get("FORGOT_PASSWORD_RATE_LIMIT") or _DEFAULT_FORGOT_PASSWORD_RATE_LIMIT
 
 # One fixed sentence per endpoint, and deliberately not a sentence that can vary. A 429 on
 # login that read differently for a real username than an unknown one would hand out
@@ -37,6 +44,9 @@ REGISTER_RATE_LIMIT = os.environ.get("REGISTER_RATE_LIMIT") or _DEFAULT_REGISTER
 # key is the address alone, so there is nothing about the account in scope here to leak.
 TOO_MANY_LOGIN_ATTEMPTS = "Too many sign-in attempts from here. Try again shortly."
 TOO_MANY_REGISTRATIONS = "Too many accounts created from here. Try again later."
+# Says nothing about whether any of those requests matched an account, for the same reason
+# the 204 does not.
+TOO_MANY_RESET_REQUESTS = "Too many password reset requests from here. Try again later."
 
 # `key_func` is the address, and that only means anything if the address is the caller's
 # rather than the proxy's. Behind nginx it is not, unless the proxy sends X-Forwarded-For
