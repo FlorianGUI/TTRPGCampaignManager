@@ -1,10 +1,12 @@
 import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.ids import UserId
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
+from app.contexts.user.domain.ports.user_repository import EmailTakenError, UsernameTakenError
 from app.contexts.user.domain.user import User
 
 
@@ -97,3 +99,55 @@ class TestFindByUsername:
         result = await repository.find_by_username("unknown")
 
         assert result is None
+
+
+class TestUniqueViolations:
+    """The index's answer, translated — checked against a real Postgres rather than a
+    guess about what the driver reports.
+
+    Which constraint failed decides what the caller does next: retry with another name, or
+    report that the address belongs to someone. Collapsing both into one error would leave
+    the application guessing, and matching on the message text would break the day the
+    driver rewords it.
+    """
+
+    async def test_a_duplicate_username_is_reported_as_such(self, repository: SqlAlchemyUserRepository):
+        await repository.save(User(username="frodo", email="frodo@shire.com", hashed_password="hashed"))
+
+        with pytest.raises(UsernameTakenError):
+            await repository.save(User(username="frodo", email="other@shire.com", hashed_password="hashed"))
+
+    async def test_a_duplicate_email_is_reported_separately(self, repository: SqlAlchemyUserRepository):
+        await repository.save(User(username="rosie", email="shared@shire.com", hashed_password="hashed"))
+
+        with pytest.raises(EmailTakenError):
+            await repository.save(User(username="other", email="shared@shire.com", hashed_password="hashed"))
+
+    async def test_the_session_survives_a_rejected_save(self, repository: SqlAlchemyUserRepository):
+        """The point of the rollback. A caller retrying with the next variant needs a
+        working session, and a failed flush leaves one unusable until it is rolled back —
+        so without it the retry fails for an unrelated reason.
+        """
+        await repository.save(User(username="taken", email="taken@shire.com", hashed_password="hashed"))
+        with pytest.raises(UsernameTakenError):
+            await repository.save(User(username="taken", email="new@shire.com", hashed_password="hashed"))
+
+        saved = await repository.save(User(username="taken-2", email="new@shire.com", hashed_password="hashed"))
+
+        assert await repository.find_by_username("taken-2") == saved
+
+    async def test_an_integrity_error_it_does_not_recognise_is_left_alone(self, repository: SqlAlchemyUserRepository):
+        """Two named constraints are translated; everything else is re-raised as it came.
+
+        Reinterpreting an unfamiliar violation would be a guess, and the guess would be
+        wrong in the direction that matters — a caller retrying with another username
+        against a failure that had nothing to do with the username. Here the collision is
+        on the primary key.
+        """
+        existing = User(username="theoden", email="theoden@rohan.test", hashed_password="hashed")
+        await repository.save(existing)
+
+        with pytest.raises(IntegrityError):
+            await repository.save(
+                User(id=existing.id, username="eomer", email="eomer@rohan.test", hashed_password="hashed")
+            )

@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -14,14 +15,29 @@ from app.common.security.security import (
     verify_password,
 )
 from app.contexts.user.domain.ports.refresh_token_repository import RefreshTokenRepository
-from app.contexts.user.domain.ports.user_repository import UserRepository
+from app.contexts.user.domain.ports.user_repository import UsernameTakenError, UserRepository
 from app.contexts.user.domain.refresh_token import RefreshToken
 from app.contexts.user.domain.session import Session
 from app.contexts.user.domain.user import User
+from app.contexts.user.domain.username import derive as derive_username
+from app.contexts.user.domain.username import variant as username_variant
+
+# Enough that contention never reaches it, small enough that a base which somehow cannot
+# produce a free name fails rather than loops.
+_USERNAME_ATTEMPTS = 50
 
 
 class UsernameAlreadyExistsError(Exception):
     pass
+
+
+class UsernameUnavailableError(Exception):
+    """No variant of a derived base was free within the attempt cap.
+
+    Distinct from `UsernameAlreadyExistsError`, which is a person being told the name they
+    chose is taken. This one is nobody's fault and nothing the caller can fix by choosing
+    differently — it means fifty variants of one base are all in use.
+    """
 
 
 class InvalidCredentialsError(Exception):
@@ -58,8 +74,42 @@ class UserService:
         if await self._repository.find_by_username(username) is not None:
             raise UsernameAlreadyExistsError(username)
         user = User(username=username, email=email, hashed_password=hash_password(password))
-        saved = await self._repository.save(user)
+        try:
+            saved = await self._repository.save(user)
+        except UsernameTakenError:
+            # The check above is the fast path, not the guarantee. Two registrations for
+            # one username can both pass it and only one can insert — which used to
+            # surface as an integrity error escaping to a 500, for the caller who lost by
+            # milliseconds. The index decides; this reports its decision as the same 409
+            # the check produces.
+            raise UsernameAlreadyExistsError(username) from None
         return await self._begin_session(saved)
+
+    async def claim_username(self, display_name: str, claim: Callable[[str], Awaitable[User]]) -> User:
+        """Take the first free username derived from a provider's display name.
+
+        Written as attempt-and-retry rather than look-then-insert, and that is the whole
+        point of it. Checking availability first is a race with a window: two people called
+        Alice signing in at the same moment both find "alice" free, and one of them gets an
+        integrity error instead of an account. The unique index is the only authority on
+        whether a name is taken, so this asks it — by inserting — and takes the next
+        variant when the answer is no.
+
+        `claim` builds and saves the user for a given username, so the caller decides what
+        else goes on the row (which provider, which address, verified or not) without this
+        needing to know. It is expected to raise `UsernameTakenError`, which is what the
+        repository raises.
+
+        The attempt cap exists so a pathological base cannot spin forever; reaching it means
+        something is wrong beyond contention.
+        """
+        base = derive_username(display_name)
+        for attempt in range(_USERNAME_ATTEMPTS):
+            try:
+                return await claim(username_variant(base, attempt))
+            except UsernameTakenError:
+                continue
+        raise UsernameUnavailableError(base)
 
     async def authenticate(self, username: str, password: str) -> Session:
         """Sign in with a username and password, for the accounts that have one.

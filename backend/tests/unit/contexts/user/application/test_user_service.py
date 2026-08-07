@@ -10,10 +10,11 @@ from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
     SessionNotRenewableError,
     UsernameAlreadyExistsError,
+    UsernameUnavailableError,
     UserService,
 )
 from app.contexts.user.domain.ports.refresh_token_repository import RefreshTokenRepository
-from app.contexts.user.domain.ports.user_repository import UserRepository
+from app.contexts.user.domain.ports.user_repository import UsernameTakenError, UserRepository
 from app.contexts.user.domain.refresh_token import RefreshToken
 from app.contexts.user.domain.user import User
 
@@ -21,8 +22,17 @@ from app.contexts.user.domain.user import User
 class FakeUserRepository(UserRepository):
     def __init__(self):
         self._store: dict[UUID, User] = {}
+        # Lets a test stage the failure a lost race produces, without needing two of them.
+        self.fail_next_save_with: Exception | None = None
 
     async def save(self, user: User) -> User:
+        if self.fail_next_save_with is not None:
+            failure, self.fail_next_save_with = self.fail_next_save_with, None
+            raise failure
+        # Refuses a taken username the way the real one does — on save, from the index,
+        # rather than by being asked first.
+        if any(u.username == user.username for u in self._store.values()):
+            raise UsernameTakenError(user.username)
         self._store[user.id] = user
         return user
 
@@ -356,3 +366,91 @@ class TestGetByToken:
 
         with pytest.raises(InvalidCredentialsError):
             await service.get_by_token(token)
+
+
+class TestClaimUsername:
+    """Attempt-and-retry, because look-then-insert is a race with a window.
+
+    The fake below refuses names the way the real repository does — by raising after being
+    asked to save, not by being consulted first — so these exercise the same path a lost
+    race takes.
+    """
+
+    async def test_takes_the_derived_name_when_it_is_free(self, service: UserService, users: FakeUserRepository):
+        async def claim(username: str) -> User:
+            return await users.save(User(username=username, email="aragorn@gondor.test"))
+
+        user = await service.claim_username("Aragorn Elessar", claim)
+
+        assert user.username == "aragorn-elessar"
+
+    async def test_takes_the_next_variant_when_the_name_is_gone(self, service: UserService, users: FakeUserRepository):
+        await users.save(User(username="alice", email="alice@example.test"))
+
+        async def claim(username: str) -> User:
+            return await users.save(User(username=username, email="alice2@example.test"))
+
+        user = await service.claim_username("Alice", claim)
+
+        assert user.username == "alice-2"
+
+    async def test_keeps_going_past_several_taken_names(self, service: UserService, users: FakeUserRepository):
+        for taken in ("alice", "alice-2", "alice-3"):
+            await users.save(User(username=taken, email=f"{taken}@example.test"))
+
+        async def claim(username: str) -> User:
+            return await users.save(User(username=username, email="another@example.test"))
+
+        user = await service.claim_username("Alice", claim)
+
+        assert user.username == "alice-4"
+
+    async def test_survives_losing_the_race_rather_than_checking_first(
+        self, service: UserService, users: FakeUserRepository
+    ):
+        """The case that look-then-insert gets wrong.
+
+        Here the name is free when the attempt begins and taken by the time it saves —
+        exactly what two simultaneous sign-ins do to each other. A service that had
+        checked availability up front would have no way to recover; this one takes the
+        next variant.
+        """
+        attempted: list[str] = []
+
+        async def claim(username: str) -> User:
+            attempted.append(username)
+            if username == "alice":
+                # Free when this attempt began, gone by the time it saved.
+                raise UsernameTakenError(username)
+            return await users.save(User(username=username, email="late@example.test"))
+
+        user = await service.claim_username("Alice", claim)
+
+        # It tried the name that looked free, lost, and moved on — rather than deciding
+        # up front and having nowhere to go.
+        assert attempted == ["alice", "alice-2"]
+        assert user.username == "alice-2"
+
+    async def test_gives_up_rather_than_spinning_forever(self, service: UserService):
+        async def claim(username: str) -> User:
+            raise UsernameTakenError(username)
+
+        with pytest.raises(UsernameUnavailableError):
+            await service.claim_username("Alice", claim)
+
+
+class TestRegisterRacingOnTheIndex:
+    async def test_a_username_taken_between_the_check_and_the_insert_is_still_a_409(
+        self, service: UserService, users: FakeUserRepository
+    ):
+        """The window the pre-check cannot close.
+
+        `register` looks first, which is the fast path — but two registrations for one
+        username can both pass that and only one can insert. The loser used to get an
+        integrity error escaping as a 500; it now gets the same conflict the check
+        produces.
+        """
+        users.fail_next_save_with = UsernameTakenError("aragorn")
+
+        with pytest.raises(UsernameAlreadyExistsError):
+            await service.register("aragorn", "aragorn@gondor.test", "strider123")
