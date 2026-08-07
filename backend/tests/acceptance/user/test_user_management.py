@@ -17,16 +17,6 @@ scenarios("features/user_management.feature")
 from tests.acceptance.user.conftest import held_refresh_cookie  # noqa: E402
 
 
-@given("I refresh my session")
-@when("I refresh my session")
-def refresh_session(client: AsyncClient, context: dict):
-    """No Authorization header, deliberately — the cookie is the whole credential here."""
-    response = asyncio.get_event_loop().run_until_complete(client.post("/users/refresh"))
-    context["response"] = response
-    if response.status_code == 200:
-        context["token"] = response.json()["access_token"]
-
-
 @given("someone takes a copy of my refresh cookie")
 def copy_refresh_cookie(client: AsyncClient, context: dict):
     context["stolen"] = held_refresh_cookie(client)
@@ -87,11 +77,6 @@ def account_created_with_access_token(context: dict):
 @then("I should not receive an access token")
 def no_access_token(context: dict):
     assert "access_token" not in context["response"].json()
-
-
-@then("I should get an unauthorized error")
-def get_unauthorized_error(context: dict):
-    assert context["response"].status_code == 401
 
 
 @then("the refresh cookie is httpOnly, secure, same-site and scoped to /users")

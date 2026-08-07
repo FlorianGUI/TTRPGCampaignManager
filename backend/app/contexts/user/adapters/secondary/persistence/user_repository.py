@@ -59,6 +59,17 @@ class SqlAlchemyUserRepository(UserRepository):
             return None
         return self._to_domain(model)
 
+    async def find_by_email(self, email: str) -> User | None:
+        result = await self._session.execute(select(UserModel).where(UserModel.email == email))
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+        return self._to_domain(model)
+
+    async def set_password(self, id: UserId, hashed_password: str) -> None:
+        await self._session.execute(update(UserModel).where(UserModel.id == id).values(hashed_password=hashed_password))
+        await self._session.commit()
+
     async def mark_email_verified(self, id: UserId) -> None:
         await self._session.execute(update(UserModel).where(UserModel.id == id).values(email_verified=True))
         await self._session.commit()

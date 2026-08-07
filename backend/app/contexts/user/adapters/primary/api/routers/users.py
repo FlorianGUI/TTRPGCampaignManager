@@ -6,10 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security.auth import get_current_user
 from app.common.security.rate_limiter import (
+    FORGOT_PASSWORD_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
     REGISTER_RATE_LIMIT,
     TOO_MANY_LOGIN_ATTEMPTS,
     TOO_MANY_REGISTRATIONS,
+    TOO_MANY_RESET_REQUESTS,
     limiter,
     too_many_requests_responses,
 )
@@ -18,10 +20,20 @@ from app.contexts.user.adapters.primary.api.refresh_cookie import (
     clear_refresh_cookie,
     set_refresh_cookie,
 )
-from app.contexts.user.adapters.primary.api.schemas.user import Token, UserCreate, UserResponse, VerifyEmail
+from app.contexts.user.adapters.primary.api.schemas.user import (
+    ForgotPassword,
+    ResetPassword,
+    Token,
+    UserCreate,
+    UserResponse,
+    VerifyEmail,
+)
 from app.contexts.user.adapters.secondary.email.brevo_email_sender import BrevoEmailSender
 from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
     SqlAlchemyEmailVerificationRepository,
+)
+from app.contexts.user.adapters.secondary.persistence.password_reset_repository import (
+    SqlAlchemyPasswordResetRepository,
 )
 from app.contexts.user.adapters.secondary.persistence.refresh_token_repository import SqlAlchemyRefreshTokenRepository
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
@@ -30,6 +42,7 @@ from app.contexts.user.application.email_verification_service import (
     TooManyVerificationRequestsError,
     VerificationLinkUnusableError,
 )
+from app.contexts.user.application.password_reset_service import PasswordResetService, ResetLinkUnusableError
 from app.contexts.user.application.user_service import (
     InvalidCredentialsError,
     SessionNotRenewableError,
@@ -53,9 +66,23 @@ _CANNOT_RENEW = "Could not renew the session"
 # above. Pointing it here would let a scanner spend the token before the person clicks.
 VERIFY_EMAIL_URL = os.environ.get("VERIFY_EMAIL_URL") or "http://localhost:5173/verify-email"
 
+# Same arrangement, same reason: the link goes to the SPA, which reads the token and POSTs
+# it. A scanner prefetching a reset link must not be able to spend it.
+PASSWORD_RESET_URL = os.environ.get("PASSWORD_RESET_URL") or "http://localhost:5173/reset-password"
+
 
 def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
+
+
+def get_password_reset_service(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
+    return PasswordResetService(
+        SqlAlchemyUserRepository(db),
+        SqlAlchemyPasswordResetRepository(db),
+        SqlAlchemyRefreshTokenRepository(db),
+        BrevoEmailSender(),
+        reset_url=PASSWORD_RESET_URL,
+    )
 
 
 def get_verification_service(db: AsyncSession = Depends(get_db)) -> EmailVerificationService:
@@ -329,3 +356,70 @@ async def resend_verification(
             detail="Too many verification emails requested. Try again shortly.",
             headers={"Retry-After": str(error.retry_after)} if error.retry_after else None,
         ) from None
+
+
+@router.post(
+    "/forgot-password",
+    status_code=204,
+    responses=too_many_requests_responses(TOO_MANY_RESET_REQUESTS),
+)
+@limiter.limit(FORGOT_PASSWORD_RATE_LIMIT, error_message=TOO_MANY_RESET_REQUESTS)
+async def forgot_password(
+    request: Request,
+    body: ForgotPassword,
+    service: PasswordResetService = Depends(get_password_reset_service),
+):
+    """Ask for a reset link, by email address or by username.
+
+    **204 always**, and that is the entire design of this endpoint. It is unauthenticated
+    and takes an identifier from whoever called it, so it is the one place in the app that
+    could be asked "does this account exist?" — and accepting usernames as well as
+    addresses (#71) makes that a cheaper question, not a dearer one. The status, the body
+    and the page that follows are identical either way.
+
+    The service has no other exit for the same reason: no exception, no boolean, nothing a
+    router could accidentally turn into an answer. Even a delivery failure is swallowed —
+    a 500 for a real address and a 204 for an unknown one is the same oracle wearing a
+    different hat.
+
+    `FORGOT_PASSWORD_RATE_LIMIT` matters more here than on most endpoints. This is the one
+    that sends mail to an address supplied by the caller, which makes it the outbound-spam
+    amplifier the re-send in #38 was careful not to be. The 429 says nothing about whether
+    anything matched, for the same reason the 204 does not.
+
+    The `request` argument is the limiter's, not this function's — see `register`.
+    """
+    await service.request(body.identifier)
+
+
+@router.post(
+    "/reset-password",
+    status_code=204,
+    responses={400: {"description": "The link is unknown, expired, or already used"}},
+)
+async def reset_password(
+    body: ResetPassword,
+    service: PasswordResetService = Depends(get_password_reset_service),
+):
+    """Spend a reset link and set a new password.
+
+    A POST, and the link in the message points at the SPA rather than here — the same
+    arrangement as verification, for the same reason: mail scanners prefetch links, and a
+    GET that spends a single-use token is spent before the person clicks. It matters more
+    here, because a spent reset link is someone locked out rather than merely unverified.
+
+    Every session for the account ends. Resetting is what someone does when they believe
+    another person has their password, and leaving that person signed in would be leaving
+    the door open behind them. Not "this device only", unlike logout.
+
+    204 rather than a token: this does not sign anyone in. The account's sessions were just
+    revoked on purpose, and handing back a fresh one would quietly undo the part of this
+    that matters. The page sends them to sign in with the password they just chose.
+
+    One 400 for unknown, expired and already used, matching every other token endpoint
+    here.
+    """
+    try:
+        await service.reset(body.token, body.password)
+    except ResetLinkUnusableError:
+        raise HTTPException(status_code=400, detail="This link is no longer valid") from None

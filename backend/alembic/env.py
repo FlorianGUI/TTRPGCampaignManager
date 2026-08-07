@@ -18,6 +18,7 @@ from app.contexts.source.adapters.secondary.persistence import source_model  # n
 from app.contexts.user.adapters.secondary.persistence import (
     email_verification_model,  # noqa: F401
     identity_model,  # noqa: F401
+    password_reset_model,  # noqa: F401
     refresh_token_model,  # noqa: F401
     user_model,  # noqa: F401
 )

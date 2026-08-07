@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from app.common.ids import SessionId
+from app.common.ids import SessionId, UserId
 from app.contexts.user.domain.refresh_token import RefreshToken
 
 
@@ -32,4 +32,14 @@ class RefreshTokenRepository(ABC):
         Whole-session because that is the unit that survives rotation: revoking only the
         token in hand would leave the one it was rotated into working, which is neither
         logging out nor containing a leak.
+        """
+
+    @abstractmethod
+    async def revoke_all_for_user(self, user_id: UserId, at: datetime) -> None:
+        """End every session this account has, everywhere.
+
+        What a password reset needs (#71). Resetting is what someone does when they believe
+        another person has their password, so leaving that person's sessions alive is
+        leaving the door open behind them — and unlike logging out, this one is deliberately
+        not "this device only".
         """
