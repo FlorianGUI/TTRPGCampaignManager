@@ -124,6 +124,13 @@ Some things worth knowing before touching any of it:
   without deciding that question.
 - **Everything colour-bearing reads a `--p-*` token.** No component hardcodes a
   hex. A theme switch is a token swap.
+- **`app` wins over `primevue` in the cascade**, which is what lets `base.css`
+  override component styles without specificity games — and is also a trap.
+  `<Button as="router-link">` renders an `<a>`, so the anchor rule claims it and
+  paints a primary button's label in the same accent as its background: a solid
+  block with invisible text. `a.p-button` reverts colour and decoration to the
+  primevue layer. jsdom does not do layered cascade, so no unit test can catch
+  this class of bug — it is found by looking.
 - **Two themes**: `candlelight` (dark, the default) and `parchment` (light),
   driven by a `.theme-candlelight` class on `<html>`. The default is
   deliberately _not_ tied to `prefers-color-scheme`.
