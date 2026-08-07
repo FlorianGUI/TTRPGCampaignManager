@@ -3,9 +3,11 @@ import { nextTick, onScopeDispose, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import InputText from 'primevue/inputtext'
+import { useRouter } from 'vue-router'
 import AppNav from './AppNav.vue'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '../stores/theme.js'
+import { useAuthStore } from '../stores/auth.js'
 
 /*
  * Dark leather chrome (top bar + sidebar) framing a parchment reading surface.
@@ -30,6 +32,24 @@ defineProps({
 const themeStore = useThemeStore()
 const { theme, density } = storeToRefs(themeStore)
 const { toggleTheme, toggleDensity } = themeStore
+
+/*
+ * Signing out revokes server-side before it clears anything locally — clearing
+ * only the client would leave a working refresh cookie behind, which is the one
+ * way to log out that does not log you out (#35).
+ *
+ * `POST /users/logout` answers 204 whether or not there was a session, so there
+ * is no failure state to design here: no confirmation dialog, no error
+ * affordance, no disabled-while-pending. It ends the session on this device
+ * only — if the copy ever says "everywhere", that is a different endpoint.
+ */
+const auth = useAuthStore()
+const router = useRouter()
+
+async function signOut() {
+  await auth.logOut()
+  router.push({ name: 'login' })
+}
 
 /* Kept in sync with the max-width: 900px breakpoint below. */
 const WIDE_QUERY = '(min-width: 901px)'
@@ -116,6 +136,27 @@ watch(searchOpen, async (open) => {
             :title="`Theme: ${theme}`"
             @click="toggleTheme"
           />
+          <!--
+            Last in the row, and it never folds. The priority ladder (#25) drops
+            the wordmark and then the search field as the bar narrows, because
+            both have somewhere else to go — the mark still carries the brand,
+            and search reopens as a row underneath. Sign out has no such
+            fallback: an account you cannot leave on a phone is worse than a
+            cramped bar, so it holds its place at every width.
+
+            Last rather than first because it is the most consequential and the
+            least frequent control here, and it should not sit where a thumb
+            reaching for the theme toggle lands.
+          -->
+          <Button
+            class="shell__sign-out"
+            text
+            rounded
+            icon="pi pi-sign-out"
+            aria-label="Sign out"
+            title="Sign out"
+            @click="signOut"
+          />
         </div>
       </div>
 
@@ -191,6 +232,21 @@ watch(searchOpen, async (open) => {
   margin-left: auto;
   display: flex;
   gap: var(--space-1);
+}
+
+/*
+ * The same 44px floor AppNav sets. These are icon-only targets with no label to
+ * widen them, so they are the smallest things in the chrome — and sign out is
+ * now among them, which is not a control to make people aim at twice.
+ *
+ * Coarse pointers only: on a mouse the default size is comfortable, and forcing
+ * 44px there would space the bar out for no one's benefit.
+ */
+@media (pointer: coarse) {
+  .shell__actions :deep(button) {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* Both toggles are small-screen only; the wide layout shows the real controls. */
