@@ -147,6 +147,19 @@ class TestAuthenticate:
         with pytest.raises(InvalidCredentialsError):
             await service.authenticate("unknown", "whatever")
 
+    async def test_raises_for_an_account_that_has_no_password(self, service: UserService, users: FakeUserRepository):
+        """An account reached only through a provider (#36, #39) has no password.
+
+        Without the guard this is not a failed login, it is a 500: `verify_password`
+        raises on `None`. And a 500 where every other username answers "incorrect" says
+        the account exists and how it signs in — an oracle sitting on top of the answer
+        the 401 is careful not to give.
+        """
+        await users.save(User(username="legolas", email="legolas@woodland.test"))
+
+        with pytest.raises(InvalidCredentialsError):
+            await service.authenticate("legolas", "anything-at-all")
+
 
 class TestWhatIsStored:
     async def test_the_token_itself_is_never_written_down(

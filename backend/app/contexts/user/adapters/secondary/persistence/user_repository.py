@@ -17,6 +17,7 @@ class SqlAlchemyUserRepository(UserRepository):
             username=user.username,
             email=user.email,
             hashed_password=user.hashed_password,
+            email_verified=user.email_verified,
         )
         self._session.add(model)
         await self._session.commit()
@@ -43,4 +44,5 @@ class SqlAlchemyUserRepository(UserRepository):
             username=model.username,
             email=model.email,
             hashed_password=model.hashed_password,
+            email_verified=model.email_verified,
         )

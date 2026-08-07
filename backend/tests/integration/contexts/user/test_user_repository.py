@@ -31,6 +31,41 @@ class TestSave:
         assert found.username == "samwise"
         assert found.email == "samwise@shire.com"
 
+    async def test_persists_an_account_with_no_password(self, repository: SqlAlchemyUserRepository):
+        """The column is nullable now, and this is what proves it against a real database
+        rather than against the model's opinion of itself."""
+        user = User(username="gimli", email="gimli@erebor.test")
+
+        await repository.save(user)
+        found = await repository.find_by_id(user.id)
+
+        assert found is not None
+        assert found.hashed_password is None
+        assert found.has_password is False
+
+    async def test_a_new_row_is_unverified(self, repository: SqlAlchemyUserRepository):
+        user = User(username="merry", email="merry@shire.com", hashed_password="hashed")
+
+        await repository.save(user)
+        found = await repository.find_by_id(user.id)
+
+        assert found is not None
+        assert found.email_verified is False
+
+    async def test_round_trips_a_verified_address(self, repository: SqlAlchemyUserRepository):
+        user = User(
+            username="galadriel",
+            email="galadriel@lorien.test",
+            hashed_password="hashed",
+            email_verified=True,
+        )
+
+        await repository.save(user)
+        found = await repository.find_by_id(user.id)
+
+        assert found is not None
+        assert found.email_verified is True
+
 
 class TestFindById:
     async def test_returns_user_when_found(self, repository: SqlAlchemyUserRepository):
