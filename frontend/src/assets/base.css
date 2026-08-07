@@ -117,6 +117,30 @@
     text-decoration-thickness: 1px;
   }
 
+  /*
+   * An anchor that is a button is a button.
+   *
+   * `<Button as="router-link">` renders an <a>, so the rule above claims it —
+   * and because main.js orders the layers `primevue, app`, this file wins. On a
+   * primary button that paints the label in the same accent the background
+   * already uses: a solid block with invisible text. It looks like a rendering
+   * bug and it is a cascade one.
+   *
+   * `revert-layer` hands the colour back to the primevue layer, so each
+   * severity keeps its own — which an explicit token here could not do without
+   * being wrong for every button that is not primary.
+   */
+  a.p-button {
+    /* revert-layer hands the colour back to the primevue layer, so each severity
+       keeps its own — an explicit token here would be wrong for every button
+       that is not primary. */
+    color: revert-layer;
+    /* Explicit rather than reverted: primevue declares no text-decoration for a
+       button, so reverting falls through to the user-agent stylesheet, which
+       underlines anchors. A button is not underlined. */
+    text-decoration: none;
+  }
+
   code,
   kbd,
   samp {

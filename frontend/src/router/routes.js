@@ -35,6 +35,17 @@ export const routes = [
     meta: { title: 'Create an account', public: true, layout: 'auth' },
   },
   /*
+   * Where a verification link lands. Public because the common case is opening
+   * the mail on a phone that has never signed in — a guard here would turn a
+   * working link into a login prompt (#38).
+   */
+  {
+    path: '/verify-email',
+    name: 'verify-email',
+    component: () => import('../views/VerifyEmailView.vue'),
+    meta: { title: 'Confirm your address', public: true, layout: 'auth' },
+  },
+  /*
    * Dev-only. `import.meta.env.DEV` is substituted with a literal at build
    * time, so this whole branch — and with it the dynamic import — is dropped
    * from the production bundle rather than merely hidden: the view is not
