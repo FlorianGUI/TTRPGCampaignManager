@@ -188,6 +188,12 @@ function scheme({ ramp, roles, accent, onAccent, tone }) {
           borderColor: r('chromeBorder'),
         },
         rule: { color: r('rule'), strongColor: accent[700] },
+        // Error text under a form field. `tone.danger` rather than the ramp
+        // directly, and the same value the invalid border already uses, so a
+        // field and its message cannot drift apart. The pair it makes with the
+        // content background is the one check-contrast.mjs calls "danger text
+        // on card", already gated at AA in both schemes.
+        form: { errorColor: tone.danger },
         readAloud: {
           background: tone.readAloudBackground,
           borderColor: tone.info,

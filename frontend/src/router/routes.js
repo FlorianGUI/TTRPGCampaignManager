@@ -9,6 +9,11 @@ import SpikeView from '../views/SpikeView.vue'
  *  - the landing route for a section is eagerly imported, everything else is
  *    lazy, so the initial bundle only carries what the first paint needs
  *  - the catch-all stays last
+ *  - `meta.public: true` marks the handful of routes a signed-out visitor may
+ *    reach. Everything else is behind the guard, so forgetting the flag fails
+ *    closed — a new page is private until it says otherwise
+ *  - `meta.layout: 'auth'` asks App.vue for the bare chrome instead of the
+ *    campaign shell
  */
 export const routes = [
   {
@@ -16,6 +21,18 @@ export const routes = [
     name: 'home',
     component: SpikeView,
     meta: { title: 'Session notes' },
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/LoginView.vue'),
+    meta: { title: 'Sign in', public: true, layout: 'auth' },
+  },
+  {
+    path: '/signup',
+    name: 'signup',
+    component: () => import('../views/SignupView.vue'),
+    meta: { title: 'Create an account', public: true, layout: 'auth' },
   },
   /*
    * Dev-only. `import.meta.env.DEV` is substituted with a literal at build
