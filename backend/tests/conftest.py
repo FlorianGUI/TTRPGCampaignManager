@@ -5,12 +5,20 @@ from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
+from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.contexts.user.adapters.primary.api.routers.users import get_verification_service
+from app.contexts.user.adapters.secondary.persistence.email_verification_repository import (
+    SqlAlchemyEmailVerificationRepository,
+)
+from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
+from app.contexts.user.application.email_verification_service import EmailVerificationService
+from app.contexts.user.domain.ports.email_sender import EmailSender
 from app.database import get_db
 from app.main import app
 
@@ -153,3 +161,44 @@ async def client(db_connection):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def outbox() -> list[dict[str, str]]:
+    """Every message the app tried to send during a scenario."""
+    return []
+
+
+@pytest.fixture(autouse=True)
+def no_real_mail(outbox: list[dict[str, str]]):
+    """Nothing in this suite reaches a mail provider, ever.
+
+    At the root rather than in one package, which is the correction: it lived under
+    tests/acceptance/ first, and the system tests register users too — they went straight
+    to the real adapter and died on a missing BREVO_API_KEY. That failure was the polite
+    version. The rude version is a suite that finds the key set, on a laptop or in CI, and
+    posts fixture addresses to Brevo.
+
+    Autouse for the same reason: registering sends a verification link (#38), and almost
+    every test that touches the app registers somebody. A fixture you had to remember would
+    be one omission away from real mail.
+
+    The repositories stay real, so the rows a test asserts on are the rows the app actually
+    wrote. Only the outbound edge is replaced.
+    """
+
+    class RecordingEmailSender(EmailSender):
+        async def send(self, to: str, subject: str, text: str, html: str | None = None) -> None:
+            outbox.append({"to": to, "subject": subject, "text": text})
+
+    def override(db: AsyncSession = Depends(get_db)) -> EmailVerificationService:
+        return EmailVerificationService(
+            SqlAlchemyUserRepository(db),
+            SqlAlchemyEmailVerificationRepository(db),
+            RecordingEmailSender(),
+            verify_url="http://testserver/users/verify-email",
+        )
+
+    app.dependency_overrides[get_verification_service] = override
+    yield
+    app.dependency_overrides.pop(get_verification_service, None)
