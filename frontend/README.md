@@ -180,23 +180,28 @@ That is what stops it looping.
 loads `/config.js` before the app, and that file sets
 `window.__CONFIG__ = { apiUrl }`. `api/http.js` reads it once at import.
 
-| where         | who writes `/config.js`                                           | from                                                |
-| ------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
-| production    | the `Write runtime config` step in `.github/workflows/deploy.yml` | `FRONTEND_API_URL` in `/opt/dnd/.env` on the server |
-| dev / preview | the `dev-runtime-config` plugin in `vite.config.js`               | `VITE_API_URL`, else `http://localhost:8000`        |
+| where         | where `/config.js` comes from                       | from                                         |
+| ------------- | --------------------------------------------------- | -------------------------------------------- |
+| production    | `/opt/dnd/config/config.js`, aliased by nginx       | whatever configures the host                 |
+| dev / preview | the `dev-runtime-config` plugin in `vite.config.js` | `VITE_API_URL`, else `http://localhost:8000` |
 
 Vite substitutes `VITE_*` at **build** time, so a host in the bundle makes the
 artifact correct in exactly one environment and silently wrong in every other —
 which is how a build once shipped calling `localhost:8000`. Nothing in `dist/`
-names a host now, so the same artifact deploys anywhere and moving the API is an
-env var and a re-run of that step.
+names a host now, so the same artifact deploys anywhere and moving the API is one
+line on the server.
+
+**No deploy step writes it.** It sits outside `/opt/dnd/frontend-dist`, which the
+deploy replaces wholesale, so it is host state rather than something every deploy
+has to restore — and it is the first thing that should become an Ansible task
+rather than a step to translate.
 
 Three things follow, and all three are load-bearing:
 
 - **It fails closed.** A production build that finds no `apiUrl` throws at import
   rather than falling back to localhost. A fallback there would be the original
-  bug again, in production, silently. The deploy fails the same way if
-  `FRONTEND_API_URL` is unset — unset is never the quiet choice.
+  bug again, in production, silently. The error names the file and where it
+  lives, because that is the only clue anyone will get.
 - **`/config.js` must not be cached.** It carries no content hash, unlike
   everything under `/assets/`, so `nginx/lastdawn.fr.conf` serves it `no-cache`.
   Without that a browser can keep pointing at yesterday's API host.
