@@ -80,3 +80,39 @@ class TestSend:
             return httpx.Response(201, json={})
 
         await sender_with(httpx.MockTransport(handle)).send(to="a@b.test", subject="s", text="t")
+
+
+class TestItsOwnClient:
+    async def test_builds_one_with_a_timeout_when_it_was_not_given_a_client(self, monkeypatch):
+        """The path production takes. Every other test here injects a transport, so without
+        this the branch that opens a real client — and the timeout on it — is never run.
+
+        A provider that has not answered in ten seconds is not about to, and somebody is
+        waiting on this request.
+        """
+        opened: dict[str, object] = {}
+
+        class RecordingClient:
+            def __init__(self, timeout: float) -> None:
+                opened["timeout"] = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc: object) -> None:
+                return None
+
+            async def post(self, url: str, json: object, headers: dict[str, str]) -> httpx.Response:
+                opened["url"] = url
+                return httpx.Response(201, json={})
+
+        monkeypatch.setattr(
+            "app.contexts.user.adapters.secondary.email.brevo_email_sender.httpx.AsyncClient", RecordingClient
+        )
+
+        await BrevoEmailSender(api_key="k", sender="s@t.test", sender_name="n").send(
+            to="a@b.test", subject="s", text="t"
+        )
+
+        assert opened["url"] == BREVO_ENDPOINT
+        assert opened["timeout"] == 10.0
