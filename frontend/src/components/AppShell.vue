@@ -5,10 +5,9 @@ import Drawer from 'primevue/drawer'
 import InputText from 'primevue/inputtext'
 import { useRouter } from 'vue-router'
 import AppNav from './AppNav.vue'
+import ChromeActions from './ChromeActions.vue'
 import VerificationNotice from './VerificationNotice.vue'
-import { storeToRefs } from 'pinia'
-import { useThemeStore } from '../stores/theme.js'
-import { useAuthStore } from '../stores/auth.js'
+import { forgetCurrentCampaign } from '../stores/currentCampaign.js'
 
 /*
  * Dark leather chrome (top bar + sidebar) framing a parchment reading surface.
@@ -26,30 +25,25 @@ import { useAuthStore } from '../stores/auth.js'
 defineProps({
   sections: { type: Array, required: true },
   active: { type: String, default: null },
+  // Null while the list is still in flight, and on any route that is not inside
+  // a campaign. The chip is simply absent until there is a name to put in it.
+  campaign: { type: Object, default: null },
 })
 
-// storeToRefs keeps the two values reactive; actions are taken off the store
-// directly, which is the Pinia idiom and what plain destructuring would break.
-const themeStore = useThemeStore()
-const { theme, density } = storeToRefs(themeStore)
-const { toggleTheme, toggleDensity } = themeStore
-
-/*
- * Signing out revokes server-side before it clears anything locally — clearing
- * only the client would leave a working refresh cookie behind, which is the one
- * way to log out that does not log you out (#35).
- *
- * `POST /users/logout` answers 204 whether or not there was a session, so there
- * is no failure state to design here: no confirmation dialog, no error
- * affordance, no disabled-while-pending. It ends the session on this device
- * only — if the copy ever says "everywhere", that is a different endpoint.
- */
-const auth = useAuthStore()
 const router = useRouter()
 
-async function signOut() {
-  await auth.logOut()
-  router.push({ name: 'login' })
+/*
+ * Leaving a campaign, which is the other half of #59's decision to put home
+ * outside this shell: without a way back, the chooser is reachable only by
+ * signing out, and that is not a way back.
+ *
+ * Forgetting is what makes `/` show the chooser rather than bouncing straight
+ * back into the campaign just left. The rule lives in the id, not in a flag —
+ * see `enterRememberedCampaign` in router/routes.js.
+ */
+function leaveCampaign() {
+  forgetCurrentCampaign()
+  router.push({ name: 'home' })
 }
 
 /* Kept in sync with the max-width: 900px breakpoint below. */
@@ -100,6 +94,29 @@ watch(searchOpen, async (open) => {
           <span>Campaign Manager</span>
         </div>
 
+        <!--
+          Where you are, and the way out of it. On the left, next to the brand,
+          rather than in the actions cluster: that row ends in sign out, and two
+          adjacent leave-shaped icons on a phone is a mis-tap that ends the
+          session instead of the campaign.
+
+          It is also where #48's switcher goes — the chip already names the
+          current campaign, so that issue adds a dropdown to something that
+          exists rather than reopening the placement question.
+        -->
+        <div v-if="campaign" class="shell__campaign">
+          <span class="shell__campaign-name">{{ campaign.name }}</span>
+          <Button
+            class="shell__campaign-leave"
+            text
+            rounded
+            icon="pi pi-times"
+            :aria-label="`Leave ${campaign.name}`"
+            title="Back to your campaigns"
+            @click="leaveCampaign"
+          />
+        </div>
+
         <div class="shell__search">
           <InputText placeholder="Search sources, NPCs, locations…" fluid />
         </div>
@@ -116,48 +133,15 @@ watch(searchOpen, async (open) => {
             @click="searchOpen = !searchOpen"
           />
           <!--
-            Density is a pointer-precision affordance: compact shrinks targets
-            that are already at the 44px floor on touch, so it is not offered
-            there (issue #25).
+            Density, theme and sign out, shared with BareLayout's bar so the two
+            cannot drift apart. Sign out is last in that row and never folds:
+            the priority ladder (#25) drops the wordmark and then the search
+            field as the bar narrows, because both have somewhere else to go —
+            the mark still carries the brand, and search reopens as a row
+            underneath. An account you cannot leave on a phone is worse than a
+            cramped bar.
           -->
-          <Button
-            class="shell__density-toggle"
-            text
-            rounded
-            :icon="density === 'compact' ? 'pi pi-bars' : 'pi pi-align-justify'"
-            :aria-label="`Switch to ${density === 'compact' ? 'comfortable' : 'compact'} density`"
-            :title="`Density: ${density}`"
-            @click="toggleDensity"
-          />
-          <Button
-            text
-            rounded
-            :icon="theme === 'candlelight' ? 'pi pi-sun' : 'pi pi-moon'"
-            :aria-label="`Switch to ${theme === 'candlelight' ? 'parchment' : 'candlelight'} theme`"
-            :title="`Theme: ${theme}`"
-            @click="toggleTheme"
-          />
-          <!--
-            Last in the row, and it never folds. The priority ladder (#25) drops
-            the wordmark and then the search field as the bar narrows, because
-            both have somewhere else to go — the mark still carries the brand,
-            and search reopens as a row underneath. Sign out has no such
-            fallback: an account you cannot leave on a phone is worse than a
-            cramped bar, so it holds its place at every width.
-
-            Last rather than first because it is the most consequential and the
-            least frequent control here, and it should not sit where a thumb
-            reaching for the theme toggle lands.
-          -->
-          <Button
-            class="shell__sign-out"
-            text
-            rounded
-            icon="pi pi-sign-out"
-            aria-label="Sign out"
-            title="Sign out"
-            @click="signOut"
-          />
+          <ChromeActions />
         </div>
       </div>
 
@@ -224,6 +208,33 @@ watch(searchOpen, async (open) => {
   color: var(--p-primary-color);
 }
 
+/*
+ * A border rather than a fill: the chip names a place, it is not a control, and
+ * only the × inside it is pressable. Giving the whole thing a button's surface
+ * would invite people to click the name and wonder why nothing happened —
+ * until #48, when the name becomes the switcher and that expectation is right.
+ */
+.shell__campaign {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-left: var(--space-3);
+  border: 1px solid var(--p-grimoire-chrome-border-color);
+  border-radius: var(--p-border-radius-sm);
+  background: var(--p-grimoire-chrome-raised-background);
+}
+
+.shell__campaign-name {
+  overflow: hidden;
+  font-family: var(--grimoire-font-display);
+  font-weight: 700;
+  font-size: var(--step--1);
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shell__search {
   flex: 1;
   max-width: 26rem;
@@ -240,15 +251,16 @@ watch(searchOpen, async (open) => {
 }
 
 /*
- * The same 44px floor AppNav sets. These are icon-only targets with no label to
- * widen them, so they are the smallest things in the chrome — and sign out is
- * now among them, which is not a control to make people aim at twice.
+ * The same 44px floor AppNav sets, for the icon-only targets this component
+ * owns. The shared cluster sets its own — see ChromeActions.
  *
  * Coarse pointers only: on a mouse the default size is comfortable, and forcing
  * 44px there would space the bar out for no one's benefit.
  */
 @media (pointer: coarse) {
-  .shell__actions :deep(button) {
+  .shell__nav-toggle,
+  .shell__search-toggle,
+  .shell__campaign-leave {
     min-height: 44px;
     min-width: 44px;
   }
@@ -349,11 +361,14 @@ watch(searchOpen, async (open) => {
     /* The mark carries the brand; the wordmark is what has to give first. */
     display: none;
   }
-}
 
-@media (pointer: coarse) {
-  .shell__density-toggle {
-    display: none;
+  /*
+   * The chip is the next rung down that ladder. It keeps its place — leaving a
+   * campaign has to stay possible on a phone — but gives up most of its width,
+   * because the drawer names the campaign in full a tap away.
+   */
+  .shell__campaign-name {
+    max-width: 6rem;
   }
 }
 </style>

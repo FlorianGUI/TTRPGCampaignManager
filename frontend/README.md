@@ -44,6 +44,7 @@ frontend/
       index.js                     # router instance, scroll behaviour, title
       routes.js                    # the route table
     views/
+      HomeView.vue                 # / — the campaign chooser
       SpikeView.vue                # SPIKE: design-direction judgement surface
       StyleguideView.vue           # /styleguide — every token and component
       NotFoundView.vue             # catch-all
@@ -58,6 +59,9 @@ frontend/
     stores/
       auth.js                      # current user, in-memory access token
       theme.js                     # theme + density state, persisted
+      campaigns.js                 # the campaigns you own, and creating one
+      sources.js                   # the sources you own, read-only
+      currentCampaign.js           # the remembered campaign — storage, not a store
     design-system/
       preset.js                    # composes the three layers into the preset
       tokens/
@@ -67,6 +71,8 @@ frontend/
     components/
       AppShell.vue                 # top bar + context sidebar + content area
       AppNav.vue                   # the nav list, shared by sidebar and drawer
+      BareLayout.vue               # chrome for the pages above any campaign
+      ChromeActions.vue            # density + theme + sign out, shared by both bars
       domain/                      # stat block, read-aloud, dice, entity tags
     content/
       sample.js                    # sample copy for the spike
@@ -78,8 +84,10 @@ The visual direction is settled (issue #23). Two surfaces exercise it:
 
 - **`/styleguide`** — the living reference: every token in both schemes, and
   every component we own or override. Start here. **Dev only** — see below.
-- **`/` (`SpikeView.vue`)** — one realistic page of prep notes, for judging
-  type, palette and ornament _in context_ rather than in a grid.
+- **`/campaigns/:campaignId/sessions` (`SpikeView.vue`)** — one realistic page
+  of prep notes, for judging type, palette and ornament _in context_ rather than
+  in a grid. It stands in for session notes until that context exists; its
+  counts come from `content/sample.js` and are invented.
 
 ### Token layers
 
@@ -159,10 +167,54 @@ Some things worth knowing before touching any of it:
   function parameter defeats the elimination and the chunk comes back.
 - every route sets `meta.title`, which `router/index.js` turns into the document
   title
+- `meta.layout` names the chrome `App.vue` wraps the view in: `auth` for the
+  signed-out column, `bare` for the pages above any campaign. Saying nothing
+  gets the campaign shell, which is what all but a handful want
 - the catch-all stays **last**
 
 `App.vue` holds the shell and renders `<RouterView>` inside it, so the top bar
 and sidebar are not torn down on navigation.
+
+### Where a signed-in visitor lands
+
+`/` is a **chooser**, not a page inside the campaign frame (#59). `AppNav`'s
+Campaign section is meaningless before a campaign is picked, so home sits
+outside `AppShell` in `BareLayout` — `meta.layout: 'bare'`, the third value
+beside `auth` and saying nothing.
+
+The campaign id lives **in the path** (`/campaigns/:campaignId/...`).
+`localStorage` holds only the campaign to open by default, under
+`grimoire.campaign`. That is a knowing contradiction of #14, which put
+`active_campaign_id` on `users` — a column cut from #44 and still unbuilt. It
+moves server-side the day multi-device continuity matters.
+
+The rule for `/` is one line, in `enterRememberedCampaign`:
+
+> a remembered id? go there. otherwise, show the chooser.
+
+The two exceptions — just signed in, just left a campaign — are **not** special
+cases in that guard. They work because the id is cleared at those moments, in
+four places, and between them they are every point a session starts or stops
+being one person's:
+
+| where             | why it is not covered by the others                                   |
+| ----------------- | --------------------------------------------------------------------- |
+| `auth.clear()`    | logout, and every failed refresh — a session ending                   |
+| `auth.logIn()`    | an expired session never calls logout; that person meets a login form |
+| `SsoCallbackView` | a provider sign-in arrives through `boot()`, which must _not_ forget  |
+| the campaign chip | leaving would otherwise bounce straight back in                       |
+
+Two consequences worth keeping:
+
+- **Do not "fix" this with a flag.** A `skipAutoEnter` boolean is the obvious
+  shape and it desynchronises on the first page reload. The clearing rule cannot.
+- **`boot()` must never forget.** A cold open with a live refresh cookie is the
+  case the whole feature exists for. The SSO callback is the one sign-in that
+  also arrives through `boot()`, which is why it clears explicitly.
+
+`currentCampaign.js` is deliberately import-free and is not a Pinia store:
+`stores/auth.js` has to clear it, and it cannot import a store that imports
+`api/client.js`, which imports the auth store.
 
 ## State and the API
 

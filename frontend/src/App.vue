@@ -12,34 +12,57 @@
  * the shell first means a signed-out user watches the campaign sidebar draw
  * before being sent to the login page.
  */
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import AppShell from './components/AppShell.vue'
 import AuthLayout from './components/AuthLayout.vue'
+import BareLayout from './components/BareLayout.vue'
 import { useAuthStore } from './stores/auth.js'
+import { useCampaignsStore } from './stores/campaigns.js'
 import { sections } from './content/sample.js'
 
 const route = useRoute()
 const auth = useAuthStore()
+const campaigns = useCampaignsStore()
 
 /*
- * Which chrome the current route wants. The shell is the default and `auth` is
- * the exception, rather than every route having to declare one — a page that
- * says nothing gets the campaign frame, which is what all but two of them want.
+ * Which chrome the current route wants. The shell is the default and the named
+ * layouts are the exceptions, rather than every route having to declare one — a
+ * page that says nothing gets the campaign frame, which is what all but a
+ * handful of them want.
  *
- * One <component> rather than a v-if pair, so the `ready` gate is written once
- * instead of twice and cannot fall out of step with itself.
+ * One <component> rather than a v-if chain, so the `ready` gate is written once
+ * instead of three times and cannot fall out of step with itself.
  */
-const isAuthLayout = computed(() => route.meta.layout === 'auth')
-const layout = computed(() => (isAuthLayout.value ? AuthLayout : AppShell))
+const LAYOUTS = { auth: AuthLayout, bare: BareLayout }
+
+const layout = computed(() => LAYOUTS[route.meta.layout] ?? AppShell)
 
 /*
- * Bound per layout rather than to both. AuthLayout declares no props, so
- * anything passed to it falls through onto its root element — `sections` would
- * land in the DOM as an attribute stringified from an array.
+ * The campaign the top bar names, resolved from the path rather than from
+ * storage — the URL is the truth about where you are, and storage only supplies
+ * a default for `/` (#59).
+ *
+ * Loading is triggered here because this is where the id first becomes known,
+ * and it costs nothing: `ensureLoaded` is single-flight, so arriving on a
+ * campaign page shares the one request the guard or the chooser already made.
+ * Until it lands, `byId` is null and the chip simply is not rendered yet.
+ */
+watchEffect(() => {
+  if (route.params.campaignId) campaigns.ensureLoaded()
+})
+
+const campaign = computed(() =>
+  route.params.campaignId ? campaigns.byId(route.params.campaignId) : null,
+)
+
+/*
+ * Bound per layout rather than to both. AuthLayout and BareLayout declare no
+ * props, so anything passed to them falls through onto their root element —
+ * `sections` would land in the DOM as an attribute stringified from an array.
  */
 const layoutProps = computed(() =>
-  isAuthLayout.value ? {} : { sections, active: route.meta.title },
+  route.meta.layout ? {} : { sections, active: route.meta.title, campaign: campaign.value },
 )
 </script>
 

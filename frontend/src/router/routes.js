@@ -1,4 +1,6 @@
-import SpikeView from '../views/SpikeView.vue'
+import HomeView from '../views/HomeView.vue'
+import { useCampaignsStore } from '../stores/campaigns.js'
+import { forgetCurrentCampaign, readCurrentCampaign } from '../stores/currentCampaign.js'
 
 /*
  * Route table, kept apart from the router instance so it can be imported by
@@ -12,14 +14,74 @@ import SpikeView from '../views/SpikeView.vue'
  *  - `meta.public: true` marks the handful of routes a signed-out visitor may
  *    reach. Everything else is behind the guard, so forgetting the flag fails
  *    closed — a new page is private until it says otherwise
- *  - `meta.layout: 'auth'` asks App.vue for the bare chrome instead of the
- *    campaign shell
+ *  - `meta.layout` names the chrome App.vue should wrap the view in: `auth` for
+ *    the signed-out column, `bare` for the pages above any campaign. Saying
+ *    nothing gets the campaign shell, which is what all but a handful want
  */
+
+/*
+ * Go straight into the campaign you were last in, if there is one.
+ *
+ * This is the whole of the "where do I land" rule from #59, and it is one line
+ * of logic on purpose: a remembered id means go there, no id means show the
+ * chooser. The two exceptions people asked for — just signed in, just left a
+ * campaign — are not special cases here. They are handled by *clearing* the id
+ * at those moments (`logIn`, `logOut`, the SSO callback, the exit chip), which
+ * is why a page reload cannot desynchronise this and there is no flag to keep
+ * in step.
+ *
+ * The list is fetched before deciding rather than after. The chooser needs it
+ * anyway, `ensureLoaded` is single-flight, and it is what separates "this
+ * campaign is gone" from "this campaign is not mine" — both of which arrive as
+ * an id that is simply not in the list.
+ */
+export async function enterRememberedCampaign() {
+  const campaignId = readCurrentCampaign()
+  if (!campaignId) return true
+
+  const campaigns = useCampaignsStore()
+  await campaigns.ensureLoaded()
+
+  /*
+   * Could not ask. Keep the id and show the chooser, which renders the failure
+   * and offers a retry — forgetting here would punish a dropped connection by
+   * losing a preference that is probably still correct.
+   */
+  if (!campaigns.loaded) return true
+
+  // Deleted, or belonging to whoever used this browser last. Either way it is
+  // not a campaign this user can open, and it should not be tried again.
+  if (!campaigns.byId(campaignId)) {
+    forgetCurrentCampaign()
+    return true
+  }
+
+  // `replace`, so Back from the campaign does not land on a `/` that bounces
+  // straight here again — an entry no one can ever get past.
+  return { name: 'campaign-sessions', params: { campaignId }, replace: true }
+}
+
 export const routes = [
   {
     path: '/',
     name: 'home',
-    component: SpikeView,
+    component: HomeView,
+    beforeEnter: enterRememberedCampaign,
+    meta: { title: 'Your campaigns', layout: 'bare' },
+  },
+  /*
+   * Inside a campaign. The id is in the path rather than only in storage, so a
+   * campaign page can be bookmarked and two tabs can sit in two campaigns —
+   * neither of which `active_campaign_id` on `users` would have given us (#14).
+   *
+   * `SpikeView` stands in for session notes until that context exists. It is no
+   * longer the landing route, which is what #59 set out to fix: its counts come
+   * from `content/sample.js` and are invented.
+   */
+  {
+    path: '/campaigns/:campaignId/sessions',
+    name: 'campaign-sessions',
+    component: () => import('../views/SpikeView.vue'),
     meta: { title: 'Session notes' },
   },
   {
