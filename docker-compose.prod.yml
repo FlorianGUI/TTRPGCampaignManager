@@ -45,6 +45,21 @@ services:
       RESEND_COOLDOWN_SECONDS: ${RESEND_COOLDOWN_SECONDS:-120}
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
       REGISTER_RATE_LIMIT: ${REGISTER_RATE_LIMIT:-5/hour}
+      # Sign in with Discord (#39). No defaults for the credentials, like the mail keys
+      # above: a deployment that forgets them should fail where it is obvious rather than
+      # offer a button that cannot work.
+      #
+      # DISCORD_REDIRECT_URI must match a URI registered in the Discord developer portal
+      # character for character — Discord compares strings, not hosts — and it is never
+      # derived from the incoming request, because a redirect URI a caller could influence
+      # is an open redirect with an authorization code attached to it.
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-https://api.lastdawn.fr/auth/discord/callback}
+      # Where the callback hands the browser back to. A page in the SPA, which turns the
+      # refresh cookie it was just given into an access token — which is what keeps the
+      # token out of the URL, and so out of history and every proxy log on the way.
+      SSO_REDIRECT_URL: ${SSO_REDIRECT_URL:-https://lastdawn.fr/auth/callback}
       # Whose X-Forwarded-For uvicorn believes. Nothing here reaches it from 127.0.0.1 — the
       # published port above is forwarded by docker-proxy, so the peer is the bridge gateway
       # (172.18.0.1 today). uvicorn's default of 127.0.0.1 therefore trusts nobody and the
