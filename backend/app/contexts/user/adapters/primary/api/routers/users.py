@@ -15,6 +15,7 @@ from app.common.security.rate_limiter import (
     limiter,
     too_many_requests_responses,
 )
+from app.contexts.user.adapters.primary.api.dependencies import get_user_service
 from app.contexts.user.adapters.primary.api.refresh_cookie import (
     REFRESH_COOKIE_NAME,
     clear_refresh_cookie,
@@ -71,10 +72,6 @@ VERIFY_EMAIL_URL = os.environ.get("VERIFY_EMAIL_URL") or "http://localhost:5173/
 PASSWORD_RESET_URL = os.environ.get("PASSWORD_RESET_URL") or "http://localhost:5173/reset-password"
 
 
-def get_service(db: AsyncSession = Depends(get_db)) -> UserService:
-    return UserService(SqlAlchemyUserRepository(db), SqlAlchemyRefreshTokenRepository(db))
-
-
 def get_password_reset_service(db: AsyncSession = Depends(get_db)) -> PasswordResetService:
     return PasswordResetService(
         SqlAlchemyUserRepository(db),
@@ -119,7 +116,7 @@ async def register(
     request: Request,
     body: UserCreate,
     response: Response,
-    service: UserService = Depends(get_service),
+    service: UserService = Depends(get_user_service),
     verification: EmailVerificationService = Depends(get_verification_service),
 ):
     """Create an account and sign it in, in one call.
@@ -165,7 +162,7 @@ async def login(
     request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    service: UserService = Depends(get_service),
+    service: UserService = Depends(get_user_service),
 ):
     """Sign in with a username and password.
 
@@ -204,7 +201,7 @@ async def login(
 async def refresh(
     response: Response,
     refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
-    service: UserService = Depends(get_service),
+    service: UserService = Depends(get_user_service),
 ):
     """Get a new access token from the refresh cookie, with no `Authorization` header.
 
@@ -247,7 +244,7 @@ async def refresh(
 async def logout(
     response: Response,
     refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
-    service: UserService = Depends(get_service),
+    service: UserService = Depends(get_user_service),
 ) -> None:
     """End this session: revoke it server-side, then clear the cookie.
 
@@ -324,7 +321,7 @@ async def resend_verification(
     response: Response,
     current_user: User = Depends(get_current_user),
     refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
-    service: UserService = Depends(get_service),
+    service: UserService = Depends(get_user_service),
     verification: EmailVerificationService = Depends(get_verification_service),
 ):
     """Send another link to the signed-in user's own address.
