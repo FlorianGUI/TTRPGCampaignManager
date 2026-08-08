@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { DISCORD_SIGN_IN_URL, rememberDestination, takeDestination } from './sso.js'
+import {
+  DISCORD_SIGN_IN_URL,
+  GOOGLE_SIGN_IN_URL,
+  rememberDestination,
+  takeDestination,
+} from './sso.js'
 import { API_URL } from './http.js'
 
 describe('DISCORD_SIGN_IN_URL', () => {
@@ -15,6 +20,22 @@ describe('DISCORD_SIGN_IN_URL', () => {
 
   it('carries no secret', () => {
     expect(DISCORD_SIGN_IN_URL).not.toMatch(/secret|client_id|token/i)
+  })
+})
+
+describe('GOOGLE_SIGN_IN_URL', () => {
+  it('points at the API rather than at Google', () => {
+    expect(GOOGLE_SIGN_IN_URL).toBe(`${API_URL}/auth/google/authorize`)
+  })
+
+  it('carries no secret', () => {
+    /*
+     * Google's client id is not secret, but it does not belong in the bundle
+     * either: the authorize URL is built server-side so the scopes, the PKCE
+     * challenge and the client id all live in one place that can change without
+     * a frontend deploy.
+     */
+    expect(GOOGLE_SIGN_IN_URL).not.toMatch(/secret|client_id|token/i)
   })
 })
 

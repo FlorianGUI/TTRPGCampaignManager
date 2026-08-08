@@ -18,6 +18,13 @@ import { safeRedirect } from '../router/redirect.js'
  */
 export const DISCORD_SIGN_IN_URL = `${API_URL}/auth/discord/authorize`
 
+/*
+ * The same for Google (#36). Two constants rather than a `signInUrl(provider)`
+ * helper: there are two of them, they are used once each, and a function would
+ * accept a provider name this app does not offer.
+ */
+export const GOOGLE_SIGN_IN_URL = `${API_URL}/auth/google/authorize`
+
 // Session-scoped and tab-scoped, like the thing it stands for. It exists for the
 // length of one round trip and should not outlive the tab that started it.
 const DESTINATION_KEY = 'ttrpg.sso.destination'

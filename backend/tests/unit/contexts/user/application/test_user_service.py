@@ -704,6 +704,43 @@ class TestSignInWithProviderAndAnExistingAccount:
 
         assert (await service.get_by_token(session.access_token)).id == local.id
 
+    async def test_two_providers_reach_one_account(
+        self, service: UserService, users: FakeUserRepository, identities: FakeIdentityRepository
+    ):
+        """Signing in with Discord and later with Google is one account, not two.
+
+        This is what `user_identities` being a table rather than a column on `users` buys,
+        and it is worth a test of its own because the mechanism is indirect: the Discord
+        sign-in sets `email_verified` on the strength of Discord's own `verified` claim, and
+        it is *that* flag the Google sign-in then satisfies the both-sides-verified rule
+        against. Nothing links the two providers to each other — they meet at the address,
+        once, and only because both had confirmed it.
+        """
+        first = await service.sign_in_with_provider(Provider.DISCORD, discord_profile(subject="discord-1"))
+        me = await service.get_by_token(first.access_token)
+
+        second = await service.sign_in_with_provider(Provider.GOOGLE, discord_profile(subject="google-9"))
+
+        assert (await service.get_by_token(second.access_token)).id == me.id
+        assert {(i.provider, i.subject) for i in await identities.find_for_user(me.id)} == {
+            (Provider.DISCORD, "discord-1"),
+            (Provider.GOOGLE, "google-9"),
+        }
+        # And no second account was created along the way.
+        assert await users.find_by_username("aragorn-elessar-2") is None
+
+    async def test_a_second_provider_does_not_disturb_the_first(self, service: UserService):
+        """Linking adds a way in and takes none away — the Discord identity still signs in
+        after Google has attached to the same account."""
+        first = await service.sign_in_with_provider(Provider.DISCORD, discord_profile(subject="discord-1"))
+        await service.sign_in_with_provider(Provider.GOOGLE, discord_profile(subject="google-9"))
+
+        again = await service.sign_in_with_provider(Provider.DISCORD, discord_profile(subject="discord-1"))
+
+        assert (await service.get_by_token(again.access_token)).id == (
+            await service.get_by_token(first.access_token)
+        ).id
+
     async def test_refuses_to_link_to_an_account_that_has_not_proved_its_address(
         self, service: UserService, identities: FakeIdentityRepository
     ):

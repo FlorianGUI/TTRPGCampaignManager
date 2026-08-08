@@ -59,6 +59,13 @@ services:
       # Where the callback hands the browser back to. A page in the SPA, which turns the
       # refresh cookie it was just given into an access token — which is what keeps the
       # token out of the URL, and so out of history and every proxy log on the way.
+      # Sign in with Google (#36). Same shape as Discord: credentials with no default, and
+      # a redirect URI that must match the Cloud console entry character for character.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://api.lastdawn.fr/auth/google/callback}
+      # Shared by every provider: what happens after a sign-in does not depend on which one
+      # it was, so there is one landing page and one variable naming it.
       SSO_REDIRECT_URL: ${SSO_REDIRECT_URL:-https://lastdawn.fr/auth/callback}
       # Whose X-Forwarded-For uvicorn believes. Nothing here reaches it from 127.0.0.1 — the
       # published port above is forwarded by docker-proxy, so the peer is the bridge gateway

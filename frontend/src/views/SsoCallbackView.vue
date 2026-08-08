@@ -16,10 +16,25 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import { useAuthStore } from '../stores/auth.js'
+import { forgetCurrentCampaign } from '../stores/currentCampaign.js'
 import { takeDestination } from '../api/sso.js'
 
 const auth = useAuthStore()
 const router = useRouter()
+
+/*
+ * Which provider it was, for the sentences below.
+ *
+ * The API names it on the way back because this page cannot know: the round trip
+ * left this origin, so whichever button was pressed is two navigations ago. It
+ * is a provider's name and nothing more — no id, no scope, nothing secret.
+ *
+ * Anything unrecognised falls back to "the provider", which reads acceptably in
+ * every sentence here. That matters because the value arrives in a URL and a URL
+ * is whatever someone typed: interpolating it raw would put attacker-chosen text
+ * into our own error copy.
+ */
+const PROVIDERS = { discord: 'Discord', google: 'Google' }
 
 /*
  * The API's codes, plus `no-session` for the case it cannot report: the callback
@@ -27,54 +42,70 @@ const router = useRouter()
  * here rather than assembled from the code, because these are sentences a person
  * reads at the moment something went wrong, and each one has a different next
  * step — which is the only reason the backend sends a code instead of prose.
+ *
+ * `{provider}` is filled in below. A placeholder rather than a template literal
+ * because these are the strings a translation file would eventually hold, and a
+ * translator needs the whole sentence, not a fragment either side of a join.
  */
 const MESSAGES = {
   cancelled: {
     title: 'Sign-in cancelled',
-    detail: 'You did not authorise the app at Discord, so nothing has changed here.',
+    detail: 'You did not authorise the app at {provider}, so nothing has changed here.',
   },
   'provider-unavailable': {
-    title: 'Discord did not answer',
+    title: '{provider} did not answer',
     detail:
-      'We could not reach Discord just now. Nothing is wrong with your account — try again shortly.',
+      'We could not reach {provider} just now. Nothing is wrong with your account — try again shortly.',
   },
   'no-email': {
-    title: 'Your Discord account has no email address',
+    title: 'Your {provider} account has no email address',
     detail:
-      'An account here needs one, for password resets and confirmations. Add an address to Discord and try again, or sign in with a password instead.',
+      'An account here needs one, for password resets and confirmations. Add an address to {provider} and try again, or sign in with a password instead.',
   },
   'unverified-email': {
-    title: 'Discord has not confirmed your address',
+    title: '{provider} has not confirmed your address',
     detail:
-      'We only accept an address the provider has confirmed, so that nobody can reach an account by typing someone else’s address into a profile. Confirm it with Discord, then come back.',
+      'We only accept an address the provider has confirmed, so that nobody can reach an account by typing someone else’s address into a profile. Confirm it with {provider}, then come back.',
   },
   'email-in-use': {
     title: 'That address already belongs to an account here',
     detail:
-      'The account has not confirmed the address yet, so we cannot safely link it to Discord. Sign in with your password, confirm your address, and Discord will link to it after that.',
+      'The account has not confirmed the address yet, so we cannot safely link it to {provider}. Sign in with your password, confirm your address, and {provider} will link to it after that.',
   },
   'no-session': {
     title: 'The sign-in did not stick',
-    detail: 'Discord signed you in, but the session did not reach this tab. Try signing in again.',
+    detail:
+      '{provider} signed you in, but the session did not reach this tab. Try signing in again.',
   },
 }
 
 const FALLBACK = {
   title: 'Something went wrong',
-  detail: 'We could not finish signing you in with Discord. Try again shortly.',
+  detail: 'We could not finish signing you in with {provider}. Try again shortly.',
+}
+
+function fill(message, provider) {
+  const name = PROVIDERS[provider] ?? 'the provider'
+
+  return {
+    title: message.title.replaceAll('{provider}', name),
+    detail: message.detail.replaceAll('{provider}', name),
+  }
 }
 
 const failure = ref(null)
 
 onMounted(async () => {
-  const error = new URLSearchParams(window.location.search).get('error')
+  const query = new URLSearchParams(window.location.search)
+  const error = query.get('error')
+  const provider = query.get('provider')
 
   // Out of the address bar either way: it is noise on a URL somebody may bookmark
   // or share, and a stale code shown again after a reload would be a lie.
   window.history.replaceState({}, '', window.location.pathname)
 
   if (error) {
-    failure.value = MESSAGES[error] ?? FALLBACK
+    failure.value = fill(MESSAGES[error] ?? FALLBACK, provider)
     return
   }
 
@@ -88,9 +119,26 @@ onMounted(async () => {
   await auth.boot()
 
   if (!auth.isSignedIn) {
-    failure.value = MESSAGES['no-session']
+    failure.value = fill(MESSAGES['no-session'], provider)
     return
   }
+
+  /*
+   * A provider sign-in is a sign-in, and it has to forget the last campaign the
+   * way `logIn` does — but it cannot rely on that, because it never calls it.
+   * The session arrives through `boot()`, which is the same call a returning
+   * visitor's cold open makes, and that one must *not* forget: resuming where
+   * you left off is the whole point of it.
+   *
+   * So the difference is drawn here, at the one place that knows it: reaching
+   * this line means somebody just came back from a provider, not that a cookie
+   * was still good. Without it, signing in on a shared browser would drop you
+   * into whichever campaign the last person was reading (#59).
+   *
+   * Provider-agnostic on purpose — this page is the single landing point for
+   * every provider, so a new one is covered the day it is added.
+   */
+  forgetCurrentCampaign()
 
   // `replace`, so Back from the app does not return to a callback URL whose
   // authorization code was spent the moment it was used.

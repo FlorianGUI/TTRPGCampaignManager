@@ -15,7 +15,11 @@ asyncpg = "^0.31.0"
 alembic = "^1.18.0"
 slowapi = "^0.1.9"
 bcrypt = "^5.0.0"
-pyjwt = "^2.13.0"
+# The `crypto` extra, which is `cryptography`, and it is not optional from #36 onwards.
+# Our own access tokens are HS256 and need none of it — but Google signs an id_token with
+# RS256, and pyjwt without this extra raises for the whole RSA family rather than merely
+# failing to verify. Bare `pyjwt` would have been an adapter that could not work at all.
+pyjwt = {extras = ["crypto"], version = "^2.13.0"}
 python-multipart = "^0.0.32"
 email-validator = "^2.3.0"
 # A runtime dependency, not a testing one. It sat in the dev group until #39, which meant

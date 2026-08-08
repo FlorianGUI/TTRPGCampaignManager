@@ -4,6 +4,7 @@ from typing import Literal, NamedTuple, TypedDict
 from fastapi import Response
 
 from app.common.security.pkce import challenge_for, create_verifier
+from app.contexts.user.domain.identity import Provider
 
 STATE_COOKIE_NAME = "sso"
 
@@ -12,10 +13,11 @@ STATE_COOKIE_NAME = "sso"
 # the rest of the day.
 _MAX_AGE_SECONDS = 600
 
-# The two halves are one cookie, joined by a character that cannot occur in either — both
-# are `token_urlsafe`, whose alphabet is `A-Za-z0-9_-`. A separator that could appear in a
-# value would make the split ambiguous, and the ambiguous case is a state comparison against
-# the wrong half of the string.
+# The three parts are one cookie, joined by a character that cannot occur in any of them:
+# the two secrets are `token_urlsafe`, whose alphabet is `A-Za-z0-9_-`, and a `Provider`
+# value is a lowercase word. A separator that could appear in a value would make the split
+# ambiguous, and the ambiguous case is a state comparison against the wrong piece of the
+# string — which is why this splits on an exact count rather than partitioning loosely.
 _SEPARATOR = "."
 
 
@@ -47,22 +49,31 @@ _ATTRIBUTES: _Attributes = {"httponly": True, "secure": True, "samesite": "lax",
 
 
 class SignInAttempt(NamedTuple):
-    """The two secrets a sign-in has to remember while the person is away at the provider."""
+    """What a sign-in has to remember while the person is away at the provider."""
 
+    provider: Provider
     state: str
     verifier: str
 
 
-def begin() -> SignInAttempt:
-    """Mint the pair that ties a callback back to the request that started it.
+def begin(provider: Provider) -> SignInAttempt:
+    """Mint what ties a callback back to the request that started it.
 
-    They answer different questions and neither replaces the other. `state` proves the
-    callback belongs to a sign-in *this browser* started, which is what stops an attacker
-    feeding their own authorization code to a victim's session and quietly signing them into
-    the attacker's account. `verifier` proves the code is being redeemed by whoever asked
-    for it, which is what stops an intercepted code being spent by anyone else.
+    The two secrets answer different questions and neither replaces the other. `state`
+    proves the callback belongs to a sign-in *this browser* started, which is what stops an
+    attacker feeding their own authorization code to a victim's session and quietly signing
+    them into the attacker's account. `verifier` proves the code is being redeemed by
+    whoever asked for it, which is what stops an intercepted code being spent by anyone else.
+
+    **The provider is remembered too, and that only started mattering with the second one
+    (#36).** All the callbacks share one cookie, one name and one path, so without this a
+    sign-in begun at Google could be completed at Discord's callback — the mix-up attack, in
+    which a code issued by one provider is redeemed at another. In practice the token
+    exchange would fail anyway, because each callback redeems with its own credentials at
+    its own endpoint. But "it fails at the next step for an unrelated reason" is not a
+    control; this is, and it costs one field.
     """
-    return SignInAttempt(state=secrets.token_urlsafe(32), verifier=create_verifier())
+    return SignInAttempt(provider=provider, state=secrets.token_urlsafe(32), verifier=create_verifier())
 
 
 def challenge(attempt: SignInAttempt) -> str:
@@ -79,18 +90,19 @@ def remember(response: Response, attempt: SignInAttempt) -> None:
     """
     response.set_cookie(
         STATE_COOKIE_NAME,
-        f"{attempt.state}{_SEPARATOR}{attempt.verifier}",
+        _SEPARATOR.join((attempt.provider.value, attempt.state, attempt.verifier)),
         max_age=_MAX_AGE_SECONDS,
         **_ATTRIBUTES,
     )
 
 
-def recall(cookie: str | None, presented_state: str | None) -> str | None:
+def recall(cookie: str | None, presented_state: str | None, provider: Provider) -> str | None:
     """The verifier, if the callback really belongs to the sign-in this browser began.
 
     Returns `None` for every way that can fail — no cookie, a malformed one, a missing or
-    mismatched `state` — because the caller does the same thing in all of them and telling
-    them apart would describe the check to whoever is probing it.
+    mismatched `state`, a sign-in started at a different provider — because the caller does
+    the same thing in all of them and telling them apart would describe the check to whoever
+    is probing it.
 
     `compare_digest` rather than `==` on principle rather than because a timing attack on
     this is plausible: `state` is 256 bits of randomness, so nobody is walking it out a byte
@@ -99,8 +111,11 @@ def recall(cookie: str | None, presented_state: str | None) -> str | None:
     """
     if cookie is None or presented_state is None:
         return None
-    state, separator, verifier = cookie.partition(_SEPARATOR)
-    if not separator:
+    parts = cookie.split(_SEPARATOR)
+    if len(parts) != 3:
+        return None
+    began_with, state, verifier = parts
+    if began_with != provider.value:
         return None
     if not secrets.compare_digest(state, presented_state):
         return None

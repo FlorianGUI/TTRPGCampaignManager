@@ -1,34 +1,48 @@
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException, Response
 
+from app.common.ids import SessionId
 from app.contexts.user.adapters.primary.api import oauth_state
 from app.contexts.user.adapters.primary.api.routers.auth import (
     NO_ACCOUNT,
     NO_USERNAME,
     discord_callback,
     get_discord_provider,
+    get_google_provider,
+    google_callback,
 )
 from app.contexts.user.adapters.secondary.sso.discord_provider import DiscordIdentityProvider
+from app.contexts.user.adapters.secondary.sso.google_provider import GoogleIdentityProvider
 from app.contexts.user.application.user_service import InvalidCredentialsError, UsernameUnavailableError
 from app.contexts.user.domain.identity import Provider
 from app.contexts.user.domain.ports.identity_provider import IdentityProvider, ProviderProfile
+from app.contexts.user.domain.session import Session
 
 """The callback's remaining answers, reached by calling the route rather than the app.
 
-Everything a person can actually cause is covered by the acceptance feature, which drives
-the whole flow through HTTP. These two are the ones a scenario cannot stage without a
+Everything a person can actually cause is covered by the two acceptance features, which
+drive the whole flow through HTTP. These are the ones a scenario cannot stage without a
 contrivance: fifty usernames colliding, and an identity row that outlived the account it
 named. Both are real branches with a real answer, and the answer is the point — they must
 come back as an error the app can explain, not as a 500.
+
+Written against the Discord route because the flow behind both is one function; a copy of
+each assertion under Google would assert the same lines twice. What *is* worth checking per
+provider is that each route reaches its own adapter, which is the last class here.
 """
 
 
 class StubProvider(IdentityProvider):
+    def __init__(self, speaks_for: Provider = Provider.DISCORD) -> None:
+        self._speaks_for = speaks_for
+
     @property
     def provider(self) -> Provider:
-        return Provider.DISCORD
+        return self._speaks_for
 
     def authorization_url(self, state: str, code_challenge: str) -> str:
         return "https://discord.test/oauth2/authorize"
@@ -52,13 +66,29 @@ class RefusingService:
         raise self._failure
 
 
-def a_started_sign_in() -> tuple[str, str]:
-    """The `state` and the cookie a real /auth/discord/authorize would have left behind.
+class RecordingService:
+    """A user service that succeeds, and remembers which provider it was told about."""
+
+    def __init__(self, seen: list[Provider]) -> None:
+        self._seen = seen
+
+    async def sign_in_with_provider(self, provider: Provider, profile: ProviderProfile) -> Session:
+        self._seen.append(provider)
+        return Session(
+            access_token="an-access-token",
+            refresh_token="a-refresh-token",
+            expires_at=datetime.now(UTC) + timedelta(days=30),
+            session_id=SessionId(uuid4()),
+        )
+
+
+def a_started_sign_in(provider: Provider = Provider.DISCORD) -> tuple[str, str]:
+    """The `state` and the cookie a real /auth/<provider>/authorize would have left behind.
 
     Built through `remember` rather than by formatting the cookie here, so this test knows
     only what a browser knows: the value of the header it was sent.
     """
-    attempt = oauth_state.begin()
+    attempt = oauth_state.begin(provider)
     response = Response()
     oauth_state.remember(response, attempt)
     cookie = response.headers["set-cookie"].split(";")[0].split("=", 1)[1]
@@ -128,24 +158,89 @@ class TestAStaleCallback:
         assert raised.value.status_code == 400
 
 
-class TestBuildingTheProvider:
-    def test_composes_the_real_thing_from_the_environment(self, monkeypatch: pytest.MonkeyPatch):
-        """The composition root, which nothing else runs.
+class TestEachRouteReachesItsOwnProvider:
+    """The one thing that genuinely differs between the two callbacks, and the one thing a
+    shared implementation could get wrong invisibly: a route wired to the other adapter
+    would still redirect, still set a cookie, and file every identity under the wrong
+    provider."""
 
-        The whole suite replaces this dependency so that no test can reach discord.com,
-        which leaves the wiring itself unexercised — and wiring that nothing runs is wiring
-        that breaks on deploy.
-        """
+    async def test_the_discord_callback_signs_in_through_discord(self):
+        seen: list[Provider] = []
+        state, cookie = a_started_sign_in(Provider.DISCORD)
+
+        await discord_callback(
+            code="an-authorization-code",
+            state=state,
+            sso=cookie,
+            provider=StubProvider(Provider.DISCORD),
+            service=RecordingService(seen),  # type: ignore[arg-type]
+        )
+
+        assert seen == [Provider.DISCORD]
+
+    async def test_the_google_callback_signs_in_through_google(self):
+        seen: list[Provider] = []
+        state, cookie = a_started_sign_in(Provider.GOOGLE)
+
+        await google_callback(
+            code="an-authorization-code",
+            state=state,
+            sso=cookie,
+            provider=StubProvider(Provider.GOOGLE),
+            service=RecordingService(seen),  # type: ignore[arg-type]
+        )
+
+        assert seen == [Provider.GOOGLE]
+
+    async def test_a_sign_in_begun_at_one_provider_cannot_finish_at_the_other(self):
+        """The cookie records which provider began the sign-in, so the mix-up shape is
+        turned away here rather than left to fail at somebody else's token endpoint."""
+        state, cookie = a_started_sign_in(Provider.GOOGLE)
+
+        with pytest.raises(HTTPException) as raised:
+            await discord_callback(
+                code="an-authorization-code",
+                state=state,
+                sso=cookie,
+                provider=StubProvider(Provider.DISCORD),
+                service=RecordingService([]),  # type: ignore[arg-type]
+            )
+
+        assert raised.value.status_code == 400
+
+
+class TestBuildingTheProviders:
+    """The composition roots, which nothing else runs.
+
+    The whole suite replaces both dependencies so that no test can reach a provider, which
+    leaves the wiring itself unexercised — and wiring that nothing runs is wiring that
+    breaks on deploy.
+    """
+
+    def test_composes_discord_from_the_environment(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("DISCORD_CLIENT_ID", "an-id")
         monkeypatch.setenv("DISCORD_CLIENT_SECRET", "a-secret")
         monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://api.example.test/auth/discord/callback")
 
         assert isinstance(get_discord_provider(), DiscordIdentityProvider)
 
-    def test_refuses_to_build_without_the_settings(self, monkeypatch: pytest.MonkeyPatch):
+    def test_composes_google_from_the_environment(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "an-id")
+        monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "a-secret")
+        monkeypatch.setenv("GOOGLE_REDIRECT_URI", "https://api.example.test/auth/google/callback")
+
+        assert isinstance(get_google_provider(), GoogleIdentityProvider)
+
+    def test_refuses_to_build_discord_without_the_settings(self, monkeypatch: pytest.MonkeyPatch):
         """A deployment that forgot them should fail where it is obvious, rather than at the
         first person who presses the button."""
         monkeypatch.delenv("DISCORD_CLIENT_ID", raising=False)
 
         with pytest.raises(KeyError, match="DISCORD_CLIENT_ID"):
             get_discord_provider()
+
+    def test_refuses_to_build_google_without_the_settings(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+
+        with pytest.raises(KeyError, match="GOOGLE_CLIENT_ID"):
+            get_google_provider()
