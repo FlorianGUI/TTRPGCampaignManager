@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import App from './App.vue'
 import AppShell from './components/AppShell.vue'
 import AuthLayout from './components/AuthLayout.vue'
+import BareLayout from './components/BareLayout.vue'
 import { useAuthStore } from './stores/auth.js'
 
 /*
@@ -30,7 +31,10 @@ async function mountApp({ meta = {} } = {}) {
   await router.isReady()
 
   return mount(App, {
-    global: { plugins: [router], stubs: { AppShell: true, AuthLayout: true, RouterView: true } },
+    global: {
+      plugins: [router],
+      stubs: { AppShell: true, AuthLayout: true, BareLayout: true, RouterView: true },
+    },
   })
 }
 
@@ -97,6 +101,26 @@ describe('App', () => {
       const app = await mountApp({ meta: { layout: 'auth' } })
 
       expect(app.findComponent(AuthLayout).attributes('sections')).toBeUndefined()
+    })
+
+    /*
+     * Home sits outside the shell (#59): its Campaign section would be four
+     * items leading nowhere before a campaign has been chosen. It is not the
+     * auth layout either — this page needs a way to sign out, and that one has
+     * no bar to put one in.
+     */
+    it('gives a route asking for the bare chrome neither of the other two', async () => {
+      const app = await mountApp({ meta: { layout: 'bare' } })
+
+      expect(app.findComponent(BareLayout).exists()).toBe(true)
+      expect(app.findComponent(AppShell).exists()).toBe(false)
+      expect(app.findComponent(AuthLayout).exists()).toBe(false)
+    })
+
+    it('does not leak the shell’s props onto the bare layout either', async () => {
+      const app = await mountApp({ meta: { layout: 'bare' } })
+
+      expect(app.findComponent(BareLayout).attributes('sections')).toBeUndefined()
     })
   })
 })

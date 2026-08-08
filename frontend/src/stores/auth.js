@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiFetch } from '../api/http.js'
+import { forgetCurrentCampaign } from './currentCampaign.js'
 
 /*
  * Who is signed in, and the access token that proves it.
@@ -36,9 +37,18 @@ export const useAuthStore = defineStore('auth', () => {
   // their own client.
   let renewal = null
 
+  /*
+   * `forgetCurrentCampaign` as well as the in-memory pair, because the remembered
+   * campaign is the one thing this store leaves on disk. It is only a uuid, but
+   * it is a uuid that decides where the *next* person to open this browser lands
+   * — and "the app opened someone else's campaign" is not a sentence anyone
+   * should have to hear. Everything else here has always been memory-only, which
+   * is why this is the one line that needs saying out loud (#35).
+   */
   function clear() {
     user.value = null
     token.value = null
+    forgetCurrentCampaign()
   }
 
   /*
@@ -119,10 +129,21 @@ export const useAuthStore = defineStore('auth', () => {
     return booting
   }
 
+  /*
+   * Signing in ends whatever the last session remembered.
+   *
+   * Here rather than only in `logOut` because the two are not the same event:
+   * the refresh window is absolute and does not slide, so a session that simply
+   * expires never calls logout — that person meets a login form, and without
+   * this they would be dropped straight into a campaign that may not be theirs.
+   * It is also what makes `/` show the chooser after an explicit sign-in, which
+   * is the behaviour #59 asked for, without a flag to carry across the redirect.
+   */
   async function logIn(username, password) {
     // Form-encoded, not JSON — see the note in api/http.js.
     const session = await apiFetch('/users/login', { method: 'POST', form: { username, password } })
     token.value = session.access_token
+    forgetCurrentCampaign()
     await loadUser()
   }
 

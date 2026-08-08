@@ -4,7 +4,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import AppShell from './AppShell.vue'
 import AppNav from './AppNav.vue'
-import { useAuthStore } from '../stores/auth.js'
+import {
+  forgetCurrentCampaign,
+  readCurrentCampaign,
+  rememberCurrentCampaign,
+} from '../stores/currentCampaign.js'
 
 const router = { push: vi.fn() }
 
@@ -26,15 +30,17 @@ const sections = [
   },
 ]
 
-function mountShell() {
-  // A fresh pinia per mount: the shell reads the theme store for its toggles
-  // and the auth store for signing out. setActivePinia as well as the plugin,
-  // so a test can reach the same store the component will.
+const campaign = { id: 'c-1', name: 'The Hollow Crown', description: null }
+
+function mountShell(props = {}) {
+  // A fresh pinia per mount: the shell's action cluster reads the theme store
+  // for its toggles and the auth store for signing out. setActivePinia as well
+  // as the plugin, so a test can reach the same store the component will.
   const pinia = createPinia()
   setActivePinia(pinia)
 
   return mount(AppShell, {
-    props: { sections, active: 'Session notes' },
+    props: { sections, active: 'Session notes', ...props },
     global: { plugins: [PrimeVue, pinia] },
   })
 }
@@ -110,32 +116,43 @@ describe('AppShell', () => {
     expect(wrapper.find('#shell-search-row').exists()).toBe(true)
   })
 
-  describe('signing out', () => {
+  /*
+   * The other half of putting home outside this shell (#59). Without a way
+   * back, the chooser is reachable only by signing out — and signing out is not
+   * a way back.
+   */
+  describe('the campaign chip', () => {
     beforeEach(() => {
       router.push.mockClear()
+      forgetCurrentCampaign()
     })
 
-    it('revokes the session server-side, then returns to the login page', async () => {
-      const wrapper = mountShell()
-      const auth = useAuthStore()
-      const logOut = vi.spyOn(auth, 'logOut').mockResolvedValue()
+    it('is absent until there is a campaign to name', () => {
+      expect(mountShell().find('.shell__campaign').exists()).toBe(false)
+    })
 
-      await wrapper.get('.shell__sign-out').trigger('click')
-      await wrapper.vm.$nextTick()
+    it('names the campaign it will leave, for anyone not looking at the icon', () => {
+      const wrapper = mountShell({ campaign })
+
+      expect(wrapper.get('.shell__campaign-name').text()).toBe('The Hollow Crown')
+      expect(wrapper.get('.shell__campaign-leave').attributes('aria-label')).toBe(
+        'Leave The Hollow Crown',
+      )
+    })
+
+    it('forgets the campaign on the way out, so / shows the chooser', async () => {
+      rememberCurrentCampaign(campaign.id)
+      const wrapper = mountShell({ campaign })
+
+      await wrapper.get('.shell__campaign-leave').trigger('click')
 
       /*
-       * Through the store, which calls POST /users/logout before clearing.
-       * Clearing locally alone would leave a working refresh cookie behind —
-       * the one way to log out that does not log you out (#35).
+       * Both halves matter. Navigating without forgetting would send you to a
+       * `/` that redirects straight back into the campaign you just left — an
+       * exit that cannot be used.
        */
-      expect(logOut).toHaveBeenCalled()
-      expect(router.push).toHaveBeenCalledWith({ name: 'login' })
-    })
-
-    it('is reachable and labelled without relying on the icon', () => {
-      const button = mountShell().get('.shell__sign-out')
-
-      expect(button.attributes('aria-label')).toBe('Sign out')
+      expect(readCurrentCampaign()).toBeNull()
+      expect(router.push).toHaveBeenCalledWith({ name: 'home' })
     })
   })
 })

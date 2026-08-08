@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from './auth.js'
+import {
+  forgetCurrentCampaign,
+  readCurrentCampaign,
+  rememberCurrentCampaign,
+} from './currentCampaign.js'
 import { API_URL, ApiError } from '../api/http.js'
 
 /*
@@ -259,6 +264,62 @@ describe('auth store', () => {
       await auth.logOut().catch(() => {})
 
       expect(auth.isSignedIn).toBe(false)
+    })
+  })
+
+  /*
+   * The remembered campaign is the one thing this store leaves on disk (#59).
+   * Everything else has always been memory-only, which is why these are worth
+   * asserting rather than assuming: the failure mode is not an error message,
+   * it is the app quietly opening somebody else's campaign.
+   */
+  describe('the remembered campaign', () => {
+    beforeEach(() => {
+      forgetCurrentCampaign()
+    })
+
+    it('is forgotten when a session ends', async () => {
+      serve({ 'POST /users/logout': respond(204) })
+      rememberCurrentCampaign('c-1')
+
+      await useAuthStore().logOut()
+
+      expect(readCurrentCampaign()).toBeNull()
+    })
+
+    it('is forgotten when somebody signs in', async () => {
+      serve({ 'POST /users/login': A_SESSION, 'GET /users/me': A_USER })
+      rememberCurrentCampaign('c-1')
+
+      await useAuthStore().logIn('aragorn', 'a-password')
+
+      /*
+       * Not covered by the logout case: the refresh window is absolute and does
+       * not slide, so a session that simply expires never calls logout. That
+       * person meets a login form, and without this they would be dropped into
+       * a campaign that may not be theirs.
+       */
+      expect(readCurrentCampaign()).toBeNull()
+    })
+
+    it('is forgotten when a refresh fails, which is a session ending too', async () => {
+      serve({ 'POST /users/refresh': respond(401) })
+      rememberCurrentCampaign('c-1')
+
+      await useAuthStore().boot()
+
+      expect(readCurrentCampaign()).toBeNull()
+    })
+
+    it('survives a boot that restores the session, which is the whole point', async () => {
+      serve({ 'POST /users/refresh': A_SESSION, 'GET /users/me': A_USER })
+      rememberCurrentCampaign('c-1')
+
+      await useAuthStore().boot()
+
+      // A cold open with a live cookie is the case that should land you back
+      // where you were. Clearing here would make the feature do nothing.
+      expect(readCurrentCampaign()).toBe('c-1')
     })
   })
 })
