@@ -54,6 +54,7 @@ frontend/
     api/
       http.js                      # the transport: one request, no auth state
       client.js                    # what features call: token + refresh-on-401
+      sso.js                       # where "Continue with Discord" goes, and back
     stores/
       auth.js                      # current user, in-memory access token
       theme.js                     # theme + density state, persisted

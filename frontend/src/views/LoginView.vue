@@ -16,6 +16,7 @@ import Button from 'primevue/button'
 import FormField from '../components/FormField.vue'
 import { useAuthStore } from '../stores/auth.js'
 import { safeRedirect } from '../router/redirect.js'
+import { DISCORD_SIGN_IN_URL, rememberDestination } from '../api/sso.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -34,6 +35,21 @@ function messageFor(error) {
   if (error?.status === 401) return 'That username and password do not match an account.'
 
   return 'Something went wrong signing in. Try again.'
+}
+
+/*
+ * Stash the destination before leaving this origin.
+ *
+ * The Discord round trip is a full navigation away and back, so `?redirect=`
+ * does not survive it. Without this, following a deep link while signed out
+ * would send you to Discord and set you down at the home page, having forgotten
+ * what you clicked.
+ *
+ * On the anchor's click rather than on mount, so a visitor who signs in with a
+ * password instead leaves nothing behind in storage.
+ */
+function leaveForDiscord() {
+  rememberDestination(route.query.redirect)
 }
 
 async function submit() {
@@ -69,6 +85,29 @@ async function submit() {
 
     <Button type="submit" label="Sign in" :loading="submitting" fluid />
 
+    <p class="auth-form__or"><span>or</span></p>
+
+    <!--
+      An anchor, and it has to stay one. The consent screen is a page at
+      Discord's own address that the person has to be able to read and trust, so
+      this is a top-level navigation rather than a fetch — Discord refuses to be
+      framed, and a consent prompt nobody can see is not consent.
+
+      `rel` because this leaves the app: `noopener` denies the destination a
+      handle on this window, and `noreferrer` keeps the URL we came from — which
+      carries `?redirect=` — out of Discord's logs.
+    -->
+    <Button
+      as="a"
+      :href="DISCORD_SIGN_IN_URL"
+      rel="noopener noreferrer"
+      icon="pi pi-discord"
+      label="Continue with Discord"
+      severity="secondary"
+      fluid
+      @click="leaveForDiscord"
+    />
+
     <p class="auth-form__aside">
       No account yet?
       <RouterLink :to="{ name: 'signup' }">Create one</RouterLink>.
@@ -103,6 +142,28 @@ async function submit() {
   margin: 0;
   text-align: center;
   font-size: 0.95rem;
+}
+
+/*
+ * A rule with the word sitting in it, which is the separator this design system
+ * already uses everywhere — depth comes from rules and borders here, not from a
+ * z-axis. Built from a border rather than a component so it inherits the content
+ * border colour in both schemes.
+ */
+.auth-form__or {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+}
+
+.auth-form__or::before,
+.auth-form__or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--p-content-border-color);
 }
 
 .auth-form :deep(button) {
