@@ -12,6 +12,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.contexts.user.adapters.primary.api.routers.auth import get_discord_provider
 from app.contexts.user.adapters.primary.api.routers.users import (
     get_password_reset_service,
     get_verification_service,
@@ -28,7 +29,9 @@ from app.contexts.user.adapters.secondary.persistence.refresh_token_repository i
 from app.contexts.user.adapters.secondary.persistence.user_repository import SqlAlchemyUserRepository
 from app.contexts.user.application.email_verification_service import EmailVerificationService
 from app.contexts.user.application.password_reset_service import PasswordResetService
+from app.contexts.user.domain.identity import Provider
 from app.contexts.user.domain.ports.email_sender import EmailSender
+from app.contexts.user.domain.ports.identity_provider import IdentityProvider, ProviderProfile
 from app.database import get_db
 from app.main import app
 
@@ -226,3 +229,60 @@ def no_real_mail(outbox: list[dict[str, str]]):
     yield
     app.dependency_overrides.pop(get_verification_service, None)
     app.dependency_overrides.pop(get_password_reset_service, None)
+
+
+class FakeIdentityProvider(IdentityProvider):
+    """A provider that answers from memory instead of from discord.com.
+
+    Replaces only the outbound edge, exactly as `RecordingEmailSender` does: the state
+    cookie, the PKCE pair, the redirect and every decision about which account a sign-in
+    reaches are the real ones. What is faked is the one thing a test cannot have — a person
+    consenting at a provider's own domain.
+
+    `answer` is what the next `profile` call produces. Set it to an exception to stage a
+    provider that refuses or cannot be reached.
+    """
+
+    def __init__(self) -> None:
+        self.answer: ProviderProfile | Exception = ProviderProfile(
+            subject="80351110224678912",
+            email="aragorn@gondor.test",
+            email_verified=True,
+            display_name="Aragorn Elessar",
+        )
+        # Every (code, verifier) pair redeemed, so a test can prove the verifier that came
+        # back is the one minted at the start rather than something the caller supplied.
+        self.redeemed: list[tuple[str, str]] = []
+
+    @property
+    def provider(self) -> Provider:
+        return Provider.DISCORD
+
+    def authorization_url(self, state: str, code_challenge: str) -> str:
+        return f"https://discord.test/oauth2/authorize?state={state}&code_challenge={code_challenge}"
+
+    async def profile(self, code: str, code_verifier: str) -> ProviderProfile:
+        self.redeemed.append((code, code_verifier))
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+@pytest.fixture
+def sso_provider() -> FakeIdentityProvider:
+    """What Discord would have said, for the scenario to arrange."""
+    return FakeIdentityProvider()
+
+
+@pytest.fixture(autouse=True)
+def no_real_sso(sso_provider: FakeIdentityProvider):
+    """Nothing in this suite reaches discord.com, ever.
+
+    Autouse and at the root for the same reason `no_real_mail` is. The real adapter reads
+    `DISCORD_CLIENT_SECRET` at construction, so on a machine that has one configured a test
+    which merely wandered onto the callback would post a fixture's authorization code to a
+    live token endpoint. A fixture you had to remember would be one omission away from that.
+    """
+    app.dependency_overrides[get_discord_provider] = lambda: sso_provider
+    yield
+    app.dependency_overrides.pop(get_discord_provider, None)

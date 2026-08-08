@@ -14,8 +14,11 @@ from app.common.security.security import (
     hash_refresh_token,
     verify_password,
 )
+from app.contexts.user.domain.identity import Identity, Provider
+from app.contexts.user.domain.ports.identity_provider import ProviderProfile
+from app.contexts.user.domain.ports.identity_repository import IdentityRepository
 from app.contexts.user.domain.ports.refresh_token_repository import RefreshTokenRepository
-from app.contexts.user.domain.ports.user_repository import UsernameTakenError, UserRepository
+from app.contexts.user.domain.ports.user_repository import EmailTakenError, UsernameTakenError, UserRepository
 from app.contexts.user.domain.refresh_token import RefreshToken
 from app.contexts.user.domain.session import Session
 from app.contexts.user.domain.user import User
@@ -54,10 +57,59 @@ class SessionNotRenewableError(Exception):
     """
 
 
+class ProviderAddressMissingError(Exception):
+    """The provider signed somebody in but gave us no address to attach the account to.
+
+    Discord specifically: `email` comes back `null` when the account has none, and the
+    account row needs one — `users.email` is NOT NULL and unique, deliberately, because an
+    address is what password reset and verification identify a person by (#37).
+
+    The sign-in is refused rather than worked around. The alternatives were an account with
+    no address, which makes both of those flows ambiguous for every account, and prompting
+    for one, which needs somewhere to park a half-finished sign-up. Refusing is the smaller
+    commitment and the only one that can be loosened later without a migration to undo.
+    """
+
+
+class ProviderAddressUnverifiedError(Exception):
+    """The provider handed over an address it has not itself confirmed.
+
+    Refused for both of the things it could otherwise do. It must not link to an existing
+    local account — that is account takeover by typing somebody else's address into a
+    provider profile, and it is the reason `email_verified` exists at all. And it must not
+    create a *new* account either, because `users.email` is unique: an unverified address
+    written down here is an address its real owner can no longer register with.
+
+    Not a dead end in practice. Discord exposes `verified` precisely because it asks people
+    to confirm, so the way through is to confirm the address there and come back.
+    """
+
+
+class ProviderAccountUnlinkableError(Exception):
+    """The provider's address already belongs to a local account that has not proved it.
+
+    Auto-linking on a matching address is a known account-takeover route, and it is only
+    safe when *both* sides are verified: the provider has confirmed the address reaches this
+    person, and the local account has confirmed the same thing through #38. This is the case
+    where the provider's half is good and the local half is not.
+
+    Nothing safe is available here. Linking would hand the account to whoever holds the
+    provider profile; creating a second account cannot happen, because the address is
+    unique. So the sign-in is refused and the way through is to verify the local account —
+    which is a thing only its real owner can do, which is the point.
+    """
+
+
 class UserService:
-    def __init__(self, repository: UserRepository, sessions: RefreshTokenRepository) -> None:
+    def __init__(
+        self,
+        repository: UserRepository,
+        sessions: RefreshTokenRepository,
+        identities: IdentityRepository,
+    ) -> None:
         self._repository = repository
         self._sessions = sessions
+        self._identities = identities
 
     async def register(self, username: str, email: str, password: str) -> Session:
         """Create the account and hand back the tokens that sign it in.
@@ -129,6 +181,85 @@ class UserService:
         if user is None or user.hashed_password is None or not verify_password(password, user.hashed_password):
             raise InvalidCredentialsError(username)
         return await self._begin_session(user)
+
+    async def sign_in_with_provider(self, provider: Provider, profile: ProviderProfile) -> Session:
+        """Sign in whoever a provider has just vouched for, creating the account if needed.
+
+        The fourth way in, and it ends where the other three do — `_begin_session` — so what
+        an SSO caller receives is indistinguishable from a password login downstream: same
+        access token, same refresh cookie, same logout. Minting an access token here instead
+        would compile and pass and produce accounts that work until the first page reload.
+
+        **The subject lookup comes first, and it is the only lookup a returning user gets.**
+        Once an identity exists, the address on the profile is not consulted at all — not to
+        confirm it, not to update the account, not to notice it changed. A `sub` is the
+        provider's permanent name for a person; an address is a mutable attribute that can
+        be reassigned to somebody else entirely. Reading the address on the way in would
+        make a sign-in depend on a value the account holder does not control, which is the
+        takeover route this whole arrangement exists to close.
+
+        Everything address-shaped therefore belongs to the first sign-in only, and lives in
+        `_account_for` below.
+        """
+        known = await self._identities.find_by_subject(provider, profile.subject)
+        if known is None:
+            return await self._begin_session(await self._account_for(provider, profile))
+
+        user = await self._repository.find_by_id(known.user_id)
+        if user is None:
+            # An identity pointing at no account: the user was removed and this row outlived
+            # it. There is nothing to sign in to, and the answer is the one a password login
+            # gives for an account that is gone rather than a 500 for an inconsistency the
+            # person signing in can do nothing about.
+            raise InvalidCredentialsError(profile.subject)
+        return await self._begin_session(user)
+
+    async def _account_for(self, provider: Provider, profile: ProviderProfile) -> User:
+        """Which local account a *first* sign-in from this provider reaches.
+
+        Three outcomes and they are deliberately not symmetrical, because the risks are not.
+        Creating an account is cheap and reversible. Linking to one that already exists hands
+        over everything in it, so it is allowed on exactly one condition — both sides have
+        proved the address — and refused in every other case rather than made to work.
+
+        Read the two guards at the top as one rule: an address this provider has not
+        confirmed is not usable for anything here. It cannot link, for the obvious reason,
+        and it cannot start a new account either, because `users.email` is unique — writing
+        an unconfirmed address down would let anyone lock its real owner out of registering
+        by typing it into a provider profile.
+        """
+        if profile.email is None:
+            raise ProviderAddressMissingError(provider)
+        if not profile.email_verified:
+            raise ProviderAddressUnverifiedError(provider)
+        address = profile.email
+
+        existing = await self._repository.find_by_email(address)
+        if existing is not None:
+            if not existing.email_verified:
+                raise ProviderAccountUnlinkableError(provider)
+            return await self._link(existing, provider, profile.subject)
+
+        async def claim(username: str) -> User:
+            created = await self._repository.save(
+                # Verified on arrival, because the provider just said so and we checked.
+                # This is the one place `email_verified` may be set without a link being
+                # followed, and it is why the guard above is not optional.
+                User(username=username, email=address, email_verified=True)
+            )
+            return await self._link(created, provider, profile.subject)
+
+        try:
+            return await self.claim_username(profile.display_name, claim)
+        except EmailTakenError:
+            # The address was free when it was looked up and is not any more — an ordinary
+            # registration landed in between. Same answer as finding it in the first place:
+            # the account exists and has not proved this address, so nothing may be linked.
+            raise ProviderAccountUnlinkableError(provider) from None
+
+    async def _link(self, user: User, provider: Provider, subject: str) -> User:
+        await self._identities.save(Identity(user_id=user.id, provider=provider, subject=subject))
+        return user
 
     async def refresh(self, refresh_token: str) -> Session:
         """Trade a refresh token for a new access token and a replacement refresh token.
