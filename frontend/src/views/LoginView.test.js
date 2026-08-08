@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import LoginView from './LoginView.vue'
 import { ApiError } from '../api/http.js'
-import { DISCORD_SIGN_IN_URL, takeDestination } from '../api/sso.js'
+import { DISCORD_SIGN_IN_URL, GOOGLE_SIGN_IN_URL, takeDestination } from '../api/sso.js'
 import { useAuthStore } from '../stores/auth.js'
 
 const router = { replace: vi.fn() }
@@ -121,7 +121,7 @@ describe('LoginView', () => {
     expect(router.replace).toHaveBeenCalledWith('/')
   })
 
-  describe('continuing with Discord', () => {
+  describe('continuing with a provider', () => {
     beforeEach(() => {
       sessionStorage.clear()
     })
@@ -131,13 +131,13 @@ describe('LoginView', () => {
      * The handler still runs, which is what these assert on — this just stops the
      * default action it has no way to perform, and the noise that comes with it.
      */
-    async function clickDiscord(view) {
-      const link = view.find(`a[href="${DISCORD_SIGN_IN_URL}"]`)
+    async function clickProvider(view, href = DISCORD_SIGN_IN_URL) {
+      const link = view.find(`a[href="${href}"]`)
       link.element.addEventListener('click', (event) => event.preventDefault())
       await link.trigger('click')
     }
 
-    it('offers it as a link, not a fetch', () => {
+    it('offers Discord as a link, not a fetch', () => {
       /*
        * The consent screen is a page at Discord's own address that the person
        * has to be able to read and trust. Discord refuses to be framed, and a
@@ -150,19 +150,52 @@ describe('LoginView', () => {
       expect(link.text()).toContain('Continue with Discord')
     })
 
-    it('does not hand the destination a handle on this window, or our URL', () => {
-      // Our URL carries `?redirect=`, which is nobody's business at Discord.
-      const rel = mountView().find(`a[href="${DISCORD_SIGN_IN_URL}"]`).attributes('rel')
+    it('offers Google the same way', () => {
+      const link = mountView().find(`a[href="${GOOGLE_SIGN_IN_URL}"]`)
 
-      expect(rel).toContain('noopener')
-      expect(rel).toContain('noreferrer')
+      expect(link.exists()).toBe(true)
+      expect(link.text()).toContain('Continue with Google')
+    })
+
+    it('puts Discord first', () => {
+      /*
+       * This is a campaign manager and its players already organise on Discord,
+       * so it is the account most of them will reach for. Not a strong claim —
+       * but the order is a choice, and a choice nothing asserts is a choice that
+       * changes by accident the next time someone edits the template.
+       */
+      const hrefs = mountView()
+        .findAll('a')
+        .map((link) => link.attributes('href'))
+
+      expect(hrefs.indexOf(DISCORD_SIGN_IN_URL)).toBeLessThan(hrefs.indexOf(GOOGLE_SIGN_IN_URL))
+    })
+
+    it('stashes the destination from the Google link too', async () => {
+      query = { redirect: '/library' }
+
+      const view = mountView()
+      await clickProvider(view, GOOGLE_SIGN_IN_URL)
+
+      expect(takeDestination()).toBe('/library')
+    })
+
+    it('does not hand either destination a handle on this window, or our URL', () => {
+      // Our URL carries `?redirect=`, which is nobody's business at a provider.
+      const view = mountView()
+
+      for (const href of [DISCORD_SIGN_IN_URL, GOOGLE_SIGN_IN_URL]) {
+        const rel = view.find(`a[href="${href}"]`).attributes('rel')
+        expect(rel, href).toContain('noopener')
+        expect(rel, href).toContain('noreferrer')
+      }
     })
 
     it('stashes where the guard was sending them, which the round trip would lose', async () => {
       query = { redirect: '/library?q=owlbear' }
 
       const view = mountView()
-      await clickDiscord(view)
+      await clickProvider(view)
 
       expect(takeDestination()).toBe('/library?q=owlbear')
     })
@@ -179,7 +212,7 @@ describe('LoginView', () => {
       query = { redirect: '//evil.example' }
 
       const view = mountView()
-      await clickDiscord(view)
+      await clickProvider(view)
 
       expect(takeDestination()).toBe('/')
     })

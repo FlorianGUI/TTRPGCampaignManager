@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.contexts.user.adapters.primary.api.routers.auth import get_discord_provider
+from app.contexts.user.adapters.primary.api.routers.auth import get_discord_provider, get_google_provider
 from app.contexts.user.adapters.primary.api.routers.users import (
     get_password_reset_service,
     get_verification_service,
@@ -243,7 +243,8 @@ class FakeIdentityProvider(IdentityProvider):
     provider that refuses or cannot be reached.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, speaks_for: Provider = Provider.DISCORD) -> None:
+        self._speaks_for = speaks_for
         self.answer: ProviderProfile | Exception = ProviderProfile(
             subject="80351110224678912",
             email="aragorn@gondor.test",
@@ -256,10 +257,10 @@ class FakeIdentityProvider(IdentityProvider):
 
     @property
     def provider(self) -> Provider:
-        return Provider.DISCORD
+        return self._speaks_for
 
     def authorization_url(self, state: str, code_challenge: str) -> str:
-        return f"https://discord.test/oauth2/authorize?state={state}&code_challenge={code_challenge}"
+        return f"https://{self._speaks_for}.test/oauth2/authorize?state={state}&code_challenge={code_challenge}"
 
     async def profile(self, code: str, code_verifier: str) -> ProviderProfile:
         self.redeemed.append((code, code_verifier))
@@ -271,18 +272,36 @@ class FakeIdentityProvider(IdentityProvider):
 @pytest.fixture
 def sso_provider() -> FakeIdentityProvider:
     """What Discord would have said, for the scenario to arrange."""
-    return FakeIdentityProvider()
+    return FakeIdentityProvider(Provider.DISCORD)
+
+
+@pytest.fixture
+def google_provider() -> FakeIdentityProvider:
+    """The same for Google.
+
+    Its own instance rather than one shared object with a switch on it, so a scenario that
+    arranges what Discord knows cannot silently be answering as Google — which is exactly
+    the confusion the cross-provider scenarios exist to rule out.
+    """
+    return FakeIdentityProvider(Provider.GOOGLE)
 
 
 @pytest.fixture(autouse=True)
-def no_real_sso(sso_provider: FakeIdentityProvider):
-    """Nothing in this suite reaches discord.com, ever.
+def no_real_sso(sso_provider: FakeIdentityProvider, google_provider: FakeIdentityProvider):
+    """Nothing in this suite reaches discord.com or accounts.google.com, ever.
 
-    Autouse and at the root for the same reason `no_real_mail` is. The real adapter reads
-    `DISCORD_CLIENT_SECRET` at construction, so on a machine that has one configured a test
-    which merely wandered onto the callback would post a fixture's authorization code to a
+    Autouse and at the root for the same reason `no_real_mail` is. The real adapters read
+    their client secret at construction, so on a machine that has one configured a test
+    which merely wandered onto a callback would post a fixture's authorization code to a
     live token endpoint. A fixture you had to remember would be one omission away from that.
+
+    **Both providers, not just the first.** Registering an adapter and forgetting to add it
+    here is how the suite would start reaching for a real credential again — and unlike the
+    mail case, which failed loudly on a missing key, this one would quietly succeed against
+    whatever application the developer happens to have configured.
     """
     app.dependency_overrides[get_discord_provider] = lambda: sso_provider
+    app.dependency_overrides[get_google_provider] = lambda: google_provider
     yield
     app.dependency_overrides.pop(get_discord_provider, None)
+    app.dependency_overrides.pop(get_google_provider, None)

@@ -16,7 +16,7 @@ import Button from 'primevue/button'
 import FormField from '../components/FormField.vue'
 import { useAuthStore } from '../stores/auth.js'
 import { safeRedirect } from '../router/redirect.js'
-import { DISCORD_SIGN_IN_URL, rememberDestination } from '../api/sso.js'
+import { DISCORD_SIGN_IN_URL, GOOGLE_SIGN_IN_URL, rememberDestination } from '../api/sso.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -48,7 +48,7 @@ function messageFor(error) {
  * On the anchor's click rather than on mount, so a visitor who signs in with a
  * password instead leaves nothing behind in storage.
  */
-function leaveForDiscord() {
+function leaveForProvider() {
   rememberDestination(route.query.redirect)
 }
 
@@ -88,14 +88,17 @@ async function submit() {
     <p class="auth-form__or"><span>or</span></p>
 
     <!--
-      An anchor, and it has to stay one. The consent screen is a page at
-      Discord's own address that the person has to be able to read and trust, so
-      this is a top-level navigation rather than a fetch — Discord refuses to be
-      framed, and a consent prompt nobody can see is not consent.
+      Anchors, and they have to stay anchors. A consent screen is a page at the
+      provider's own address that the person has to be able to read and trust,
+      so this is a top-level navigation rather than a fetch — neither Google nor
+      Discord will be framed, and a consent prompt nobody can see is not consent.
 
       `rel` because this leaves the app: `noopener` denies the destination a
       handle on this window, and `noreferrer` keeps the URL we came from — which
-      carries `?redirect=` — out of Discord's logs.
+      carries `?redirect=` — out of the provider's logs.
+
+      Discord first, deliberately. This is a campaign manager and its players
+      already organise there, so it is the account most of them will reach for.
     -->
     <Button
       as="a"
@@ -105,7 +108,18 @@ async function submit() {
       label="Continue with Discord"
       severity="secondary"
       fluid
-      @click="leaveForDiscord"
+      @click="leaveForProvider"
+    />
+
+    <Button
+      as="a"
+      :href="GOOGLE_SIGN_IN_URL"
+      rel="noopener noreferrer"
+      icon="pi pi-google"
+      label="Continue with Google"
+      severity="secondary"
+      fluid
+      @click="leaveForProvider"
     />
 
     <p class="auth-form__aside">

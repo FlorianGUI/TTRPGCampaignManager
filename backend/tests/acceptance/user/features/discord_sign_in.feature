@@ -114,6 +114,7 @@ Feature: Signing in with a Discord account
     Given Discord is unreachable
     When I sign in with Discord
     Then I should be sent back with the error "provider-unavailable"
+    And the page should know it was "discord"
     And I should not be signed in
 
   Scenario: A callback nobody started is rejected

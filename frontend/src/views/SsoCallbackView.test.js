@@ -4,6 +4,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import SsoCallbackView from './SsoCallbackView.vue'
 import { useAuthStore } from '../stores/auth.js'
+import {
+  forgetCurrentCampaign,
+  readCurrentCampaign,
+  rememberCurrentCampaign,
+} from '../stores/currentCampaign.js'
 
 const router = { replace: vi.fn() }
 
@@ -99,12 +104,61 @@ describe('SsoCallbackView', () => {
 
   it('explains a cancelled sign-in instead of looking broken', async () => {
     signedIn()
-    landOn('?error=cancelled')
+    landOn('?error=cancelled&provider=discord')
 
     const view = await mountView()
 
     expect(view.text()).toContain('Sign-in cancelled')
     expect(router.replace).not.toHaveBeenCalled()
+  })
+
+  it('names the provider it actually was', async () => {
+    /*
+     * The page cannot know on its own: the round trip left this origin, so the
+     * button that started it is two navigations ago. The API says which, and
+     * "Google did not answer" beats "the provider did not answer".
+     */
+    signedIn()
+    landOn('?error=provider-unavailable&provider=google')
+
+    const view = await mountView()
+
+    expect(view.text()).toContain('Google did not answer')
+    expect(view.text()).not.toContain('Discord')
+  })
+
+  it('names Discord when it was Discord', async () => {
+    signedIn()
+    landOn('?error=provider-unavailable&provider=discord')
+
+    const view = await mountView()
+
+    expect(view.text()).toContain('Discord did not answer')
+    expect(view.text()).not.toContain('Google')
+  })
+
+  it('will not put an unknown provider name into its own copy', async () => {
+    /*
+     * The value arrives in a URL, so it is whatever someone typed. Interpolating
+     * it raw would let a crafted link write our error page for us — the sentence
+     * would carry attacker-chosen text under our own heading.
+     */
+    signedIn()
+    landOn('?error=provider-unavailable&provider=Definitely+Your+Bank')
+
+    const view = await mountView()
+
+    expect(view.text()).toContain('the provider did not answer')
+    expect(view.text()).not.toContain('Your Bank')
+  })
+
+  it('copes with no provider named at all', async () => {
+    signedIn()
+    landOn('?error=cancelled')
+
+    const view = await mountView()
+
+    expect(view.text()).toContain('the provider')
   })
 
   it('does not refresh at all when the callback reported an error', async () => {
@@ -118,7 +172,7 @@ describe('SsoCallbackView', () => {
 
   it('says what to do about an address Discord has not confirmed', async () => {
     signedIn()
-    landOn('?error=unverified-email')
+    landOn('?error=unverified-email&provider=discord')
 
     const view = await mountView()
 
@@ -133,7 +187,7 @@ describe('SsoCallbackView', () => {
      * confirm the address, and the link becomes safe.
      */
     signedIn()
-    landOn('?error=email-in-use')
+    landOn('?error=email-in-use&provider=google')
 
     const view = await mountView()
 
@@ -188,5 +242,40 @@ describe('SsoCallbackView', () => {
     await mountView()
 
     expect(window.location.search).toBe('')
+  })
+
+  /*
+   * A provider sign-in is a sign-in, and it has to forget the last campaign the
+   * way `logIn` does — but it never calls it. The session arrives through
+   * `boot()`, which is the same call a returning visitor's cold open makes, so
+   * the difference can only be drawn here (#59).
+   */
+  describe('the remembered campaign', () => {
+    beforeEach(() => {
+      forgetCurrentCampaign()
+    })
+
+    it('is forgotten, so a shared browser does not open the last person’s game', async () => {
+      signedIn()
+      landOn()
+      rememberCurrentCampaign('c-1')
+
+      await mountView()
+
+      expect(readCurrentCampaign()).toBeNull()
+    })
+
+    it('is left alone when the sign-in failed', async () => {
+      signedOut()
+      landOn('?error=cancelled')
+      rememberCurrentCampaign('c-1')
+
+      await mountView()
+
+      // Nothing happened. Nobody new is signed in, and taking someone's place
+      // away because Discord said no would be a second failure on top of the
+      // one this page is here to explain.
+      expect(readCurrentCampaign()).toBe('c-1')
+    })
   })
 })
