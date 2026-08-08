@@ -53,7 +53,7 @@ onMounted(() => {
  * campaign" to someone who owns three, for the half second before the response
  * lands, is the kind of lie that makes a page feel broken.
  */
-const isEmpty = computed(() => campaigns.loaded && campaigns.sorted.length === 0)
+const isEmpty = computed(() => campaigns.loaded && campaigns.items.length === 0)
 
 /* Initials for the card's sigil. Spread rather than `[0]`, so a name starting
  * with an astral character is not cut in half. */
@@ -177,7 +177,7 @@ async function submit() {
       </p>
 
       <ul v-else class="home__grid">
-        <li v-for="campaign in campaigns.sorted" :key="campaign.id">
+        <li v-for="campaign in campaigns.items" :key="campaign.id">
           <RouterLink class="card" :to="campaignRoute(campaign)" @click="remember(campaign)">
             <span class="card__sigil" aria-hidden="true">{{ sigil(campaign.name) }}</span>
             <span class="card__name">{{ campaign.name }}</span>
@@ -204,14 +204,14 @@ async function submit() {
       under it is a dead end wearing a heading. #50 owns the view these will
       eventually link to.
     -->
-    <template v-if="sources.sorted.length">
+    <template v-if="sources.items.length">
       <hr class="rule-fleuron" />
 
       <section class="shelf" aria-labelledby="home-sources">
         <h2 id="home-sources" class="label-smallcaps shelf__label">Your sources</h2>
 
         <ul class="shelf__row">
-          <li v-for="source in sources.sorted" :key="source.id" class="chip">
+          <li v-for="source in sources.items" :key="source.id" class="chip">
             <i class="pi pi-book" aria-hidden="true" />
             <span>{{ source.title }}</span>
           </li>

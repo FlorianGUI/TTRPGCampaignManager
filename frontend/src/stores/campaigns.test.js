@@ -30,29 +30,18 @@ describe('the campaigns store', () => {
   })
 
   /*
-   * `campaign_repository.py` has no `order_by`, so the API's order is whatever
-   * Postgres has and can change after any update. A grid of cards found by
-   * position must not reshuffle between visits.
+   * The order is the API's. `campaign_repository.py` orders by id — arbitrary
+   * but fixed, which is what a grid of cards found by position needs. Re-sorting
+   * here would mean two places decide the order and only one of them survives
+   * the day this list is paged.
    */
-  it('sorts by name, because the API does not', async () => {
+  it('keeps the order the API sent, without a second opinion about it', async () => {
     request.mockResolvedValue([HOLLOW, SALT])
 
     const campaigns = useCampaignsStore()
     await campaigns.ensureLoaded()
 
-    expect(campaigns.sorted.map((c) => c.name)).toEqual(['Salt & Ashes', 'The Hollow Crown'])
-  })
-
-  it('orders numbered campaigns the way a person would', async () => {
-    request.mockResolvedValue([
-      { id: 'a', name: 'Arc 10' },
-      { id: 'b', name: 'Arc 2' },
-    ])
-
-    const campaigns = useCampaignsStore()
-    await campaigns.ensureLoaded()
-
-    expect(campaigns.sorted.map((c) => c.name)).toEqual(['Arc 2', 'Arc 10'])
+    expect(campaigns.items.map((c) => c.name)).toEqual(['The Hollow Crown', 'Salt & Ashes'])
   })
 
   it('loads once however many callers ask', async () => {

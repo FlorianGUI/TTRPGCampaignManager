@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { request } from '../api/client.js'
 
 /*
@@ -8,6 +8,11 @@ import { request } from '../api/client.js'
  * `GET /campaigns/` is filtered server-side by owner, so nothing here filters
  * again — a client-side owner check would be a second, weaker answer to a
  * question the API has already settled.
+ *
+ * The order is the API's too, for the same reason. `campaign_repository.py`
+ * orders by id: arbitrary but fixed, which is the property a grid of cards
+ * needs. Re-sorting here would mean two places decide the order and only one of
+ * them survives paging.
  *
  * There is no aggregate "dashboard" endpoint and this does not fetch one.
  * Campaigns and sources are two calls because they are two collections; folding
@@ -18,20 +23,6 @@ export const useCampaignsStore = defineStore('campaigns', () => {
   const loading = ref(false)
   const loaded = ref(false)
   const error = ref(null)
-
-  /*
-   * Sorted here rather than in the view, because more than one screen wants the
-   * same order and disagreeing about it would be worse than either choice.
-   *
-   * `campaign_repository.py` has no `order_by`, so the API returns rows in
-   * whatever order Postgres has them in — which can change after any update. A
-   * grid of cards found by position must not reshuffle between visits, so the
-   * order is decided on this side until there is a reason to page the list, at
-   * which point it has to move into the query.
-   */
-  const sorted = computed(() =>
-    [...items.value].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
-  )
 
   /*
    * One load per page load, shared by everyone who asks.
@@ -95,5 +86,5 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     return campaign
   }
 
-  return { items, sorted, loading, loaded, error, ensureLoaded, reload, byId, create }
+  return { items, loading, loaded, error, ensureLoaded, reload, byId, create }
 })

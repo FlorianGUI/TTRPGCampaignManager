@@ -36,7 +36,13 @@ class SqlAlchemySourceRepository(SourceRepository):
         #
         # The SQL twin of Source.is_visible_to. A contract test holds the two to the same
         # answer, because this is the one place a wrong rule leaks rows silently.
-        result = await self._session.execute(select(SourceModel).where(SourceModel.owner_id == owner_id))
+        #
+        # Ordered for the same reason as campaigns: an unordered SELECT is only
+        # incidentally stable, and a library that reshuffles between visits is a list
+        # nobody can learn. By id — arbitrary but fixed — until someone wants it by title.
+        result = await self._session.execute(
+            select(SourceModel).where(SourceModel.owner_id == owner_id).order_by(SourceModel.id)
+        )
         return [self._to_domain(m) for m in result.scalars().all()]
 
     async def delete(self, id: SourceId) -> None:

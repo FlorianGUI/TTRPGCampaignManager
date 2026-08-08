@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { request } from '../api/client.js'
 
 /*
@@ -12,19 +12,16 @@ import { request } from '../api/client.js'
  *
  * Read-only for now. Adding and editing is #51, and the Library view is #50 —
  * home only lists what is there and links onwards.
+ *
+ * The order comes from `source_repository.py`, which orders by id. Whether a
+ * library wants to be alphabetical by title is #50's question, and it is a
+ * question for the query rather than for this file.
  */
 export const useSourcesStore = defineStore('sources', () => {
   const items = ref([])
   const loading = ref(false)
   const loaded = ref(false)
   const error = ref(null)
-
-  // Same reasoning as the campaigns store: `source_repository.py` has no
-  // `order_by` either, so the order is decided here until it needs to be a
-  // query. #50 owns whether that stays true once the Library view lands.
-  const sorted = computed(() =>
-    [...items.value].sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
-  )
 
   let inflight = null
 
@@ -58,5 +55,5 @@ export const useSourcesStore = defineStore('sources', () => {
     }
   }
 
-  return { items, sorted, loading, loaded, error, ensureLoaded, reload }
+  return { items, loading, loaded, error, ensureLoaded, reload }
 })

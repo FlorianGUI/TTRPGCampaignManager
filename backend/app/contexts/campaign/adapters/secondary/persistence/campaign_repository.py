@@ -33,7 +33,15 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
     async def find_all_for(self, owner_id: UserId) -> list[Campaign]:
         # The SQL twin of Campaign.is_visible_to. A contract test holds the two to the
         # same answer, because this is the one place a wrong rule leaks rows silently.
-        result = await self._session.execute(select(CampaignModel).where(CampaignModel.owner_id == owner_id))
+        #
+        # Ordered because an unordered SELECT is only incidentally stable: Postgres may
+        # return rows in a different order after any update, and the frontend draws this
+        # list as a grid of cards people find by position. Ordering by id is arbitrary
+        # but fixed, which is the property that matters — a friendlier sort is a
+        # decision for whenever the list is long enough for anyone to care.
+        result = await self._session.execute(
+            select(CampaignModel).where(CampaignModel.owner_id == owner_id).order_by(CampaignModel.id)
+        )
         return [self._to_domain(m) for m in result.scalars().all()]
 
     async def delete(self, id: CampaignId) -> None:

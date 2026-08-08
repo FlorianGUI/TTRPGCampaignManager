@@ -30,13 +30,15 @@ describe('the sources store', () => {
     expect(request).toHaveBeenCalledWith('/sources/')
   })
 
-  it('sorts by title, because the API does not', async () => {
+  it('keeps the order the API sent', async () => {
     request.mockResolvedValue([PHB, MM])
     const sources = useSourcesStore()
 
     await sources.ensureLoaded()
 
-    expect(sources.sorted.map((s) => s.title)).toEqual(['Monster Manual', "Player's Handbook"])
+    // `source_repository.py` orders by id. Whether a library should be
+    // alphabetical is #50's question, and it belongs in the query.
+    expect(sources.items.map((s) => s.title)).toEqual(["Player's Handbook", 'Monster Manual'])
   })
 
   it('loads once however many callers ask', async () => {
