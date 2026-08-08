@@ -69,12 +69,15 @@ describe('HomeView', () => {
   })
 
   describe('with campaigns to choose from', () => {
-    it('lists them by name, sorted', async () => {
+    it('lists them in the order the API sent, without reordering them', async () => {
       api({ campaigns: [HOLLOW, SALT] })
 
       const names = (await mountHome()).findAll('.card__name').map((n) => n.text())
 
-      expect(names).toEqual(['Salt & Ashes', 'The Hollow Crown'])
+      // The order is decided by `campaign_repository.py`'s `order_by`. Sorting
+      // again here would be a second opinion that the day this list is paged
+      // would silently start disagreeing with the first.
+      expect(names).toEqual(['The Hollow Crown', 'Salt & Ashes'])
     })
 
     it('links each card at the campaign, with the id in the path', async () => {
