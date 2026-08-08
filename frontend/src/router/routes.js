@@ -62,6 +62,21 @@ export const routes = [
     meta: { title: 'Confirm your address', public: true, layout: 'auth' },
   },
   /*
+   * Where a provider sign-in comes back to (#39). The API sets the refresh
+   * cookie and redirects here with nothing in the URL but, when it went wrong,
+   * an error code — so this page refreshes, loads the user and moves on.
+   *
+   * Public, and it has to be rather than merely happens to be. On the failure
+   * path there is no session, so the guard would send an error code off to the
+   * login page and swallow the one thing this page exists to say.
+   */
+  {
+    path: '/auth/callback',
+    name: 'sso-callback',
+    component: () => import('../views/SsoCallbackView.vue'),
+    meta: { title: 'Signing you in', public: true, layout: 'auth' },
+  },
+  /*
    * Dev-only. `import.meta.env.DEV` is substituted with a literal at build
    * time, so this whole branch — and with it the dynamic import — is dropped
    * from the production bundle rather than merely hidden: the view is not

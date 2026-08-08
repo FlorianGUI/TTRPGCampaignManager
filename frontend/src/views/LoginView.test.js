@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import LoginView from './LoginView.vue'
 import { ApiError } from '../api/http.js'
+import { DISCORD_SIGN_IN_URL, takeDestination } from '../api/sso.js'
 import { useAuthStore } from '../stores/auth.js'
 
 const router = { replace: vi.fn() }
@@ -118,6 +119,70 @@ describe('LoginView', () => {
 
     expect(logIn).toHaveBeenCalledTimes(2)
     expect(router.replace).toHaveBeenCalledWith('/')
+  })
+
+  describe('continuing with Discord', () => {
+    beforeEach(() => {
+      sessionStorage.clear()
+    })
+
+    /*
+     * jsdom tries to follow a real anchor and complains that it cannot navigate.
+     * The handler still runs, which is what these assert on — this just stops the
+     * default action it has no way to perform, and the noise that comes with it.
+     */
+    async function clickDiscord(view) {
+      const link = view.find(`a[href="${DISCORD_SIGN_IN_URL}"]`)
+      link.element.addEventListener('click', (event) => event.preventDefault())
+      await link.trigger('click')
+    }
+
+    it('offers it as a link, not a fetch', () => {
+      /*
+       * The consent screen is a page at Discord's own address that the person
+       * has to be able to read and trust. Discord refuses to be framed, and a
+       * consent prompt nobody can see is not consent — so this is a top-level
+       * navigation and must stay an anchor.
+       */
+      const link = mountView().find(`a[href="${DISCORD_SIGN_IN_URL}"]`)
+
+      expect(link.exists()).toBe(true)
+      expect(link.text()).toContain('Continue with Discord')
+    })
+
+    it('does not hand the destination a handle on this window, or our URL', () => {
+      // Our URL carries `?redirect=`, which is nobody's business at Discord.
+      const rel = mountView().find(`a[href="${DISCORD_SIGN_IN_URL}"]`).attributes('rel')
+
+      expect(rel).toContain('noopener')
+      expect(rel).toContain('noreferrer')
+    })
+
+    it('stashes where the guard was sending them, which the round trip would lose', async () => {
+      query = { redirect: '/library?q=owlbear' }
+
+      const view = mountView()
+      await clickDiscord(view)
+
+      expect(takeDestination()).toBe('/library?q=owlbear')
+    })
+
+    it('stashes nothing until the link is actually used', () => {
+      query = { redirect: '/library' }
+
+      mountView()
+
+      expect(takeDestination()).toBe('/')
+    })
+
+    it('will not stash a destination pointing off this app', async () => {
+      query = { redirect: '//evil.example' }
+
+      const view = mountView()
+      await clickDiscord(view)
+
+      expect(takeDestination()).toBe('/')
+    })
   })
 
   it('labels its fields and asks password managers for the right thing', () => {
