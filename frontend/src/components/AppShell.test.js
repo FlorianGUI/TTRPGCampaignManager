@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import AppShell from './AppShell.vue'
@@ -41,7 +41,7 @@ function mountShell(props = {}) {
 
   return mount(AppShell, {
     props: { sections, active: 'Session notes', ...props },
-    global: { plugins: [PrimeVue, pinia] },
+    global: { plugins: [PrimeVue, pinia], stubs: { RouterLink: RouterLinkStub } },
   })
 }
 
@@ -153,6 +153,42 @@ describe('AppShell', () => {
        */
       expect(readCurrentCampaign()).toBeNull()
       expect(router.push).toHaveBeenCalledWith({ name: 'home' })
+    })
+
+    /*
+     * Editing and deleting a campaign are reached from here rather than from the
+     * chooser (#49): the cog sits beside the name it changes, and by the time
+     * you want to rename a campaign you are already inside it.
+     */
+    describe('the settings cog', () => {
+      it('points at the settings for the campaign the bar is naming', () => {
+        const wrapper = mountShell({ campaign })
+
+        expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
+          name: 'campaign-settings',
+          params: { campaignId: 'c-1' },
+        })
+      })
+
+      it('says which campaign it settles, since a cog says nothing on its own', () => {
+        const wrapper = mountShell({ campaign })
+
+        expect(wrapper.get('.shell__campaign-settings').attributes('aria-label')).toBe(
+          'Settings for The Hollow Crown',
+        )
+      })
+
+      it('is a link, so it opens in a new tab like any other', () => {
+        // Not a click handler: the id is in the URL, and middle-click and
+        // open-in-new-tab should carry the campaign with it.
+        const wrapper = mountShell({ campaign })
+
+        expect(wrapper.get('.shell__campaign-settings').element.tagName).toBe('A')
+      })
+
+      it('is absent with the rest of the chip when no campaign is named', () => {
+        expect(mountShell().find('.shell__campaign-settings').exists()).toBe(false)
+      })
     })
   })
 })

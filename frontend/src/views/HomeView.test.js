@@ -203,6 +203,13 @@ describe('HomeView', () => {
     })
   })
 
+  /*
+   * Still a dialog, and still here (#59). #49 made *editing* a page because an
+   * edit is interrupted and reloaded; creating is neither, and an empty state
+   * whose primary action navigates away is a worse answer than one that
+   * resolves in place. The fields are `CampaignForm`, so the dialog and the
+   * settings page cannot drift apart.
+   */
   describe('creating a campaign', () => {
     /* From the empty state, which is where it is the primary action. The card
      * in the grid opens the same dialog. */
@@ -266,9 +273,38 @@ describe('HomeView', () => {
       await wrapper.get('form').trigger('submit')
       await flushPromises()
 
-      expect(wrapper.text()).toContain('Something went wrong creating the campaign')
+      expect(wrapper.text()).toContain('Something went wrong saving the campaign')
       expect(push).not.toHaveBeenCalled()
       expect(readCurrentCampaign()).toBeNull()
+    })
+
+    it('puts a 422 against the field the API named, rather than at the form', async () => {
+      const wrapper = await openDialog()
+      request.mockRejectedValue(new ApiError(422, [{ loc: ['body', 'name'], msg: 'nope' }]))
+
+      await wrapper.get('#campaign-name').setValue('The Hollow Crown')
+      await wrapper.get('form').trigger('submit')
+      await flushPromises()
+
+      // What sharing `CampaignForm` with the settings page buys the dialog.
+      expect(wrapper.get('#campaign-name').attributes('aria-invalid')).toBe('true')
+      expect(wrapper.text()).toContain('That name was not accepted')
+    })
+  })
+
+  describe('managing a campaign', () => {
+    it('offers no way to edit or delete from here', async () => {
+      api({ campaigns: [HOLLOW, SALT] })
+
+      /*
+       * Both live inside the campaign, on the settings route reached from the
+       * cog in the top bar. This is the screen you land on straight after
+       * signing in, and deleting takes every character at the table with it —
+       * the campaign you want to rename is one click away in it (#49).
+       */
+      const text = (await mountHome()).text()
+
+      expect(text).not.toMatch(/delete|remove|settings/i)
     })
   })
 })

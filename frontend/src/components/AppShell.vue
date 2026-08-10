@@ -106,6 +106,26 @@ watch(searchOpen, async (open) => {
         -->
         <div v-if="campaign" class="shell__campaign">
           <span class="shell__campaign-name">{{ campaign.name }}</span>
+          <!--
+            Settings for the campaign you are in (#49). It sits on the chip
+            rather than in the actions cluster because it belongs to *this*
+            campaign, not to the app — and beside a name is where you look for
+            the thing that changes it.
+
+            A cog and a × read as different actions, so the mis-tap the note
+            below is about does not apply between these two. If the bar does end
+            up carrying more than it can, #79 owns that.
+          -->
+          <Button
+            class="shell__campaign-settings"
+            as="router-link"
+            :to="{ name: 'campaign-settings', params: { campaignId: campaign.id } }"
+            text
+            rounded
+            icon="pi pi-cog"
+            :aria-label="`Settings for ${campaign.name}`"
+            title="Campaign settings"
+          />
           <Button
             class="shell__campaign-leave"
             text
@@ -209,10 +229,11 @@ watch(searchOpen, async (open) => {
 }
 
 /*
- * A border rather than a fill: the chip names a place, it is not a control, and
- * only the × inside it is pressable. Giving the whole thing a button's surface
- * would invite people to click the name and wonder why nothing happened —
- * until #48, when the name becomes the switcher and that expectation is right.
+ * A border rather than a fill: the chip names a place, it is not a control —
+ * only the cog and the × inside it are pressable. Giving the whole thing a
+ * button's surface would invite people to click the name and wonder why nothing
+ * happened — until #48, when the name becomes the switcher and that expectation
+ * is right.
  */
 .shell__campaign {
   display: flex;
@@ -260,6 +281,7 @@ watch(searchOpen, async (open) => {
 @media (pointer: coarse) {
   .shell__nav-toggle,
   .shell__search-toggle,
+  .shell__campaign-settings,
   .shell__campaign-leave {
     min-height: 44px;
     min-width: 44px;
