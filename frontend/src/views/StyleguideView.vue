@@ -43,8 +43,8 @@ import { owlbear } from '../content/sample.js'
 // storeToRefs keeps the two values reactive; actions are taken off the store
 // directly, which is the Pinia idiom and what plain destructuring would break.
 const themeStore = useThemeStore()
-const { theme, density } = storeToRefs(themeStore)
-const { toggleTheme, toggleDensity } = themeStore
+const { theme } = storeToRefs(themeStore)
+const { toggleTheme } = themeStore
 
 const RAMPS = { ink, vellum, gold, blood, moss, torch, scrying }
 
@@ -110,13 +110,6 @@ const tokenRows = semanticRows.filter((r) => !r.path.startsWith('surface.'))
           severity="secondary"
           outlined
           @click="toggleTheme"
-        />
-        <Button
-          :label="`Density: ${density}`"
-          :icon="density === 'compact' ? 'pi pi-bars' : 'pi pi-align-justify'"
-          severity="secondary"
-          outlined
-          @click="toggleDensity"
         />
       </p>
     </header>
@@ -252,7 +245,10 @@ const tokenRows = semanticRows.filter((r) => !r.path.startsWith('surface.'))
         <span class="sg__bar" :style="{ width: `var(${step})` }" />
       </div>
       <div class="prose">
-        <p>Compact density shifts these values only — never the type scale.</p>
+        <p>
+          One scale, since #79 removed the compact density — these values are the spacing, in every
+          theme and at every width.
+        </p>
       </div>
     </section>
 

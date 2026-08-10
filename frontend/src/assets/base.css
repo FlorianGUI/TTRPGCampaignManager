@@ -40,16 +40,6 @@
     --shell-topbar: 3.25rem;
   }
 
-  .density-compact {
-    --space-1: 0.15rem;
-    --space-2: 0.3rem;
-    --space-3: 0.5rem;
-    --space-4: 0.7rem;
-    --space-5: 1rem;
-    --space-6: 1.4rem;
-    --space-7: 2rem;
-  }
-
   /* Ornament kill-switch: one class turns off every decorative flourish. */
   .no-ornament {
     --grimoire-texture-opacity: 0;

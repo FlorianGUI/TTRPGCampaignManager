@@ -59,7 +59,7 @@ frontend/
       sso.js                       # where "Continue with Discord" goes, and back
     stores/
       auth.js                      # current user, in-memory access token
-      theme.js                     # theme + density state, persisted
+      theme.js                     # theme state, persisted
       campaigns.js                 # the campaigns you own, and the three writes
       sources.js                   # the sources you own, read-only
       currentCampaign.js           # the remembered campaign — storage, not a store
@@ -72,9 +72,10 @@ frontend/
     components/
       AppShell.vue                 # top bar + context sidebar + content area
       AppNav.vue                   # the nav list, shared by sidebar and drawer
+      CampaignTitle.vue            # the campaign name at the head of its own nav
       CampaignForm.vue             # the campaign fields, for both creating and editing
       BareLayout.vue               # chrome for the pages above any campaign
-      ChromeActions.vue            # density + theme + sign out, shared by both bars
+      ChromeActions.vue            # who you are, and the account menu, in both bars
       domain/                      # stat block, read-aloud, dice, entity tags
     content/
       sample.js                    # sample copy for the spike
@@ -119,14 +120,25 @@ read it; `scripts/check-contrast.mjs` imports it directly.
 **There is no elevation scale, and that is a decision rather than an omission.**
 A printed page has no z-axis: depth here comes from rules (`.rule-double`,
 `.rule-fleuron`), borders (`--p-content-border-color`) and the chrome/content
-split — dark leather against parchment. Every `shadow` in the preset is
+split — dark leather against parchment. Every in-page `shadow` in the preset is
 explicitly `none`, overriding Aura's defaults on `card`, `formField` and both
 focus rings.
 
+**There is no density scale either, since #79.** Comfortable is the only
+spacing, so `--space-*` has one definition rather than two. The 44px touch
+floors dotted around the components look like they were density workarounds and
+are not: they are a touch guideline, set in absolute pixels precisely so no
+change to the spacing scale can quietly lower them.
+
 Shadows survive only where something genuinely floats above the page — drawer,
-popover, menu — and those come from PrimeVue's overlay tokens. If that stops
-being enough, add the ramp to `tokens/semantic.js` and tint it warm; the palette
-never reaches pure black, so a neutral shadow reads cold against it.
+popover, menu — and those are the `overlay.*` tokens in `tokens/semantic.js`.
+**They are tinted warm, and that is not decoration.** Aura ships them as pure
+black at 10%; this palette never reaches pure black, so a neutral shadow reads
+grey-blue against parchment — a hole in the page rather than a raised edge.
+`OVERLAY_SHADOW` and `MODAL_SHADOW` warm them to the ink at the bottom of the
+ramp. #79's account menu was the first overlay in the app and is what put the
+question on screen; anything floating that is added later should read those
+tokens rather than inventing a shadow.
 
 Some things worth knowing before touching any of it:
 
@@ -213,6 +225,60 @@ Two consequences worth keeping:
 - **`boot()` must never forget.** A cold open with a live refresh cookie is the
   case the whole feature exists for. The SSO callback is the one sign-in that
   also arrives through `boot()`, which is why it clears explicitly.
+
+### The top bar: where you are on the left, who you are on the right
+
+#79 collapsed a bar that had accumulated one control per decision — six of them,
+none of which said who was signed in. What is left is a label and a menu.
+
+**Where you are is a label; what you can do is a menu.** That split is the whole
+shape of it, and it is why the campaign's name and the campaign's actions live
+in different places rather than together.
+
+- **`ChromeActions.vue` is the one menu** — everything you can do: switch theme,
+  and inside a campaign its settings and closing it, then sign out. Shared by
+  `AppShell` and `BareLayout` so the two bars cannot drift apart; the campaign
+  arrives as a prop rather than by forking the component. The username is the
+  trigger itself rather than a name beside one: one control, carrying
+  `aria-haspopup`, `aria-expanded` and a focus ring because it is pressable.
+- **The campaign items are added, not dimmed.** They exist only when there is a
+  campaign. A disabled item reads as broken rather than as not-yet-available —
+  the argument #59 made for the sidebar.
+- **`CampaignTitle.vue` is a label and nothing else.** No border, no chevron,
+  nothing to press, `cursor: default`. It sits at the head of the nav it names,
+  in the sidebar and in the drawer — below 900px the drawer is the only place
+  the campaign is named at all. The tag it replaced looked pressable and mostly
+  was not, which is the worst of both.
+- **Its tooltip is the only place the description appears in the chrome.** A
+  15rem column is narrower than a lot of campaign names, so the name ellipsises
+  and the popup carries the whole of it, with the description under it. The
+  ellipsis is visual only — CSS truncation does not shorten the accessible name,
+  so nothing is hidden from a screen reader by a hover-only affordance. The
+  `tooltip` directive is registered in `main.js`; `tokens/components.js` already
+  had tokens for it.
+- **The theme item reads "Switch theme"**, not the name of the theme it would
+  switch to. Naming the destination needs no state indicator, which is the
+  argument for it, but it reads as a place among a list of verbs. The icon
+  carries the direction — a sun in candlelight, a moon in parchment.
+- **`aria-expanded` is flipped on click, not from the menu's `show` event.**
+  PrimeVue emits that from the overlay's transition hooks, so it arrives after
+  the animation — and the attribute describes what the button just did, not what
+  an animation has finished doing. Focus returns to the trigger on close.
+
+Two recorded decisions changed here, and both were rewritten rather than deleted:
+
+- **#25 said sign out must hold its place at every width.** That was written when
+  the alternative was folding it away as the bar narrowed. It is in the menu now:
+  one tap further, but present on every route and at every width, and no longer a
+  44px icon beside another 44px icon — which is how a thumb aiming at the theme
+  toggle ends a session. The reasoning lives in `ChromeActions.vue`.
+- **Search is gone entirely** — field, toggle and collapsed row. Nothing was ever
+  behind it, a placeholder since the spike, and a control that does nothing is a
+  promise the app does not keep.
+
+Below 640px the ladder is one rung long — the wordmark goes, and the username
+caps at 8rem in `ChromeActions`. The campaign is not on this row to compete for
+it any more.
 
 ### Creating is a dialog; editing is a page
 

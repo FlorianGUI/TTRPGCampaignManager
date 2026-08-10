@@ -1,13 +1,11 @@
 <script setup>
-import { nextTick, onScopeDispose, ref, watch } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
-import InputText from 'primevue/inputtext'
-import { useRouter } from 'vue-router'
 import AppNav from './AppNav.vue'
+import CampaignTitle from './CampaignTitle.vue'
 import ChromeActions from './ChromeActions.vue'
 import VerificationNotice from './VerificationNotice.vue'
-import { forgetCurrentCampaign } from '../stores/currentCampaign.js'
 
 /*
  * Dark leather chrome (top bar + sidebar) framing a parchment reading surface.
@@ -30,28 +28,17 @@ defineProps({
   campaign: { type: Object, default: null },
 })
 
-const router = useRouter()
-
 /*
- * Leaving a campaign, which is the other half of #59's decision to put home
- * outside this shell: without a way back, the chooser is reachable only by
- * signing out, and that is not a way back.
- *
- * Forgetting is what makes `/` show the chooser rather than bouncing straight
- * back into the campaign just left. The rule lives in the id, not in a flag —
- * see `enterRememberedCampaign` in router/routes.js.
+ * Leaving a campaign moved to `ChromeActions` with the rest of #79's menu. It is
+ * still the other half of #59's decision to put home outside this shell —
+ * without a way back the chooser is reachable only by signing out, and that is
+ * not a way back — but the way back is now an item rather than an icon.
  */
-function leaveCampaign() {
-  forgetCurrentCampaign()
-  router.push({ name: 'home' })
-}
 
 /* Kept in sync with the max-width: 900px breakpoint below. */
 const WIDE_QUERY = '(min-width: 901px)'
 
 const navOpen = ref(false)
-const searchOpen = ref(false)
-const searchField = ref(null)
 
 /*
  * The sidebar and the drawer are both in the DOM, each hidden by CSS at the
@@ -67,12 +54,6 @@ if (typeof window !== 'undefined' && window.matchMedia) {
   wide.addEventListener('change', closeNav)
   onScopeDispose(() => wide.removeEventListener('change', closeNav))
 }
-
-watch(searchOpen, async (open) => {
-  if (!open) return
-  await nextTick()
-  searchField.value?.$el?.focus()
-})
 </script>
 
 <template>
@@ -95,83 +76,21 @@ watch(searchOpen, async (open) => {
         </div>
 
         <!--
-          Where you are, and the way out of it. On the left, next to the brand,
-          rather than in the actions cluster: that row ends in sign out, and two
-          adjacent leave-shaped icons on a phone is a mis-tap that ends the
-          session instead of the campaign.
-
-          It is also where #48's switcher goes — the chip already names the
-          current campaign, so that issue adds a dropdown to something that
-          exists rather than reopening the placement question.
+          The campaign is named in the sidebar now, at the head of the navigation
+          it belongs to, rather than as a tag up here beside the brand. This row
+          is about the app; the campaign is not.
         -->
-        <div v-if="campaign" class="shell__campaign">
-          <span class="shell__campaign-name">{{ campaign.name }}</span>
-          <!--
-            Settings for the campaign you are in (#49). It sits on the chip
-            rather than in the actions cluster because it belongs to *this*
-            campaign, not to the app — and beside a name is where you look for
-            the thing that changes it.
-
-            A cog and a × read as different actions, so the mis-tap the note
-            below is about does not apply between these two. If the bar does end
-            up carrying more than it can, #79 owns that.
-          -->
-          <Button
-            class="shell__campaign-settings"
-            as="router-link"
-            :to="{ name: 'campaign-settings', params: { campaignId: campaign.id } }"
-            text
-            rounded
-            icon="pi pi-cog"
-            :aria-label="`Settings for ${campaign.name}`"
-            title="Campaign settings"
-          />
-          <Button
-            class="shell__campaign-leave"
-            text
-            rounded
-            icon="pi pi-times"
-            :aria-label="`Leave ${campaign.name}`"
-            title="Back to your campaigns"
-            @click="leaveCampaign"
-          />
-        </div>
-
-        <div class="shell__search">
-          <InputText placeholder="Search sources, NPCs, locations…" fluid />
-        </div>
 
         <div class="shell__actions">
-          <Button
-            class="shell__search-toggle"
-            text
-            rounded
-            icon="pi pi-search"
-            aria-label="Search"
-            aria-controls="shell-search-row"
-            :aria-expanded="searchOpen"
-            @click="searchOpen = !searchOpen"
-          />
           <!--
-            Density, theme and sign out, shared with BareLayout's bar so the two
-            cannot drift apart. Sign out is last in that row and never folds:
-            the priority ladder (#25) drops the wordmark and then the search
-            field as the bar narrows, because both have somewhere else to go —
-            the mark still carries the brand, and search reopens as a row
-            underneath. An account you cannot leave on a phone is worse than a
-            cramped bar.
+            Who you are, and the menu behind it — shared with BareLayout's bar so
+            the two cannot drift apart. The campaign is the one thing that
+            differs between them, and it travels as a prop rather than forking
+            the component: inside a campaign the menu grows "Campaign settings"
+            and "Close campaign", and on the chooser it simply does not.
           -->
-          <ChromeActions />
+          <ChromeActions :campaign="campaign" />
         </div>
-      </div>
-
-      <div v-if="searchOpen" id="shell-search-row" class="shell__search-row">
-        <InputText
-          ref="searchField"
-          placeholder="Search sources, NPCs, locations…"
-          fluid
-          @keydown.esc="searchOpen = false"
-        />
       </div>
     </header>
 
@@ -181,6 +100,7 @@ watch(searchOpen, async (open) => {
 
     <div class="shell__body">
       <nav class="shell__sidebar texture-grain" aria-label="Campaign">
+        <CampaignTitle v-if="campaign" :campaign="campaign" />
         <AppNav :sections="sections" :active="active" />
       </nav>
 
@@ -195,6 +115,12 @@ watch(searchOpen, async (open) => {
       header="Campaign"
       :pt="{ root: { 'aria-label': 'Campaign' } }"
     >
+      <!--
+        The name travels with the nav rather than staying behind in a bar that no
+        longer carries it: below the sidebar breakpoint this drawer is the only
+        place the campaign is named at all.
+      -->
+      <CampaignTitle v-if="campaign" :campaign="campaign" />
       <AppNav :sections="sections" :active="active" @navigate="navOpen = false" />
     </Drawer>
   </div>
@@ -228,43 +154,6 @@ watch(searchOpen, async (open) => {
   color: var(--p-primary-color);
 }
 
-/*
- * A border rather than a fill: the chip names a place, it is not a control —
- * only the cog and the × inside it are pressable. Giving the whole thing a
- * button's surface would invite people to click the name and wonder why nothing
- * happened — until #48, when the name becomes the switcher and that expectation
- * is right.
- */
-.shell__campaign {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  padding-left: var(--space-3);
-  border: 1px solid var(--p-grimoire-chrome-border-color);
-  border-radius: var(--p-border-radius-sm);
-  background: var(--p-grimoire-chrome-raised-background);
-}
-
-.shell__campaign-name {
-  overflow: hidden;
-  font-family: var(--grimoire-font-display);
-  font-weight: 700;
-  font-size: var(--step--1);
-  letter-spacing: 0.02em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell__search {
-  flex: 1;
-  max-width: 26rem;
-}
-
-.shell__search-row {
-  padding: 0 var(--space-4) var(--space-3);
-}
-
 .shell__actions {
   margin-left: auto;
   display: flex;
@@ -272,26 +161,25 @@ watch(searchOpen, async (open) => {
 }
 
 /*
- * The same 44px floor AppNav sets, for the icon-only targets this component
- * owns. The shared cluster sets its own — see ChromeActions.
+ * The same 44px floor AppNav sets, for the one icon-only target this component
+ * still owns. The shared cluster sets its own — see ChromeActions.
+ *
+ * A touch guideline, not a density workaround: this floor predates #79 removing
+ * the compact scale and outlives it unchanged, because a finger is the same size
+ * whatever the spacing tokens say.
  *
  * Coarse pointers only: on a mouse the default size is comfortable, and forcing
  * 44px there would space the bar out for no one's benefit.
  */
 @media (pointer: coarse) {
-  .shell__nav-toggle,
-  .shell__search-toggle,
-  .shell__campaign-settings,
-  .shell__campaign-leave {
+  .shell__nav-toggle {
     min-height: 44px;
     min-width: 44px;
   }
 }
 
-/* Both toggles are small-screen only; the wide layout shows the real controls. */
-.shell__nav-toggle,
-.shell__search-toggle,
-.shell__search-row {
+/* Small-screen only; the wide layout shows the sidebar itself. */
+.shell__nav-toggle {
   display: none;
 }
 
@@ -364,33 +252,17 @@ watch(searchOpen, async (open) => {
 
 @media (max-width: 640px) {
   /*
-   * Priority on one row: brand + nav + theme survive, the search field folds
-   * down to an icon that opens a full-width row underneath.
+   * #25's priority ladder had four rungs and search took two of them. What is
+   * left on this row is the nav toggle, the brand and the account trigger — the
+   * campaign moved into the sidebar and the drawer — so the ladder is one rung
+   * long: the wordmark goes, because the mark still carries the brand. The
+   * username gives up width in ChromeActions rather than here.
+   *
+   * Nothing folds away entirely any more. That is the point of the rework: every
+   * control the bar still has is one there is no second way to reach.
    */
-  .shell__search {
-    display: none;
-  }
-
-  .shell__search-toggle {
-    display: inline-flex;
-  }
-
-  .shell__search-row {
-    display: block;
-  }
-
   .shell__brand span {
-    /* The mark carries the brand; the wordmark is what has to give first. */
     display: none;
-  }
-
-  /*
-   * The chip is the next rung down that ladder. It keeps its place — leaving a
-   * campaign has to stay possible on a phone — but gives up most of its width,
-   * because the drawer names the campaign in full a tap away.
-   */
-  .shell__campaign-name {
-    max-width: 6rem;
   }
 }
 </style>

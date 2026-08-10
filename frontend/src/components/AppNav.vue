@@ -103,8 +103,9 @@ defineEmits(['navigate'])
 
 /*
  * Touch targets: 0.35rem of padding is fine for a mouse and far under the 44px
- * guideline for a finger. Compact density shrinks --space-* but not this, so
- * the floor holds in both densities.
+ * guideline for a finger. The floor is set in absolute pixels rather than in
+ * --space-*, so no change to the spacing scale can quietly lower it — which is
+ * why it needed no adjusting when #79 removed the compact density.
  */
 @media (pointer: coarse) {
   .nav__item {
