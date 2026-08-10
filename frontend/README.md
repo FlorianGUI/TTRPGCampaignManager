@@ -44,7 +44,8 @@ frontend/
       index.js                     # router instance, scroll behaviour, title
       routes.js                    # the route table
     views/
-      HomeView.vue                 # / — the campaign chooser
+      HomeView.vue                 # / — the campaign chooser, and the create dialog
+      CampaignSettingsView.vue     # /campaigns/:id/settings — editing and deleting one
       SpikeView.vue                # SPIKE: design-direction judgement surface
       StyleguideView.vue           # /styleguide — every token and component
       NotFoundView.vue             # catch-all
@@ -59,7 +60,7 @@ frontend/
     stores/
       auth.js                      # current user, in-memory access token
       theme.js                     # theme + density state, persisted
-      campaigns.js                 # the campaigns you own, and creating one
+      campaigns.js                 # the campaigns you own, and the three writes
       sources.js                   # the sources you own, read-only
       currentCampaign.js           # the remembered campaign — storage, not a store
     design-system/
@@ -71,6 +72,7 @@ frontend/
     components/
       AppShell.vue                 # top bar + context sidebar + content area
       AppNav.vue                   # the nav list, shared by sidebar and drawer
+      CampaignForm.vue             # the campaign fields, for both creating and editing
       BareLayout.vue               # chrome for the pages above any campaign
       ChromeActions.vue            # density + theme + sign out, shared by both bars
       domain/                      # stat block, read-aloud, dice, entity tags
@@ -211,6 +213,50 @@ Two consequences worth keeping:
 - **`boot()` must never forget.** A cold open with a live refresh cookie is the
   case the whole feature exists for. The SSO callback is the one sign-in that
   also arrives through `boot()`, which is why it clears explicitly.
+
+### Creating is a dialog; editing is a page
+
+The two are shaped differently on purpose, and the difference is not
+inconsistency:
+
+- **Creating stays the `Dialog` on the chooser** (#59). It is short, it is never
+  resumed, and nobody reloads half way through — and an empty state whose
+  primary action navigates away is a worse answer than one that resolves where
+  you are.
+- **Editing is `/campaigns/:campaignId/settings`** (#49). An edit _is_
+  interrupted, reloaded, bookmarked and opened in a second tab, and a modal
+  survives none of those.
+
+Both render `CampaignForm.vue`, so the two cannot drift apart.
+
+The settings page is reached from the **cog on the campaign chip** in
+`AppShell`'s top bar, beside the name it changes — by the time you want to
+rename a campaign you are inside it, so the chooser carries no entry point of its
+own and stays a screen for choosing a table. If that bar ends up carrying more
+controls than it can, #79 owns the crowding.
+
+Three things that go with all this:
+
+- **`CampaignForm.vue` owns the form and nothing else.** The caller makes the
+  call and hands back whatever it threw, through `error`. That is what lets
+  creating navigate into the new campaign and editing stay put, without the
+  shared component knowing that either happens.
+- **Every write sends both fields.** `PUT /campaigns/{id}` is a full
+  replacement, not a patch: a description left out of the body is cleared. A
+  form that emitted only what changed would wipe the description of every
+  campaign anyone renamed.
+- **The empty-name check is not duplication of the API's 422.** `CampaignCreate.name`
+  is a bare `str`, so the backend answers 422 for a name that is _missing_ and
+  accepts one that is blank — the client check is the only thing between someone
+  and a nameless campaign. A 422 is placed against the field named in its `loc`;
+  pydantic's own wording is not shown, because it is written for whoever wrote
+  the request.
+
+Deleting lives on that same settings page, behind the campaign's name typed out.
+It is not on the chooser, which is the screen people land on straight after
+signing in, and it is not a dialog: `CampaignService.delete` takes every
+character at the table with it and the API offers no undo, so the confirmation
+has to be one that muscle memory cannot satisfy.
 
 `currentCampaign.js` is deliberately import-free and is not a Pinia store:
 `stores/auth.js` has to clear it, and it cannot import a store that imports

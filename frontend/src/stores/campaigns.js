@@ -17,6 +17,12 @@ import { request } from '../api/client.js'
  * There is no aggregate "dashboard" endpoint and this does not fetch one.
  * Campaigns and sources are two calls because they are two collections; folding
  * them together would put a screen's layout into the API's shape.
+ *
+ * The list is also the app's answer to "is this campaign mine?". A campaign
+ * belonging to someone else 404s exactly as one that does not exist, so an id
+ * absent from here is the same absence either way — which is what lets the route
+ * guard, the top bar's chip and the edit form all read `byId` rather than each
+ * inventing a way to ask.
  */
 export const useCampaignsStore = defineStore('campaigns', () => {
   const items = ref([])
@@ -69,10 +75,16 @@ export const useCampaignsStore = defineStore('campaigns', () => {
   }
 
   /*
-   * Creating is #49's subject; what lives here is the one call the empty state
-   * needs to not be a dead end. The new campaign is pushed onto the list rather
-   * than triggering a reload — the response is the created row, so refetching
-   * would be asking the API to repeat itself.
+   * The three writes. None of them reloads the list: every one answers with the
+   * row it changed (or, for a delete, with nothing left to say), so refetching
+   * would be asking the API to repeat itself — and would race the navigation
+   * that follows each of them.
+   *
+   * They all reject rather than parking the failure in `error` the way `load`
+   * does. That field belongs to the list: a form has somewhere to put a rejected
+   * promise and needs the status to say *which* field the API objected to, and
+   * painting the whole chooser as broken because one edit was refused would be
+   * the wrong screen showing the wrong thing.
    */
   async function create({ name, description }) {
     const campaign = await request('/campaigns/', {
@@ -86,5 +98,38 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     return campaign
   }
 
-  return { items, loading, loaded, error, ensureLoaded, reload, byId, create }
+  /*
+   * `PUT /campaigns/{id}` is a full replacement, not a patch: a description left
+   * out of the body is cleared rather than kept. So both fields are always sent,
+   * and the form that calls this is loaded with the current values for the same
+   * reason — an edit that only touches the name must still carry the description
+   * it did not touch, or saving a name silently wipes the description.
+   */
+  async function update(id, { name, description }) {
+    const campaign = await request(`/campaigns/${id}`, {
+      method: 'PUT',
+      json: { name, description: description || null },
+    })
+
+    // Only ever reached through a loaded list — the edit form is rendered from
+    // `byId` — so a miss here would mean editing something not in the list, and
+    // appending it would put a row on the chooser by way of a failed lookup.
+    const at = items.value.findIndex((c) => c.id === id)
+    if (at !== -1) items.value[at] = campaign
+
+    return campaign
+  }
+
+  /*
+   * Takes the characters at the table with it — the cascade is `CampaignService`'s
+   * (see its `delete`), which is why the confirmation that guards this one is a
+   * typed name rather than a dialog dismissed by reflex.
+   */
+  async function remove(id) {
+    await request(`/campaigns/${id}`, { method: 'DELETE' })
+
+    items.value = items.value.filter((campaign) => campaign.id !== id)
+  }
+
+  return { items, loading, loaded, error, ensureLoaded, reload, byId, create, update, remove }
 })

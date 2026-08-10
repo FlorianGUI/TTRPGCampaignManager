@@ -153,4 +153,108 @@ describe('the campaigns store', () => {
       )
     })
   })
+
+  describe('updating', () => {
+    async function loaded() {
+      request.mockResolvedValue([HOLLOW, SALT])
+      const campaigns = useCampaignsStore()
+      await campaigns.ensureLoaded()
+      request.mockReset()
+
+      return campaigns
+    }
+
+    it('PUTs both fields, because the API replaces rather than patches', async () => {
+      const campaigns = await loaded()
+      request.mockResolvedValue({ ...HOLLOW, name: 'The Hollow Throne' })
+
+      await campaigns.update('c-1', {
+        name: 'The Hollow Throne',
+        description: 'A kingdom with no heir.',
+      })
+
+      /*
+       * `PUT /campaigns/{id}` is a full replacement: a description left out of
+       * the body is cleared, not kept. Sending only what changed would wipe the
+       * description of every campaign anyone renamed.
+       */
+      expect(request).toHaveBeenCalledWith('/campaigns/c-1', {
+        method: 'PUT',
+        json: { name: 'The Hollow Throne', description: 'A kingdom with no heir.' },
+      })
+    })
+
+    it('puts the row it gets back where the old one was', async () => {
+      const campaigns = await loaded()
+      const renamed = { ...HOLLOW, name: 'The Hollow Throne' }
+      request.mockResolvedValue(renamed)
+
+      await campaigns.update('c-1', { name: 'The Hollow Throne', description: 'x' })
+
+      // In place: the order is the API's, and moving a renamed campaign to the
+      // end of the chooser would be this store having an opinion about it.
+      expect(campaigns.items).toEqual([renamed, SALT])
+    })
+
+    it('sends null rather than an empty description', async () => {
+      const campaigns = await loaded()
+      request.mockResolvedValue(SALT)
+
+      await campaigns.update('c-2', { name: 'Salt & Ashes', description: '' })
+
+      expect(request).toHaveBeenCalledWith(
+        '/campaigns/c-2',
+        expect.objectContaining({ json: { name: 'Salt & Ashes', description: null } }),
+      )
+    })
+
+    it('lets a failure reach the form rather than parking it in `error`', async () => {
+      const campaigns = await loaded()
+      request.mockRejectedValue(new ApiError(404, 'Campaign not found'))
+
+      await expect(campaigns.update('c-1', { name: 'x', description: '' })).rejects.toThrow(
+        ApiError,
+      )
+
+      // `error` belongs to the list. Painting the whole chooser as broken
+      // because one edit was refused would be the wrong screen saying so.
+      expect(campaigns.error).toBeNull()
+      expect(campaigns.items).toEqual([HOLLOW, SALT])
+    })
+  })
+
+  describe('deleting', () => {
+    async function loaded() {
+      request.mockResolvedValue([HOLLOW, SALT])
+      const campaigns = useCampaignsStore()
+      await campaigns.ensureLoaded()
+      request.mockReset()
+
+      return campaigns
+    }
+
+    it('asks the API, then drops it from the list without refetching', async () => {
+      const campaigns = await loaded()
+      request.mockResolvedValue(null)
+
+      await campaigns.remove('c-1')
+
+      expect(request).toHaveBeenCalledWith('/campaigns/c-1', { method: 'DELETE' })
+      // A 204 has nothing to say, and the one row that changed is the one we
+      // just named. Reloading here would also race the navigation that follows.
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(campaigns.items).toEqual([SALT])
+    })
+
+    it('keeps the campaign when the API refuses to delete it', async () => {
+      const campaigns = await loaded()
+      request.mockRejectedValue(new ApiError(404, 'Campaign not found'))
+
+      await expect(campaigns.remove('c-1')).rejects.toThrow(ApiError)
+
+      // Removing it locally on a failure would show it gone until the next
+      // reload brought it back — the worst of both answers.
+      expect(campaigns.items).toEqual([HOLLOW, SALT])
+    })
+  })
 })

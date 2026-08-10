@@ -21,8 +21,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import Textarea from 'primevue/textarea'
-import FormField from '../components/FormField.vue'
+import CampaignForm from '../components/CampaignForm.vue'
 import { useAuthStore } from '../stores/auth.js'
 import { useCampaignsStore } from '../stores/campaigns.js'
 import { useSourcesStore } from '../stores/sources.js'
@@ -86,44 +85,35 @@ function remember(campaign) {
 /* ---- Creating -------------------------------------------------------- */
 
 /*
- * The smallest create that keeps the empty state from being a dead end: a name,
- * an optional description, and you are inside it. #49 owns the full editing
- * experience — this is here because "create your first campaign" is the primary
- * action of the screen, and a primary action that leads nowhere is worse than
- * no screen at all.
+ * A dialog, still, and deliberately: #59 put it here because "create your first
+ * campaign" is this screen's primary action, and a primary action that leads
+ * somewhere else is a worse answer to an empty state than one that resolves in
+ * place. Creating is short, it is not resumed, and nobody reloads half way
+ * through — the arguments that made *editing* a page (#49) do not carry over.
+ *
+ * What did change is the body: the fields are `CampaignForm`, the same component
+ * the settings page uses. It keeps this dialog and that page from drifting
+ * apart, and it is what gives creating the per-field 422 handling #49 asked for.
+ *
+ * Managing a campaign is not here at all. Editing and deleting live inside the
+ * campaign, on the settings route reached from the top bar — this screen is for
+ * choosing a table, and the one you want to rename is one click away in it.
  */
 const dialogOpen = ref(false)
-const name = ref('')
-const description = ref('')
-const nameError = ref(null)
-const formError = ref(null)
+const failure = ref(null)
 const submitting = ref(false)
 
 function openDialog() {
-  name.value = ''
-  description.value = ''
-  nameError.value = null
-  formError.value = null
+  failure.value = null
   dialogOpen.value = true
 }
 
-async function submit() {
-  const trimmed = name.value.trim()
-
-  if (!trimmed) {
-    nameError.value = 'Give the campaign a name.'
-    return
-  }
-
+async function create(values) {
   submitting.value = true
-  nameError.value = null
-  formError.value = null
+  failure.value = null
 
   try {
-    const campaign = await campaigns.create({
-      name: trimmed,
-      description: description.value.trim(),
-    })
+    const campaign = await campaigns.create(values)
 
     // Straight in. You just made it; being returned to a list to find it again
     // would be a step for its own sake.
@@ -131,10 +121,7 @@ async function submit() {
     dialogOpen.value = false
     router.push(campaignRoute(campaign))
   } catch (error) {
-    formError.value =
-      error?.status === 422
-        ? 'That name is not one the app can store. Try a shorter one.'
-        : 'Something went wrong creating the campaign. Try again.'
+    failure.value = error
   } finally {
     submitting.value = false
   }
@@ -226,24 +213,13 @@ async function submit() {
     <!-- ---- Create --------------------------------------------------- -->
 
     <Dialog v-model:visible="dialogOpen" modal header="New campaign" class="home__dialog">
-      <form class="home__form" @submit.prevent="submit">
-        <FormField id="campaign-name" v-model="name" label="Name" :error="nameError" />
-
-        <div class="field">
-          <label for="campaign-description">Description <span>(optional)</span></label>
-          <Textarea id="campaign-description" v-model="description" rows="3" auto-resize fluid />
-        </div>
-
-        <p v-if="formError" class="home__form-error" role="alert">{{ formError }}</p>
-
-        <Button
-          type="submit"
-          label="Create campaign"
-          :loading="submitting"
-          :disabled="submitting"
-          fluid
-        />
-      </form>
+      <CampaignForm
+        class="home__form"
+        submit-label="Create campaign"
+        :busy="submitting"
+        :error="failure"
+        @submit="create"
+      />
     </Dialog>
   </div>
 </template>
@@ -418,34 +394,9 @@ async function submit() {
 
 /* ---- Create form ------------------------------------------------ */
 
+/* The form sizes itself to the page it is on; in a dialog it needs a floor, or
+   it collapses to the width of its own labels. */
 .home__form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
   min-width: min(22rem, 70vw);
-}
-
-.home__form .field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.home__form label {
-  font-family: var(--grimoire-font-display);
-  font-size: 0.9rem;
-  letter-spacing: 0.02em;
-}
-
-.home__form label span {
-  color: var(--p-text-muted-color);
-  font-family: var(--grimoire-font-body);
-  letter-spacing: normal;
-}
-
-.home__form-error {
-  margin: 0;
-  color: var(--p-grimoire-form-error-color);
-  font-size: 0.9rem;
 }
 </style>

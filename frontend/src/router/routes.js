@@ -84,6 +84,26 @@ export const routes = [
     component: () => import('../views/SpikeView.vue'),
     meta: { title: 'Session notes' },
   },
+  /*
+   * Editing one, and the only place it can be deleted. Reached from the cog in
+   * the top bar, beside the campaign it belongs to — which is why it needs no
+   * entry point on the chooser: you are already in the campaign you want to
+   * rename.
+   *
+   * No `meta.layout`, so it wears the campaign shell and the top bar names the
+   * campaign being edited — the chip and the form read the same id from the path
+   * and cannot disagree about which campaign this is.
+   *
+   * Creating stays a dialog on the chooser (#59). Editing is the one that is
+   * interrupted, reloaded and bookmarked, and it is the only one that needed a
+   * route it could survive those in.
+   */
+  {
+    path: '/campaigns/:campaignId/settings',
+    name: 'campaign-settings',
+    component: () => import('../views/CampaignSettingsView.vue'),
+    meta: { title: 'Campaign settings' },
+  },
   {
     path: '/login',
     name: 'login',
