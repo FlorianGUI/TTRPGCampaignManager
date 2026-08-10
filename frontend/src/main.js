@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import Tooltip from 'primevue/tooltip'
 import 'primeicons/primeicons.css'
 import './assets/base.css'
 import App from './App.vue'
@@ -29,6 +30,13 @@ app.use(PrimeVue, {
   },
   ripple: false,
 })
+
+/*
+ * The only directive the app registers. `tooltip` already has tokens in
+ * `tokens/components.js` — they were written before anything used them — and
+ * the campaign name in the sidebar is the first thing that does.
+ */
+app.directive('tooltip', Tooltip)
 
 installTheme()
 

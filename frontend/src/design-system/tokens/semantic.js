@@ -278,11 +278,23 @@ export const dark = scheme({
 })
 
 /*
+ * Warm shade for the three things that genuinely float. Literal rgba rather than
+ * a primitive reference because a shadow is a colour *and* a geometry in one
+ * string, and PrimeVue takes it as one — see the note on `overlay` below for why
+ * it is tinted at all.
+ */
+const OVERLAY_SHADOW =
+  '0 4px 10px -2px rgba(28, 20, 12, 0.28), 0 1px 2px -1px rgba(28, 20, 12, 0.22)'
+const MODAL_SHADOW =
+  '0 18px 40px -12px rgba(28, 20, 12, 0.45), 0 2px 4px -2px rgba(28, 20, 12, 0.3)'
+
+/*
  * The block handed to definePreset's `semantic` key.
  *
  * No elevation scale, deliberately — see the design-system notes in
- * frontend/README.md. Depth here comes from rules, borders and the
- * chrome/content split, and every `shadow` below is explicitly `none`.
+ * frontend/README.md. Depth in the page comes from rules, borders and the
+ * chrome/content split, and every `shadow` below is `none` apart from the
+ * overlays, which are the only things that leave the page.
  */
 export const semantic = {
   // Book-like rather than app-like: tight radii, quick motion.
@@ -329,10 +341,27 @@ export const semantic = {
 
   content: { borderRadius: '{border.radius.md}' },
 
+  /*
+   * The one place a shadow survives, and #79's account menu is the first thing
+   * to actually put it on screen.
+   *
+   * There is still no elevation scale: nothing in the page floats, and these
+   * three genuinely do — an overlay has to read as *above* rather than as
+   * another panel drawn in the flow. What changed is the tint. Aura's default is
+   * pure black at 10%, and this palette never reaches pure black: against
+   * parchment a neutral shadow reads grey-blue and cold, like a hole rather than
+   * a raised edge. Warmed to the ink at the bottom of the ramp, it reads as
+   * shade on paper.
+   *
+   * Two stops rather than one soft blur, because a thin contact shadow is what
+   * separates an overlay from its own border; the wider stop alone reads as
+   * fog. Modal takes a longer throw — it floats over the whole page, not over
+   * the control that opened it.
+   */
   overlay: {
-    select: { borderRadius: '{border.radius.md}' },
-    popover: { borderRadius: '{border.radius.md}', padding: '0.75rem' },
-    modal: { borderRadius: '{border.radius.lg}', padding: '1.25rem' },
+    select: { borderRadius: '{border.radius.md}', shadow: OVERLAY_SHADOW },
+    popover: { borderRadius: '{border.radius.md}', padding: '0.75rem', shadow: OVERLAY_SHADOW },
+    modal: { borderRadius: '{border.radius.lg}', padding: '1.25rem', shadow: MODAL_SHADOW },
   },
 
   colorScheme: { light, dark },

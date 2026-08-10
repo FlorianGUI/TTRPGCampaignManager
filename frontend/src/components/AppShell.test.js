@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, RouterLinkStub } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import AppShell from './AppShell.vue'
 import AppNav from './AppNav.vue'
-import {
-  forgetCurrentCampaign,
-  readCurrentCampaign,
-  rememberCurrentCampaign,
-} from '../stores/currentCampaign.js'
+import CampaignTitle from './CampaignTitle.vue'
+import ChromeActions from './ChromeActions.vue'
 
 const router = { push: vi.fn() }
 
@@ -41,7 +38,7 @@ function mountShell(props = {}) {
 
   return mount(AppShell, {
     props: { sections, active: 'Session notes', ...props },
-    global: { plugins: [PrimeVue, pinia], stubs: { RouterLink: RouterLinkStub } },
+    global: { plugins: [PrimeVue, pinia] },
   })
 }
 
@@ -106,89 +103,66 @@ describe('AppShell', () => {
     expect(wrapper.findComponent({ name: 'Drawer' }).props('visible')).toBe(false)
   })
 
-  it('reveals the collapsed search row from the search toggle', async () => {
-    const wrapper = mountShell()
-
-    expect(wrapper.find('#shell-search-row').exists()).toBe(false)
-
-    await wrapper.get('.shell__search-toggle').trigger('click')
-
-    expect(wrapper.find('#shell-search-row').exists()).toBe(true)
-  })
-
   /*
-   * The other half of putting home outside this shell (#59). Without a way
-   * back, the chooser is reachable only by signing out — and signing out is not
-   * a way back.
+   * The campaign is named in the sidebar now, at the head of the navigation it
+   * belongs to, rather than as a tag in a bar that is about the app. What it
+   * does when opened is covered where it lives, in CampaignMenu.test.js.
    */
-  describe('the campaign chip', () => {
-    beforeEach(() => {
-      router.push.mockClear()
-      forgetCurrentCampaign()
-    })
-
-    it('is absent until there is a campaign to name', () => {
-      expect(mountShell().find('.shell__campaign').exists()).toBe(false)
-    })
-
-    it('names the campaign it will leave, for anyone not looking at the icon', () => {
+  describe('naming the campaign', () => {
+    it('puts the name at the head of the sidebar, not in the top bar', () => {
       const wrapper = mountShell({ campaign })
 
-      expect(wrapper.get('.shell__campaign-name').text()).toBe('The Hollow Crown')
-      expect(wrapper.get('.shell__campaign-leave').attributes('aria-label')).toBe(
-        'Leave The Hollow Crown',
+      expect(wrapper.get('.shell__sidebar').findComponent(CampaignTitle).exists()).toBe(true)
+      expect(wrapper.get('.shell__bar').findComponent(CampaignTitle).exists()).toBe(false)
+    })
+
+    it('hands it the campaign it was given', () => {
+      expect(mountShell({ campaign }).findComponent(CampaignTitle).props('campaign')).toEqual(
+        campaign,
       )
     })
 
-    it('forgets the campaign on the way out, so / shows the chooser', async () => {
-      rememberCurrentCampaign(campaign.id)
+    it('says nothing at all when there is no campaign', () => {
+      // Absent rather than an empty heading: on a route above any campaign
+      // there is no name to give.
+      expect(mountShell().findComponent(CampaignTitle).exists()).toBe(false)
+    })
+
+    it('travels into the drawer, which is the only place it is named on a phone', async () => {
       const wrapper = mountShell({ campaign })
+      await wrapper.get('.shell__nav-toggle').trigger('click')
 
-      await wrapper.get('.shell__campaign-leave').trigger('click')
-
-      /*
-       * Both halves matter. Navigating without forgetting would send you to a
-       * `/` that redirects straight back into the campaign you just left — an
-       * exit that cannot be used.
-       */
-      expect(readCurrentCampaign()).toBeNull()
-      expect(router.push).toHaveBeenCalledWith({ name: 'home' })
+      // The sidebar is hidden below 900px, so a name that stayed behind in it
+      // would leave the campaign unnamed exactly where the drawer exists to
+      // help.
+      expect(wrapper.findAllComponents(CampaignTitle)).toHaveLength(2)
     })
+  })
 
-    /*
-     * Editing and deleting a campaign are reached from here rather than from the
-     * chooser (#49): the cog sits beside the name it changes, and by the time
-     * you want to rename a campaign you are already inside it.
-     */
-    describe('the settings cog', () => {
-      it('points at the settings for the campaign the bar is naming', () => {
-        const wrapper = mountShell({ campaign })
+  it('hands the campaign to the account menu, which is what grows its items', () => {
+    // A prop rather than a second component: ChromeActions exists so the
+    // chooser's bar and the campaign's bar cannot drift apart, and the campaign
+    // is the only thing that differs between them.
+    expect(mountShell({ campaign }).findComponent(ChromeActions).props('campaign')).toEqual(
+      campaign,
+    )
+  })
 
-        expect(wrapper.getComponent(RouterLinkStub).props('to')).toEqual({
-          name: 'campaign-settings',
-          params: { campaignId: 'c-1' },
-        })
-      })
+  it('passes nothing on when there is no campaign', () => {
+    expect(mountShell().findComponent(ChromeActions).props('campaign')).toBeNull()
+  })
 
-      it('says which campaign it settles, since a cog says nothing on its own', () => {
-        const wrapper = mountShell({ campaign })
+  /*
+   * #79 took the search field, its toggle and the collapsed row out. Nothing was
+   * ever behind them — a placeholder since the spike — and a control that does
+   * nothing costs more than the space it takes: it is a promise the app does not
+   * keep.
+   */
+  it('offers no search, since there is nothing behind it to find', () => {
+    const wrapper = mountShell({ campaign })
 
-        expect(wrapper.get('.shell__campaign-settings').attributes('aria-label')).toBe(
-          'Settings for The Hollow Crown',
-        )
-      })
-
-      it('is a link, so it opens in a new tab like any other', () => {
-        // Not a click handler: the id is in the URL, and middle-click and
-        // open-in-new-tab should carry the campaign with it.
-        const wrapper = mountShell({ campaign })
-
-        expect(wrapper.get('.shell__campaign-settings').element.tagName).toBe('A')
-      })
-
-      it('is absent with the rest of the chip when no campaign is named', () => {
-        expect(mountShell().find('.shell__campaign-settings').exists()).toBe(false)
-      })
-    })
+    expect(wrapper.find('#shell-search-row').exists()).toBe(false)
+    expect(wrapper.find('.shell__search-toggle').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'InputText' }).exists()).toBe(false)
   })
 })

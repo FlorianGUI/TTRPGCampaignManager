@@ -1,20 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import {
-  COMPACT_CLASS,
-  DARK_CLASS,
-  DENSITY_STORAGE_KEY,
-  THEME_STORAGE_KEY,
-  installTheme,
-  useThemeStore,
-} from './theme.js'
+import { DARK_CLASS, THEME_STORAGE_KEY, installTheme, useThemeStore } from './theme.js'
 
 /*
- * The same six cases this had before Pinia (#34), against the store instead of
+ * The cases this had before Pinia (#34), against the store instead of
  * module-level refs. They no longer need vi.resetModules(): the state
  * initialiser runs when the store is first used, so a fresh pinia per test is
  * enough to re-read a freshly seeded localStorage.
+ *
+ * The density case went with density itself (#79) rather than being rewritten —
+ * there is one scale now, and a test asserting that a class is never added would
+ * be testing the absence of a feature.
  */
 
 describe('theme store', () => {
@@ -52,21 +49,6 @@ describe('theme store', () => {
 
     expect(document.documentElement.classList.contains(DARK_CLASS)).toBe(false)
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('parchment')
-  })
-
-  it('toggles density independently of the theme', async () => {
-    const store = useThemeStore()
-    installTheme()
-    await nextTick()
-
-    expect(document.documentElement.classList.contains(COMPACT_CLASS)).toBe(false)
-
-    store.toggleDensity()
-    await nextTick()
-
-    expect(store.density).toBe('compact')
-    expect(document.documentElement.classList.contains(COMPACT_CLASS)).toBe(true)
-    expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBe('compact')
   })
 
   it('still applies the theme when storage is unavailable', async () => {

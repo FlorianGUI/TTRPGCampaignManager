@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watchEffect } from 'vue'
 
 /*
- * Theme + density state, driven by classes on <html>.
+ * Theme state, driven by a class on <html>.
  *
  * Candlelight (dark) is the default and we deliberately do NOT fall back to
  * prefers-color-scheme: the dark theme is the designed default (issue #23 —
@@ -13,16 +13,19 @@ import { ref, watchEffect } from 'vue'
  * This was module-level refs before Pinia arrived (#34). The behaviour is
  * unchanged and so are its tests; what moved is where the state is declared, so
  * the codebase has one answer to "where does state live" rather than two.
+ *
+ * Density used to live here too, and #79 removed it: comfortable is the only
+ * spacing now, so `--space-*` has one definition rather than two. Anyone who
+ * ever toggled it still has `grimoire.density` in their localStorage and nothing
+ * reads it — orphaned rather than harmful, and not worth a migration to sweep
+ * up. The 44px touch floors that outlived it are a touch guideline and stay.
  */
 
 export const THEME_STORAGE_KEY = 'grimoire.theme'
-export const DENSITY_STORAGE_KEY = 'grimoire.density'
 
 export const DARK_CLASS = 'theme-candlelight'
-export const COMPACT_CLASS = 'density-compact'
 
 const THEMES = ['candlelight', 'parchment']
-const DENSITIES = ['comfortable', 'compact']
 
 function read(key, allowed) {
   try {
@@ -44,17 +47,12 @@ function write(key, value) {
 
 export const useThemeStore = defineStore('theme', () => {
   const theme = ref(read(THEME_STORAGE_KEY, THEMES) ?? 'candlelight')
-  const density = ref(read(DENSITY_STORAGE_KEY, DENSITIES) ?? 'comfortable')
 
   function toggleTheme() {
     theme.value = theme.value === 'candlelight' ? 'parchment' : 'candlelight'
   }
 
-  function toggleDensity() {
-    density.value = density.value === 'comfortable' ? 'compact' : 'comfortable'
-  }
-
-  return { theme, density, toggleTheme, toggleDensity }
+  return { theme, toggleTheme }
 })
 
 /*
@@ -68,10 +66,5 @@ export function installTheme(root = document.documentElement) {
   watchEffect(() => {
     root.classList.toggle(DARK_CLASS, store.theme === 'candlelight')
     write(THEME_STORAGE_KEY, store.theme)
-  })
-
-  watchEffect(() => {
-    root.classList.toggle(COMPACT_CLASS, store.density === 'compact')
-    write(DENSITY_STORAGE_KEY, store.density)
   })
 }
