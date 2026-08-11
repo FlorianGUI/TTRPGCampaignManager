@@ -38,6 +38,11 @@ that bite hardest if missed:
   stripped from production builds entirely.
 - **There is no elevation scale**, deliberately. Depth comes from rules, borders and
   the chrome/content split.
+- **Authored prose renders through `src/markdown/`** — one dialect and one component
+  for every long-form field, never a second parser in a view. It renders vnodes, so
+  there is **no `v-html` and no dependency that can produce an HTML string**: adding
+  `remark-rehype`, `remark-stringify`, any `rehype-*` or a sanitiser breaks the
+  guarantee the whole design rests on.
 
 ## Commands
 
