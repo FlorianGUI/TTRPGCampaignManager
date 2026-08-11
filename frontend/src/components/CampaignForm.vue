@@ -33,6 +33,19 @@ const props = defineProps({
 
 const emit = defineEmits(['submit'])
 
+/*
+ * The API's ceilings, restated as the ones the fields hold.
+ *
+ * Unlike the empty-name check below, this *is* the same rule twice — deliberately,
+ * because the two say it at different moments. The API's is the one that decides;
+ * this one stops a description being written for a minute before a 422 says the
+ * minute was wasted. They are kept in step by hand: 200 is the width of
+ * `campaigns.name`, and 1000 is `DESCRIPTION_MAX_LENGTH` in the campaign schema.
+ * If one moves, the 422 handling below is what catches the drift.
+ */
+const NAME_MAX_LENGTH = 200
+const DESCRIPTION_MAX_LENGTH = 1000
+
 const name = ref('')
 const description = ref('')
 
@@ -123,7 +136,13 @@ function submit() {
 
 <template>
   <form class="campaign-form" novalidate @submit.prevent="submit">
-    <FormField id="campaign-name" v-model="name" label="Name" :error="nameError" />
+    <FormField
+      id="campaign-name"
+      v-model="name"
+      label="Name"
+      :maxlength="NAME_MAX_LENGTH"
+      :error="nameError"
+    />
 
     <div class="field">
       <label for="campaign-description">Description <span>(optional)</span></label>
@@ -133,14 +152,21 @@ function submit() {
         rows="4"
         auto-resize
         fluid
+        :maxlength="DESCRIPTION_MAX_LENGTH"
         :invalid="Boolean(descriptionError)"
         :aria-describedby="descriptionError ? 'campaign-description-error' : undefined"
       />
       <p v-if="descriptionError" id="campaign-description-error" class="field__error" role="alert">
         {{ descriptionError }}
       </p>
+      <!--
+        The hint says what it is *for*, not where it shows, because for now it
+        shows nowhere: #31 is what reads it, to introduce the table to someone
+        deciding whether to join it. Promising a place it appears would be a
+        promise the app does not yet keep.
+      -->
       <p class="campaign-form__hint">
-        A line to recognise the table by. Only you see it, and it can change at any time.
+        A line introducing the table, for the people you invite to it. It can change at any time.
       </p>
     </div>
 

@@ -71,6 +71,24 @@ Feature: Campaign Management
     When I create a campaign without a name
     Then I should get a validation error
 
+  Scenario: Create a campaign named at more length than a name can hold
+    When I create a campaign with a name of 201 characters
+    Then I should get a validation error
+
+  Scenario: Create a campaign described at more length than a description can hold
+    When I create a campaign with a description of 1001 characters
+    Then I should get a validation error
+
+  Scenario: Rename a campaign to more than a name can hold
+    Given I create a campaign named "Greyfen"
+    When I rename my campaign to a name of 201 characters
+    Then I should get a validation error
+    And my campaign should still be named "Greyfen"
+
+  Scenario: Name a campaign right up to the limit
+    When I create a campaign with a name of 200 characters
+    Then the campaign should be created
+
   Scenario: Browse campaigns without signing in
     When I list all campaigns without a token
     Then I should be told I am not authenticated

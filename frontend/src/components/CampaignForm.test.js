@@ -144,6 +144,22 @@ describe('CampaignForm', () => {
     })
   })
 
+  describe('more than the API will take', () => {
+    it('holds both fields to the lengths the API accepts', () => {
+      const wrapper = mountForm()
+
+      /*
+       * The one place the fields say the limit before the API does. `name` is a
+       * `String(200)` column — longer than that used to reach a database that
+       * could not hold it and come back a 500 — and the description is capped in
+       * the schema at 1000. Stopping the typing is kinder than a 422 arriving
+       * after a description has been written.
+       */
+      expect(wrapper.get('#campaign-name').attributes('maxlength')).toBe('200')
+      expect(wrapper.get('#campaign-description').attributes('maxlength')).toBe('1000')
+    })
+  })
+
   describe('what the API said', () => {
     it('puts a 422 about the name against the name', async () => {
       const wrapper = mountForm({

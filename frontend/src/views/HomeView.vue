@@ -166,11 +166,14 @@ async function create(values) {
       <ul v-else class="home__grid">
         <li v-for="campaign in campaigns.items" :key="campaign.id">
           <RouterLink class="card" :to="campaignRoute(campaign)" @click="remember(campaign)">
+            <!--
+              The sigil and the name. Not the description: it is held for #31,
+              where it introduces a table to someone deciding whether to join it.
+              This grid is for a game master picking between tables they already
+              run, and they know which is which from the name.
+            -->
             <span class="card__sigil" aria-hidden="true">{{ sigil(campaign.name) }}</span>
             <span class="card__name">{{ campaign.name }}</span>
-            <span v-if="campaign.description" class="card__description">
-              {{ campaign.description }}
-            </span>
           </RouterLink>
         </li>
 
@@ -309,11 +312,10 @@ async function create(values) {
   font-weight: 700;
   font-size: var(--step-1);
   line-height: 1.2;
-}
-
-.card__description {
-  color: var(--p-text-muted-color);
-  font-size: var(--step--1);
+  /* A name is allowed 200 characters and is not obliged to contain a space.
+     `anywhere` breaks the one that does not, rather than letting it run out over
+     the card beside it. */
+  overflow-wrap: anywhere;
 }
 
 .card--new {

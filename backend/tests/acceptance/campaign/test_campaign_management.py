@@ -135,6 +135,46 @@ def create_campaign_without_a_name(client: AsyncClient, context: dict):
     )
 
 
+@when(parsers.parse("I create a campaign with a name of {length:d} characters"))
+def create_campaign_with_a_name_of_length(client: AsyncClient, context: dict, length: int):
+    context["response"] = asyncio.get_event_loop().run_until_complete(
+        client.post("/campaigns/", json={"name": "G" * length}, headers=_auth_headers(context))
+    )
+
+
+@when(parsers.parse("I create a campaign with a description of {length:d} characters"))
+def create_campaign_with_a_description_of_length(client: AsyncClient, context: dict, length: int):
+    context["response"] = asyncio.get_event_loop().run_until_complete(
+        client.post(
+            "/campaigns/",
+            json={"name": "Greyfen", "description": "G" * length},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when(parsers.parse("I rename my campaign to a name of {length:d} characters"))
+def rename_my_campaign_to_a_name_of_length(client: AsyncClient, context: dict, length: int):
+    campaign_id = context["created_campaigns"][0]["id"]
+    context["response"] = asyncio.get_event_loop().run_until_complete(
+        client.put(f"/campaigns/{campaign_id}", json={"name": "G" * length}, headers=_auth_headers(context))
+    )
+
+
+@then("the campaign should be created")
+def campaign_was_created(context: dict):
+    assert context["response"].status_code == 201
+
+
+@then(parsers.parse('my campaign should still be named "{name}"'))
+def my_campaign_is_unchanged(client: AsyncClient, context: dict, name: str):
+    campaign_id = context["created_campaigns"][0]["id"]
+    response = asyncio.get_event_loop().run_until_complete(
+        client.get(f"/campaigns/{campaign_id}", headers=_auth_headers(context))
+    )
+    assert response.json()["name"] == name
+
+
 @then(parsers.parse('I should see a campaign named "{name}"'))
 def see_campaign(context: dict, name: str):
     assert context["response"].json()["name"] == name
