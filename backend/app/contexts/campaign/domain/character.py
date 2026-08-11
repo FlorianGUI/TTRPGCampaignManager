@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.common.errors import NotAvailable
@@ -35,3 +36,16 @@ class Character:
     campaign_id: CampaignId
     description: str | None = None
     id: CharacterId = field(default_factory=lambda: CharacterId(uuid4()))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def revise(self, name: str, description: str | None) -> None:
+        """Rewrite the sheet, and record that it was rewritten.
+
+        The same shape as `Campaign.revise`, and for the same reason: a timestamp that
+        depends on every caller remembering to set it is a timestamp that is wrong as
+        soon as someone does not.
+        """
+        self.name = name
+        self.description = description
+        self.updated_at = datetime.now(UTC)

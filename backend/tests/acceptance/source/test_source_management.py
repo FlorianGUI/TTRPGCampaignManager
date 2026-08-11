@@ -141,6 +141,12 @@ def see_source_in_list(context: dict, title: str):
     assert title in titles
 
 
+@then(parsers.parse('"{title}" should be first in the list'))
+def see_source_first_in_list(context: dict, title: str):
+    """The library sorts the same way the campaign chooser does, for the same reason."""
+    assert [s["title"] for s in context["response"].json()][0] == title
+
+
 @then(parsers.parse('I should not see "{title}" in the list'))
 def not_see_source_in_list(context: dict, title: str):
     titles = [s["title"] for s in context["response"].json()]

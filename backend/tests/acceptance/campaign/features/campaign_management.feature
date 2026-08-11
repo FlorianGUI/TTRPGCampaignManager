@@ -27,6 +27,18 @@ Feature: Campaign Management
     And I retrieve the campaign by its ID
     Then I should see a campaign named "The Hollow Beneath Greyfen"
 
+  Scenario: The campaign list puts what I last worked on first
+    Given I create a campaign named "Greyfen"
+    And I create a campaign named "Fen Wardens"
+    When I rename my campaign to "The Hollow Beneath Greyfen"
+    And I list all campaigns
+    Then "The Hollow Beneath Greyfen" should be first in the campaign list
+
+  Scenario: A campaign records when it was made and when it changed
+    Given I create a campaign named "Greyfen"
+    When I retrieve the campaign by its ID
+    Then the campaign should say when it was made and when it changed
+
   Scenario: Read a campaign owned by another game master
     When I retrieve the other game masters campaign
     Then I should get a not found error

@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -162,3 +163,93 @@ class TestTheQueryAgreesWithTheDomainRule:
         ]
 
         assert sorted(c.id for c in queried) == sorted(m.id for m in allowed)
+
+
+class TestTimestamps:
+    """The half of #78 that only a real database can answer.
+
+    `save()` builds a fresh `CampaignModel` and hands it to `merge()`, which copies that
+    transient object's state onto the loaded row. A column left out of the constructor
+    is therefore not left alone — it is copied as absent. Every assertion here fails if
+    `created_at` stops being passed, and none of them fails anywhere else in the suite.
+    """
+
+    async def test_a_saved_campaign_keeps_the_time_it_was_made(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: UserId
+    ):
+        campaign = Campaign(name="Greyfen", owner_id=owner_id)
+        await repository.save(campaign)
+
+        found = (await repository.find_by_id(campaign.id)).unchecked
+
+        assert found is not None
+        assert found.created_at == campaign.created_at
+
+    async def test_saving_a_second_time_does_not_erase_when_it_was_made(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: UserId
+    ):
+        """The merge() hazard, and the reason this test exists at all.
+
+        A campaign is saved, read back, edited and saved again — the exact path a rename
+        takes. The second save must not move the moment the campaign was made.
+        """
+        campaign = Campaign(name="Greyfen", owner_id=owner_id)
+        await repository.save(campaign)
+
+        reloaded = (await repository.find_by_id(campaign.id)).unchecked
+        assert reloaded is not None
+        reloaded.revise("The Hollow Beneath Greyfen", None)
+        await repository.save(reloaded)
+
+        found = (await repository.find_by_id(campaign.id)).unchecked
+
+        assert found is not None
+        assert found.created_at == campaign.created_at
+        assert found.updated_at > campaign.updated_at
+
+    async def test_reading_a_campaign_does_not_move_its_updated_time(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: UserId
+    ):
+        campaign = Campaign(name="Greyfen", owner_id=owner_id)
+        await repository.save(campaign)
+
+        first = (await repository.find_by_id(campaign.id)).unchecked
+        second = (await repository.find_by_id(campaign.id)).unchecked
+
+        assert first is not None and second is not None
+        assert first.updated_at == second.updated_at
+
+
+class TestOrdering:
+    async def test_lists_the_most_recently_touched_campaign_first(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: UserId
+    ):
+        """What #59 could not express while the only orderable column was a uuid4."""
+        oldest = Campaign(name="Oldest", owner_id=owner_id, updated_at=datetime(2020, 1, 1, tzinfo=UTC))
+        newest = Campaign(name="Newest", owner_id=owner_id, updated_at=datetime(2026, 1, 1, tzinfo=UTC))
+        middle = Campaign(name="Middle", owner_id=owner_id, updated_at=datetime(2023, 1, 1, tzinfo=UTC))
+        for campaign in (oldest, newest, middle):
+            await repository.save(campaign)
+
+        found = await repository.find_all_for(owner_id)
+
+        assert [c.name for c in found] == ["Newest", "Middle", "Oldest"]
+
+    async def test_breaks_a_tie_by_id_rather_than_leaving_it_to_postgres(
+        self, repository: SqlAlchemyCampaignRepository, owner_id: UserId
+    ):
+        """Two rows written in one request share `now()` to the microsecond.
+
+        Without the tie-breaker Postgres may return equal keys in any order it likes,
+        and a paged list would start skipping and repeating rows — the bug #59's
+        ordering existed to prevent, reintroduced by fixing the sort key.
+        """
+        same_moment = datetime(2026, 1, 1, tzinfo=UTC)
+        first = Campaign(id=CampaignId(uuid.UUID(int=1)), name="First", owner_id=owner_id, updated_at=same_moment)
+        second = Campaign(id=CampaignId(uuid.UUID(int=2)), name="Second", owner_id=owner_id, updated_at=same_moment)
+        await repository.save(second)
+        await repository.save(first)
+
+        found = await repository.find_all_for(owner_id)
+
+        assert [c.name for c in found] == ["First", "Second"]

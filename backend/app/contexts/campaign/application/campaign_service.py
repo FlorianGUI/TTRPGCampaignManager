@@ -44,8 +44,7 @@ class CampaignService:
 
     async def update(self, id: CampaignId, owner_id: UserId, name: str, description: str | None = None) -> Campaign:
         campaign = CampaignAccess(owner_id).editable(await self._repository.find_by_id(id))
-        campaign.name = name
-        campaign.description = description
+        campaign.revise(name, description)
         return await self._repository.save(campaign)
 
     async def delete(self, id: CampaignId, owner_id: UserId) -> None:
