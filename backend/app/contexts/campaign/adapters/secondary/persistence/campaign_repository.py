@@ -14,12 +14,20 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
 
     async def save(self, campaign: Campaign) -> Campaign:
         # merge() rather than add(): one save both inserts and writes back.
+        #
+        # Every column the row has must be listed, and `created_at` is the one that
+        # punishes forgetting. merge() copies this transient object's state onto the
+        # loaded row, so a field left out here is not left alone — it is copied as
+        # absent, and the second save of a campaign erases when it was made. The
+        # timestamps come from the entity because the entity is what writes them (#78).
         await self._session.merge(
             CampaignModel(
                 id=campaign.id,
                 name=campaign.name,
                 description=campaign.description,
                 owner_id=campaign.owner_id,
+                created_at=campaign.created_at,
+                updated_at=campaign.updated_at,
             )
         )
         await self._session.commit()
@@ -34,13 +42,19 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
         # The SQL twin of Campaign.is_visible_to. A contract test holds the two to the
         # same answer, because this is the one place a wrong rule leaks rows silently.
         #
-        # Ordered because an unordered SELECT is only incidentally stable: Postgres may
-        # return rows in a different order after any update, and the frontend draws this
-        # list as a grid of cards people find by position. Ordering by id is arbitrary
-        # but fixed, which is the property that matters — a friendlier sort is a
-        # decision for whenever the list is long enough for anyone to care.
+        # Most recently worked on first, which is what a chooser wants and what #59
+        # could not express while the only orderable column was a uuid4. Editing a
+        # campaign moves it to the top: that is the feature, not a side effect.
+        #
+        # `id` is the tie-breaker and is not decoration. Two rows written in one request
+        # share `now()` to the microsecond, and Postgres may return equal keys in any
+        # order it likes — the day this list is paged, rows would start being skipped
+        # and repeated across pages. That is the same bug #59's ordering existed to
+        # prevent, and it comes back the moment the sort key stops being unique.
         result = await self._session.execute(
-            select(CampaignModel).where(CampaignModel.owner_id == owner_id).order_by(CampaignModel.id)
+            select(CampaignModel)
+            .where(CampaignModel.owner_id == owner_id)
+            .order_by(CampaignModel.updated_at.desc(), CampaignModel.id)
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
@@ -55,4 +69,6 @@ class SqlAlchemyCampaignRepository(CampaignRepository):
             name=model.name,
             description=model.description,
             owner_id=UserId(model.owner_id),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
         )

@@ -190,3 +190,28 @@ class TestDeleteAllIn:
         self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess
     ):
         await repository.delete_all_in(access)
+
+
+class TestTimestamps:
+    """The merge() hazard in the third repository that has it.
+
+    A sheet is edited more often than a campaign is renamed, so this is the row where
+    losing `created_at` would be noticed last and mattered most.
+    """
+
+    async def test_saving_a_second_time_does_not_erase_when_it_was_made(
+        self, repository: SqlAlchemyCharacterRepository, access: CharacterAccess
+    ):
+        character = _character_at(access, "Aragorn")
+        await repository.save(character)
+
+        reloaded = (await repository.find_by_id(character.id)).unchecked
+        assert reloaded is not None
+        reloaded.revise("Strider", "A ranger of the North")
+        await repository.save(reloaded)
+
+        found = (await repository.find_by_id(character.id)).unchecked
+
+        assert found is not None
+        assert found.created_at == character.created_at
+        assert found.updated_at > character.updated_at

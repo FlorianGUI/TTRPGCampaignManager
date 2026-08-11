@@ -86,8 +86,7 @@ class CharacterService:
         description: str | None = None,
     ) -> Character:
         character = access.editable(await self._repository.find_by_id(id))
-        character.name = name
-        character.description = description
+        character.revise(name, description)
         return await self._repository.save(character)
 
     async def delete(self, id: CharacterId, access: CharacterAccess) -> None:

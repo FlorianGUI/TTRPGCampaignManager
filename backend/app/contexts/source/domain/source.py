@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
@@ -24,6 +25,17 @@ class Source:
     title: str
     owner_id: UserId
     id: SourceId = field(default_factory=lambda: SourceId(uuid4()))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def revise(self, title: str) -> None:
+        """Retitle the source, and record that it moved.
+
+        One field rather than two, and the method exists anyway: what it protects is not
+        the assignment but the timestamp beside it.
+        """
+        self.title = title
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass(frozen=True)

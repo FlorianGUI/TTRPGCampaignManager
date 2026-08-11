@@ -191,6 +191,24 @@ def see_campaign_in_list(context: dict, name: str):
     assert name in [c["name"] for c in context["response"].json()]
 
 
+@then(parsers.parse('"{name}" should be first in the campaign list'))
+def see_campaign_first_in_list(context: dict, name: str):
+    """Renaming a campaign moves it to the top. That is the feature, not a side effect.
+
+    Observable only from out here: the repository test proves the SQL sorts, this proves
+    the sort is the one a game master meets when they open the chooser.
+    """
+    assert [c["name"] for c in context["response"].json()][0] == name
+
+
+@then("the campaign should say when it was made and when it changed")
+def see_campaign_timestamps(context: dict):
+    campaign = context["response"].json()
+
+    assert campaign["created_at"] is not None
+    assert campaign["updated_at"] is not None
+
+
 @then(parsers.parse('I should not see "{name}" in the campaign list'))
 def not_see_campaign_in_list(context: dict, name: str):
     assert name not in [c["name"] for c in context["response"].json()]

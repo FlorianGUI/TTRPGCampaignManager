@@ -3,10 +3,10 @@ import uuid
 from sqlalchemy import String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.database import Base, TimestampedModel
 
 
-class CampaignModel(Base):
+class CampaignModel(Base, TimestampedModel):
     __tablename__ = "campaigns"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

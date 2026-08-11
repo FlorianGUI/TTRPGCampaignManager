@@ -29,6 +29,13 @@ Feature: Source Management
     And I retrieve the source by its ID
     Then I should see a source titled "SRD 5.1"
 
+  Scenario: The library puts what I last worked on first
+    Given I create a source titled "SRD 5.1"
+    And I create a source titled "Monster Manual"
+    When I rename my source to "System Reference Document 5.1"
+    And I list all sources
+    Then "System Reference Document 5.1" should be first in the list
+
   Scenario: Read a source owned by another game master
     When I retrieve the other game masters source
     Then I should get a not found error

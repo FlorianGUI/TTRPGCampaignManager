@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
@@ -33,6 +34,21 @@ class Campaign:
     owner_id: UserId
     description: str | None = None
     id: CampaignId = field(default_factory=lambda: CampaignId(uuid4()))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def revise(self, name: str, description: str | None) -> None:
+        """Change what the campaign says, and record that it changed.
+
+        A method rather than two assignments at the call site, and that is the whole
+        reason it exists: `updated_at` is only true if nothing can edit a campaign
+        without moving it. Written as `campaign.name = name` in a service, the timestamp
+        is something the next service has to remember — and #80 adds three more entities
+        for it to be forgotten in.
+        """
+        self.name = name
+        self.description = description
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass(frozen=True)

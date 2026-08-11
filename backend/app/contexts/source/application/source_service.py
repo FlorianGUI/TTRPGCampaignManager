@@ -26,7 +26,7 @@ class SourceService:
 
     async def rename(self, id: SourceId, owner_id: UserId, title: str) -> Source:
         source = SourceAccess(owner_id).editable(await self._repository.find_by_id(id))
-        source.title = title
+        source.revise(title)
         return await self._repository.save(source)
 
     async def delete(self, id: SourceId, owner_id: UserId) -> None:

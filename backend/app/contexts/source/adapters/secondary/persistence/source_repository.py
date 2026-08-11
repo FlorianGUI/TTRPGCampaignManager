@@ -15,11 +15,17 @@ class SqlAlchemySourceRepository(SourceRepository):
     async def save(self, source: Source) -> Source:
         # merge() rather than add(): the port has a single save, used both to insert a
         # new source and to write back one that was read and modified.
+        #
+        # Every column listed, `created_at` included: merge() copies this transient
+        # object onto the loaded row, so omitting a field erases it rather than leaving
+        # it alone. See the campaign repository for the longer version.
         await self._session.merge(
             SourceModel(
                 id=source.id,
                 title=source.title,
                 owner_id=source.owner_id,
+                created_at=source.created_at,
+                updated_at=source.updated_at,
             )
         )
         await self._session.commit()
@@ -37,11 +43,14 @@ class SqlAlchemySourceRepository(SourceRepository):
         # The SQL twin of Source.is_visible_to. A contract test holds the two to the same
         # answer, because this is the one place a wrong rule leaks rows silently.
         #
-        # Ordered for the same reason as campaigns: an unordered SELECT is only
-        # incidentally stable, and a library that reshuffles between visits is a list
-        # nobody can learn. By id — arbitrary but fixed — until someone wants it by title.
+        # Ordered for the same reason as campaigns, and now by the same key: most
+        # recently touched first, with `id` breaking ties so that equal timestamps
+        # cannot make a paged list skip and repeat rows. A library sorted by title is a
+        # different feature and can have its own decision.
         result = await self._session.execute(
-            select(SourceModel).where(SourceModel.owner_id == owner_id).order_by(SourceModel.id)
+            select(SourceModel)
+            .where(SourceModel.owner_id == owner_id)
+            .order_by(SourceModel.updated_at.desc(), SourceModel.id)
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
@@ -55,4 +64,6 @@ class SqlAlchemySourceRepository(SourceRepository):
             id=SourceId(model.id),
             title=model.title,
             owner_id=UserId(model.owner_id),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
         )

@@ -22,6 +22,10 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
 
     async def save(self, character: Character) -> Character:
         # merge() rather than add(): one save both inserts and writes back.
+        #
+        # Every column listed, `created_at` included: merge() copies this transient
+        # object onto the loaded row, so omitting a field erases it rather than leaving
+        # it alone. See the campaign repository for the longer version.
         await self._session.merge(
             CharacterModel(
                 id=character.id,
@@ -29,6 +33,8 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
                 description=character.description,
                 owner_id=character.owner_id,
                 campaign_id=character.campaign_id,
+                created_at=character.created_at,
+                updated_at=character.updated_at,
             )
         )
         await self._session.commit()
@@ -62,4 +68,6 @@ class SqlAlchemyCharacterRepository(CharacterRepository):
             description=model.description,
             owner_id=UserId(model.owner_id),
             campaign_id=CampaignId(model.campaign_id),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
         )

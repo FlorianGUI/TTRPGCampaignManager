@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -150,3 +151,49 @@ class TestTheQueryAgreesWithTheDomainRule:
         ]
 
         assert sorted(s.id for s in queried) == sorted(m.id for m in allowed)
+
+
+class TestTimestamps:
+    """The merge() hazard again, in the second of the three repositories that has it."""
+
+    async def test_saving_a_second_time_does_not_erase_when_it_was_made(
+        self, repository: SqlAlchemySourceRepository, owner_id: UserId
+    ):
+        source = Source(title="SRD", owner_id=owner_id)
+        await repository.save(source)
+
+        reloaded = (await repository.find_by_id(source.id)).unchecked
+        assert reloaded is not None
+        reloaded.revise("SRD 5.1")
+        await repository.save(reloaded)
+
+        found = (await repository.find_by_id(source.id)).unchecked
+
+        assert found is not None
+        assert found.created_at == source.created_at
+        assert found.updated_at > source.updated_at
+
+
+class TestOrdering:
+    async def test_lists_the_most_recently_touched_source_first(
+        self, repository: SqlAlchemySourceRepository, owner_id: UserId
+    ):
+        oldest = Source(title="Oldest", owner_id=owner_id, updated_at=datetime(2020, 1, 1, tzinfo=UTC))
+        newest = Source(title="Newest", owner_id=owner_id, updated_at=datetime(2026, 1, 1, tzinfo=UTC))
+        for source in (oldest, newest):
+            await repository.save(source)
+
+        found = await repository.find_all_for(owner_id)
+
+        assert [s.title for s in found] == ["Newest", "Oldest"]
+
+    async def test_breaks_a_tie_by_id(self, repository: SqlAlchemySourceRepository, owner_id: UserId):
+        same_moment = datetime(2026, 1, 1, tzinfo=UTC)
+        first = Source(id=SourceId(uuid.UUID(int=1)), title="First", owner_id=owner_id, updated_at=same_moment)
+        second = Source(id=SourceId(uuid.UUID(int=2)), title="Second", owner_id=owner_id, updated_at=same_moment)
+        await repository.save(second)
+        await repository.save(first)
+
+        found = await repository.find_all_for(owner_id)
+
+        assert [s.title for s in found] == ["First", "Second"]
