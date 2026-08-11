@@ -77,6 +77,13 @@ frontend/
       BareLayout.vue               # chrome for the pages above any campaign
       ChromeActions.vue            # who you are, and the account menu, in both bars
       domain/                      # stat block, read-aloud, dice, entity tags
+    markdown/
+      CampaignMarkdown.vue         # the one renderer every prose field uses
+      parse.js                     # text ⟶ mdast, and nothing further
+      directives.js                # the dialect: directive name ⟶ component
+      render.js                    # mdast ⟶ vnodes, block and inline
+      toPlainText.js               # mdast ⟶ a string, for cells and titles
+      nodes.js                     # the tree facts both renderers share
     content/
       sample.js                    # sample copy for the spike
 ```
@@ -348,6 +355,89 @@ has to be one that muscle memory cannot satisfy.
 `currentCampaign.js` is deliberately import-free and is not a Pinia store:
 `stores/auth.js` has to clear it, and it cannot import a store that imports
 `api/client.js`, which imports the auth store.
+
+## Prose: Campaign Manager markdown
+
+Every long-form field in the app — a session note, a scene, an act's
+description — is markdown in one dialect, rendered by one component. Not a
+session-note feature: naming it after its first caller would have produced a
+second dialect the moment scenes arrived. `src/markdown/` is the whole of it.
+
+```markdown
+The party meets :npc[Fen Warden] outside :location[the Drowned Chapel].
+She wants :item[the Tarnished Key] back, and will pay :dice[2d6]{result=9} gold.
+
+:::read-aloud
+The water is waist-deep and colder than it has any right to be.
+:::
+
+Owlbears here are unusually aggressive :ref[SRD 5.1]{page=249}.
+```
+
+The syntax is [CommonMark generic
+directives](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
+— `:name[label]{attrs}` inline, `:::name` … `:::` as a block — parsed by
+`remark-parse` + `remark-directive`. One grammar covers all four components, and
+attributes map onto props, so there is no per-directive translation layer.
+
+**`directives.js` is the dialect.** Directive name → component, the forms it
+accepts, and the props to build. A new directive is an entry in that table, not
+a branch in the walker. `ENTITY_KINDS` is asked there and nowhere else, so
+adding a kind to the design system is the whole change needed to make
+`:that-kind[…]` render.
+
+### Three projections, one parser
+
+| Mode              | What it is for                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `block` (default) | the full document — headings, paragraphs, read-aloud boxes                                                                              |
+| `inline`          | inline directives still render; block structure flattens to its words. Descriptions, shown where there is no room for a boxed paragraph |
+| `toPlainText()`   | no components at all. List cells, `title` attributes, page titles                                                                       |
+
+The third is the one that goes missing: the moment a description is markdown,
+every list in the app renders raw `:npc[…]` unless something reduces it. It is a
+function rather than a mode because its output is a string, not a tree.
+
+```vue
+<CampaignMarkdown class="prose" :source="note.body" />
+<CampaignMarkdown mode="inline" :source="act.description" />
+```
+
+One root element — `div` for block, `span` for inline — so `class` and the rest
+fall through and the reading measure is applied from outside.
+
+### Why it renders vnodes, and never HTML
+
+**There is no `v-html` here, and there must not be one.** Bodies are
+user-authored, and once campaigns are shared they are authored by someone other
+than the reader — a stored-XSS surface with a direct path to the session token.
+
+The parser stops at mdast and the walker builds vnodes with `h()`. No HTML
+string is ever produced, so there is nothing to sanitise and nothing to get
+wrong: a raw `<script>` in the source is an mdast `html` node, whose value is
+handed to Vue as text, and text is all it can become. `EntityTag`'s prop
+validator still runs, so a bad kind is caught rather than styled.
+
+That guarantee is a fact about the dependency list. **`remark-rehype`,
+`remark-stringify`, any `rehype-*` or any sanitiser appearing in
+`package.json` means a compiler is back and this stopped being true.**
+`remark-gfm` is the one safe addition — mdast in, mdast out.
+
+Dropping `v-html` does not close every hole on its own:
+`[click](javascript:…)` is an ordinary markdown link, and `h('a', { href })`
+would fire it. `render.js` whitelists link schemes and renders the rest as text.
+Images render as their alt text until the asset context exists — a remote
+`<img>` in a shared note is a tracking pixel.
+
+### Nothing disappears
+
+A directive the dialect does not recognise — a typo, or a note written against a
+newer version — renders as the text the author typed, marked with
+`.markdown__unknown`. So does a directive used in the wrong form, or carrying an
+attribute that cannot be honoured: `:dice[1d20]{outcome=nat20}` shows as text
+rather than as a chip reading "fumble", because `DiceChip` renders any outcome it
+is handed as one word or the other. Silently swallowing a GM's writing is the
+one failure mode with no signal attached.
 
 ## State and the API
 
