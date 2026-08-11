@@ -21,6 +21,9 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   type: { type: String, default: 'text' },
   autocomplete: { type: String, default: null },
+  // A ceiling the API also holds. Declared rather than left to fall through the
+  // attrs, which would land it on this wrapper's `div` and enforce nothing.
+  maxlength: { type: Number, default: null },
   error: { type: String, default: null },
 })
 
@@ -38,6 +41,7 @@ const errorId = computed(() => `${props.id}-error`)
       :model-value="modelValue"
       :type="type"
       :autocomplete="autocomplete"
+      :maxlength="maxlength"
       :invalid="Boolean(error)"
       :aria-describedby="error ? errorId : undefined"
       fluid

@@ -249,13 +249,26 @@ in different places rather than together.
   in the sidebar and in the drawer — below 900px the drawer is the only place
   the campaign is named at all. The tag it replaced looked pressable and mostly
   was not, which is the worst of both.
-- **Its tooltip is the only place the description appears in the chrome.** A
+- **Its tooltip carries the rest of the name, and only when there is a rest.** A
   15rem column is narrower than a lot of campaign names, so the name ellipsises
-  and the popup carries the whole of it, with the description under it. The
-  ellipsis is visual only — CSS truncation does not shorten the accessible name,
-  so nothing is hidden from a screen reader by a hover-only affordance. The
+  and the popup finishes it. A name that fits gets no popup at all — an empty
+  value is how PrimeVue's directive is told to unbind one — because a popup that
+  repeats a line you are already reading teaches you it is not worth waiting for.
+  The ellipsis is visual only: CSS truncation does not shorten the accessible
+  name, so nothing is hidden from a screen reader by a hover-only affordance. The
   `tooltip` directive is registered in `main.js`; `tokens/components.js` already
   had tokens for it.
+- **Whether it is ellipsised is measured, not guessed.** `scrollWidth >
+clientWidth`, retaken on a `ResizeObserver`, on a rename, and once
+  `document.fonts.ready` resolves — the display face is `font-display: swap`, so
+  the first paint measures the fallback. A character count would be wrong twice:
+  the face is proportional, and the column is one width in the sidebar and
+  another in the drawer.
+- **The description is not in the chrome at all**, and not on the chooser's cards
+  either. It is being held for #31: there it introduces a table to someone
+  deciding whether to join it, which is a different reader at a different moment
+  from a game master hovering the name of a campaign they are already inside. It
+  is still stored, and still edited on the settings page.
 - **The theme item reads "Switch theme"**, not the name of the theme it would
   switch to. Naming the destination needs no state indicator, which is the
   argument for it, but it reads as a place among a list of verbs. The icon
@@ -317,6 +330,14 @@ Three things that go with all this:
   and a nameless campaign. A 422 is placed against the field named in its `loc`;
   pydantic's own wording is not shown, because it is written for whoever wrote
   the request.
+- **The length caps are the same rule twice, on purpose.** `maxlength` holds the
+  name to 200 and the description to 1000 — the API's own limits, `name` being a
+  `String(200)` column and the description capped in the campaign schema. The API
+  is still the one that decides; the fields say it earlier, so nobody writes a
+  description for a minute and learns from a 422 that the minute was wasted. The
+  chooser's cards break the name anywhere for the same reason — 200 characters
+  need not contain a space, and one without would run out over the card beside
+  it.
 
 Deleting lives on that same settings page, behind the campaign's name typed out.
 It is not on the chooser, which is the screen people land on straight after
