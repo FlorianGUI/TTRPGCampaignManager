@@ -10,7 +10,7 @@ from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepos
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.scene import Scene
+from app.contexts.campaign.domain.scene import Scene, SceneSummary
 from app.contexts.campaign.domain.sequence import Sequence
 
 # Both fakes live here rather than in one test module imported by the other: the two
@@ -92,6 +92,25 @@ class FakeSceneRepository(SceneRepository):
     async def find_all_in(self, access: SceneAccess) -> list[Scene]:
         found = [s for s in self._store.values() if s.campaign_id == access.campaign_id]
         return sorted(found, key=lambda s: (s.position, s.id))
+
+    async def find_summaries_in(self, access: SceneAccess) -> list[SceneSummary]:
+        # Built field by field rather than by copying the scene, so a body cannot reach a
+        # summary here even though this store has one — the same promise the SQL makes by
+        # naming its columns.
+        return [
+            SceneSummary(
+                id=s.id,
+                title=s.title,
+                status=s.status,
+                campaign_id=s.campaign_id,
+                position=s.position,
+                act_id=s.act_id,
+                sequence_id=s.sequence_id,
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+            )
+            for s in await self.find_all_in(access)
+        ]
 
     async def find_under(
         self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None

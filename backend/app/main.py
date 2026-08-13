@@ -9,6 +9,7 @@ from app.contexts.campaign.adapters.primary.api.routers.campaigns import router 
 from app.contexts.campaign.adapters.primary.api.routers.characters import router as characters_router
 from app.contexts.campaign.adapters.primary.api.routers.scenes import router as scenes_router
 from app.contexts.campaign.adapters.primary.api.routers.sequences import router as sequences_router
+from app.contexts.campaign.adapters.primary.api.routers.structure import router as structure_router
 from app.contexts.source.adapters.primary.api.routers.sources import router as sources_router
 from app.contexts.user.adapters.primary.api.routers.auth import router as auth_router
 from app.contexts.user.adapters.primary.api.routers.users import router as users_router
@@ -29,6 +30,7 @@ app.include_router(characters_router)
 app.include_router(acts_router)
 app.include_router(sequences_router)
 app.include_router(scenes_router)
+app.include_router(structure_router)
 app.include_router(sources_router)
 app.include_router(users_router)
 app.include_router(auth_router)

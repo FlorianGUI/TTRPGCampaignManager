@@ -37,6 +37,33 @@ class SceneStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+@dataclass(frozen=True)
+class SceneSummary:
+    """A scene with everything except the one field that makes it expensive.
+
+    The tree is read on every campaign route — the sidebar needs act titles and scene
+    statuses wherever you are — and a campaign is hundreds of scenes each carrying a body
+    of markdown. Handing all of that back to draw an outline is the mistake #88 records at
+    length: the client cannot use it, and the excerpt it *would* be used for cannot be
+    derived server-side without the API learning the dialect.
+
+    So this is not `Scene` with a field hidden at the boundary. **The query never selects
+    the column**, which is the difference between a response that omits a body and a
+    database read that does. Frozen because a summary is something to look at, not
+    something to edit: writes go through `Scene`, which is the whole record.
+    """
+
+    id: SceneId
+    title: str
+    status: SceneStatus
+    campaign_id: CampaignId
+    position: int
+    act_id: ActId | None
+    sequence_id: SequenceId | None
+    created_at: datetime
+    updated_at: datetime
+
+
 @dataclass
 class Scene:
     """A unit of play: one place, one cast — "The parley at Stonegate".

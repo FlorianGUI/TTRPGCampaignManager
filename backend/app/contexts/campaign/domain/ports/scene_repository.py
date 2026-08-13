@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from app.common.access import Unsafe
 from app.common.ids import ActId, SceneId, SequenceId
 from app.contexts.campaign.domain.narrative_access import SceneAccess
-from app.contexts.campaign.domain.scene import Scene
+from app.contexts.campaign.domain.scene import Scene, SceneSummary
 
 
 class SceneRepository(ABC):
@@ -33,6 +33,16 @@ class SceneRepository(ABC):
         #80 is explicit that ordering is applied here rather than left to whoever renders
         it: two callers sorting for themselves is two chances to disagree about what order
         the story goes in.
+        """
+
+    @abstractmethod
+    async def find_summaries_in(self, access: SceneAccess) -> list[SceneSummary]:
+        """Every scene in the campaign, in order, **without the bodies**.
+
+        The read the whole tree is drawn from, and the reason it is a separate method
+        rather than `find_all_in` with a flag: the promise is that the body column is never
+        selected, and a flag would leave that promise depending on the caller passing the
+        right value. See `SceneSummary`.
         """
 
     @abstractmethod
