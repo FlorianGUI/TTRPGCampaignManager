@@ -24,6 +24,7 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import ActProgress from '../components/narrative/ActProgress.vue'
+import MoveControl from '../components/narrative/MoveControl.vue'
 import SceneStatus from '../components/narrative/SceneStatus.vue'
 import { actProgress, useStructureStore } from '../stores/structure.js'
 import { readCollapsed, rememberCollapsed } from '../stores/collapsedNarrative.js'
@@ -103,6 +104,20 @@ const childrenOfAct = (act) =>
   ].sort((a, b) => a.node.position - b.node.position || a.node.id.localeCompare(b.node.id))
 
 const progressOf = (act) => actProgress(tree.value, act)
+
+/*
+ * The list a row sits in, which is what "up" and "down" mean for it.
+ *
+ * Every level passes its own, taken from the same array the rows were rendered
+ * from — a scene inside a sequence moves among that sequence's scenes, and the
+ * wrong list would anchor a step against something that is not a sibling and be
+ * refused by the API for reasons nobody could see on screen.
+ *
+ * At each level the two kinds are ordered together, for the same reason the
+ * outline renders them that way: a scene written straight onto an act sits among
+ * the sequences beside it, not after all of them.
+ */
+const nodesOf = (entries) => entries.map((entry) => entry.node)
 
 /*
  * Every row leads to its own page (#88's PR 2). The outline stays the place you
@@ -200,6 +215,12 @@ function toggleAll() {
             </div>
 
             <ActProgress :progress="progressOf(child.node)" />
+            <MoveControl
+              :campaign-id="campaignId"
+              kind="act"
+              :node="child.node"
+              :siblings="nodesOf(children)"
+            />
           </div>
 
           <ol v-if="!isShut(child.node.id)" class="outline__children">
@@ -230,6 +251,13 @@ function toggleAll() {
                       {{ under.node.description }}
                     </p>
                   </div>
+
+                  <MoveControl
+                    :campaign-id="campaignId"
+                    kind="sequence"
+                    :node="under.node"
+                    :siblings="nodesOf(childrenOfAct(child.node))"
+                  />
                 </div>
 
                 <ol v-if="!isShut(under.node.id)" class="outline__children">
@@ -240,6 +268,12 @@ function toggleAll() {
                         <RouterLink :to="to('scene', scene)">{{ scene.title }}</RouterLink>
                       </span>
                       <SceneStatus :status="scene.status" />
+                      <MoveControl
+                        :campaign-id="campaignId"
+                        kind="scene"
+                        :node="scene"
+                        :siblings="scenesIn(under.node)"
+                      />
                     </div>
                   </li>
                 </ol>
@@ -259,6 +293,12 @@ function toggleAll() {
                   <RouterLink :to="to('scene', under.node)">{{ under.node.title }}</RouterLink>
                 </span>
                 <SceneStatus :status="under.node.status" />
+                <MoveControl
+                  :campaign-id="campaignId"
+                  kind="scene"
+                  :node="under.node"
+                  :siblings="nodesOf(childrenOfAct(child.node))"
+                />
               </div>
             </li>
           </ol>
@@ -316,6 +356,12 @@ function toggleAll() {
             <RouterLink :to="to('scene', child.node)">{{ child.node.title }}</RouterLink>
           </span>
           <SceneStatus :status="child.node.status" />
+          <MoveControl
+            :campaign-id="campaignId"
+            kind="scene"
+            :node="child.node"
+            :siblings="nodesOf(children)"
+          />
         </div>
       </li>
     </ol>

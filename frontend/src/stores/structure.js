@@ -143,6 +143,30 @@ export const useStructureStore = defineStore('structure', () => {
     return saved
   }
 
+  /*
+   * Where a record sits: its parent, and its place among that parent's children.
+   *
+   * One call for both, because they are one gesture — the endpoint takes them
+   * together for the same reason (#80's PR 3). `after` names the sibling this
+   * goes below; `null` is the top of the list, which is a placement rather than
+   * an absent argument.
+   *
+   * The tree is refetched afterwards. A placement moves *this* row and possibly
+   * renumbers its siblings, so nothing local can be trusted to still be right —
+   * and unlike a title edit there is no single field to patch.
+   */
+  async function place(campaignId, kind, id, placement) {
+    const saved = await request(`${pathTo(campaignId, kind, id)}/placement`, {
+      method: 'PUT',
+      json: placement,
+    })
+
+    nodes.value[`${kind}:${id}`] = saved
+    await reload(campaignId)
+
+    return saved
+  }
+
   function treeFor(campaignId) {
     return trees.value[campaignId] ?? null
   }
@@ -181,6 +205,7 @@ export const useStructureStore = defineStore('structure', () => {
     ensureNode,
     nodeFor,
     saveNode,
+    place,
   }
 })
 
@@ -293,4 +318,63 @@ export function trailTo(tree, kind, node) {
   }
 
   return []
+}
+
+/*
+ * Which sibling a record should land after, to move one step up or down.
+ *
+ * The endpoint takes an anchor rather than an index, so a step is arithmetic on
+ * the sibling list — and the arithmetic is not symmetrical, which is the whole
+ * reason it lives here with a test rather than inline in a template.
+ *
+ * Moving **down** past one neighbour means landing after that neighbour:
+ * `siblings[index + 1]`. Moving **up** means landing after the record *two*
+ * places above, because the one directly above is the neighbour being passed —
+ * and two above the top is nothing at all, which is `null`, the head of the list.
+ *
+ * `undefined` means the move is not available: the first record cannot rise and
+ * the last cannot fall. Distinct from `null` on purpose, since `null` is a real
+ * destination.
+ */
+export function anchorForStep(siblings, id, direction) {
+  const index = siblings.findIndex((sibling) => sibling.id === id)
+  if (index === -1) return undefined
+
+  if (direction === 'up') {
+    if (index === 0) return undefined
+    return index >= 2 ? siblings[index - 2].id : null
+  }
+
+  if (index >= siblings.length - 1) return undefined
+  return siblings[index + 1].id
+}
+
+/*
+ * The parents a record may legally be given, nearest thing to a menu of them.
+ *
+ * The tree's shape is the only rule here and it is structural rather than
+ * checked: an act has no parent but the campaign, a sequence may take an act,
+ * and a scene may take either. The campaign itself is always an option and is
+ * listed first, because #80's skippable levels make it a real place rather than
+ * a fallback.
+ *
+ * A record is never offered itself, and a sequence is never offered a parent
+ * that would put it inside another sequence — there is no column for that.
+ */
+export function parentsFor(tree, kind, id) {
+  if (!tree || kind === 'act') return []
+
+  const campaign = [{ label: 'The campaign', act_id: null, sequence_id: null }]
+
+  const acts = tree.acts.map((act) => ({ label: act.title, act_id: act.id, sequence_id: null }))
+
+  if (kind === 'sequence') return [...campaign, ...acts]
+
+  const sequences = tree.sequences.map((sequence) => ({
+    label: sequence.title,
+    act_id: null,
+    sequence_id: sequence.id,
+  }))
+
+  return [...campaign, ...acts, ...sequences].filter((option) => option.sequence_id !== id)
 }
