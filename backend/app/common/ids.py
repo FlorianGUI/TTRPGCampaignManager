@@ -23,6 +23,7 @@ from uuid import UUID
 UserId = NewType("UserId", UUID)
 CampaignId = NewType("CampaignId", UUID)
 CharacterId = NewType("CharacterId", UUID)
+SceneId = NewType("SceneId", UUID)
 SourceId = NewType("SourceId", UUID)
 RefreshTokenId = NewType("RefreshTokenId", UUID)
 SessionId = NewType("SessionId", UUID)

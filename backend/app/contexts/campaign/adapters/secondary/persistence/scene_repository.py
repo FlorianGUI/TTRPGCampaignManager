@@ -1,0 +1,94 @@
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.common.access import Unsafe
+from app.common.ids import CampaignId, SceneId
+from app.contexts.campaign.adapters.secondary.persistence.scene_model import SceneModel
+from app.contexts.campaign.domain.narrative_access import SceneAccess
+from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
+from app.contexts.campaign.domain.scene import Scene, SceneStatus
+
+
+class SqlAlchemySceneRepository(SceneRepository):
+    """Only the bulk reads carry a rule; the single-row ones are plain lookups.
+
+    Where a query filters on `access.campaign_id`, that is a campaign the caller has
+    already been proved entitled to. Where one does not, the entitlement is checked in
+    the domain instead — see the port for why the two halves differ.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def save(self, scene: Scene) -> Scene:
+        # merge() rather than add(): one save both inserts and writes back.
+        #
+        # Every column listed, `created_at` and `position` included: merge() copies this
+        # transient object onto the loaded row, so a field left out is erased rather than
+        # left alone. That is the hazard #78 fixed in the other two repositories before
+        # this one existed, and it bites harder here — a missing `position` would not
+        # merely blank a value, it would drop the scene out of narrative order.
+        await self._session.merge(
+            SceneModel(
+                id=scene.id,
+                title=scene.title,
+                body=scene.body,
+                status=scene.status,
+                campaign_id=scene.campaign_id,
+                position=scene.position,
+                created_at=scene.created_at,
+                updated_at=scene.updated_at,
+            )
+        )
+        await self._session.commit()
+        return scene
+
+    async def find_by_id(self, id: SceneId) -> Unsafe[Scene]:
+        result = await self._session.execute(select(SceneModel).where(SceneModel.id == id))
+        model = result.scalar_one_or_none()
+        return Unsafe(self._to_domain(model) if model is not None else None)
+
+    async def find_all_in(self, access: SceneAccess) -> list[Scene]:
+        # position, then id. The tie-breaker is #78's rule applied to a different column:
+        # equal keys come back in whatever order Postgres likes, and two scenes appended
+        # in the same instant can share a position. Without the second key a list can
+        # reorder itself between two identical requests.
+        result = await self._session.execute(
+            select(SceneModel)
+            .where(SceneModel.campaign_id == access.campaign_id)
+            .order_by(SceneModel.position, SceneModel.id)
+        )
+        return [self._to_domain(m) for m in result.scalars().all()]
+
+    async def last_position_in(self, access: SceneAccess) -> int | None:
+        # MAX over an empty set is NULL, which is exactly "this campaign has no scenes
+        # yet" — so the empty case needs no branch here and none in the caller.
+        result = await self._session.execute(
+            select(func.max(SceneModel.position)).where(SceneModel.campaign_id == access.campaign_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def delete(self, id: SceneId) -> None:
+        await self._session.execute(delete(SceneModel).where(SceneModel.id == id))
+        await self._session.commit()
+
+    async def delete_all_in(self, access: SceneAccess) -> None:
+        # One statement, no rows loaded: emptying a campaign is not a reason to read it.
+        await self._session.execute(delete(SceneModel).where(SceneModel.campaign_id == access.campaign_id))
+        await self._session.commit()
+
+    @staticmethod
+    def _to_domain(model: SceneModel) -> Scene:
+        return Scene(
+            id=SceneId(model.id),
+            title=model.title,
+            body=model.body,
+            # The column is text; this is where a value coming back out of the table is
+            # held to the domain's list. A row carrying something else raises here rather
+            # than travelling on as a str that only looks like a status.
+            status=SceneStatus(model.status),
+            campaign_id=CampaignId(model.campaign_id),
+            position=model.position,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )

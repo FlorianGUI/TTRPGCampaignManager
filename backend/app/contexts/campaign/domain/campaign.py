@@ -7,6 +7,7 @@ from app.common.access import Access, Unsafe
 from app.common.errors import NotAvailable
 from app.common.ids import CampaignId, UserId
 from app.contexts.campaign.domain.character_access import CharacterAccess
+from app.contexts.campaign.domain.narrative_access import SceneAccess
 
 
 class CampaignNotReachable(NotAvailable):
@@ -96,3 +97,18 @@ class CampaignAccess(Access[Campaign]):
         drift. #52 and #29 add a sibling each.
         """
         return CharacterAccess(campaign_id=self.readable(campaign).id, viewer_id=self.viewer_id)
+
+    def narrative_at(self, campaign: Unsafe[Campaign]) -> SceneAccess:
+        """Hand out the right to work with this campaign's prep — the whole tree.
+
+        The sibling of `characters_at`, and the same single line: `self.readable(campaign)`
+        is the reach check, asked here and nowhere below. That is the whole of #80's "one
+        access token for the whole tree, minted only by `CampaignAccess`, its rules
+        deferring to the campaign's rather than restating them".
+
+        Returns the scene token because a scene is the whole tree today. PR 2 adds acts
+        and sequences, and the change here is the return type widening rather than two
+        more methods appearing: the tokens differ only in which 404 they raise, and every
+        one of them will have been minted by this line.
+        """
+        return SceneAccess(campaign_id=self.readable(campaign).id, viewer_id=self.viewer_id)
