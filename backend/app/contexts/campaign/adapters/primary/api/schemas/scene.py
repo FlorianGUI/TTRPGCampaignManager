@@ -1,34 +1,60 @@
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.markdown import CampaignMarkdown
 from app.contexts.campaign.domain.scene import SceneStatus
 
 
-class SceneCreate(BaseModel):
+class OneParent(BaseModel):
+    """A scene hangs off an act, a sequence, or the campaign — never two of them.
+
+    Rejecting both here rather than in the domain is what makes it a **422 and not a 500**.
+    `Scene.__post_init__` guards the same thing, but that guard exists to catch a bug in
+    this codebase; this is the one that answers a caller, and it says which two fields are
+    the problem rather than leaving them to guess from a stack trace.
+
+    Both omitted is not an error and never should be: that is the campaign, and it is the
+    whole of a one-shot.
+    """
+
+    act_id: UUID | None = None
+    sequence_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_parent_at_most(self) -> Self:
+        if self.act_id is not None and self.sequence_id is not None:
+            raise ValueError("A scene hangs off an act or a sequence, not both")
+        return self
+
+
+class SceneCreate(OneParent):
     title: str = Field(max_length=200)
     body: CampaignMarkdown = ""
     status: SceneStatus = SceneStatus.PLANNED
 
 
 class SceneUpdate(BaseModel):
-    """A full replacement, not a patch — the rule `PUT /campaigns/{id}` already follows.
+    """What the scene says. Where it sits is `PUT .../parent`.
 
-    Every field is sent on every write, so a body left out of the request is cleared
-    rather than kept. The frontend depends on knowing which of the two this is: #88's
-    inline description edit is only safe because the client sends the whole record.
+    A full replacement, not a patch: every field is sent on every write, so a body left
+    out is cleared rather than kept. #88's editor depends on knowing which of the two this
+    is.
 
-    `body` and `status` carry defaults so a title-only rename is one field, which is the
-    common edit — and the default is the same "" the create schema uses, so a rename that
-    omits the body clears it rather than doing something surprising. That is the full
-    replacement rule being consistent, not an exception to it.
+    No parentage here on purpose — see `SequenceUpdate` for the argument. It matters more
+    for a scene, because the common write is a long body typed over an hour, and that is
+    exactly the request most likely to be carrying a stale parent.
     """
 
     title: str = Field(max_length=200)
     body: CampaignMarkdown = ""
     status: SceneStatus = SceneStatus.PLANNED
+
+
+class SceneMove(OneParent):
+    """Where the scene sits. Both null is the campaign."""
 
 
 class SceneResponse(BaseModel):
@@ -37,14 +63,11 @@ class SceneResponse(BaseModel):
     body: CampaignMarkdown
     status: SceneStatus
     campaign_id: UUID
-    # On the way out only, like the timestamps below it. Where a scene sits among its
-    # siblings is the campaign's business, not something a caller asserts on a write —
-    # a create appends, and moving one is PR 3's own endpoint. Sending it here would
-    # invite a client to reorder by editing, which is the thing an explicit position
-    # exists to prevent.
+    # The direct parent, and at most one is ever set. A scene under a sequence does not
+    # report that sequence's act — a client that wants the whole tree reads the whole
+    # tree, rather than trusting a copy that a move could have left stale.
+    act_id: UUID | None
+    sequence_id: UUID | None
     position: int
-    # What a record says about itself is not something a caller sends: both are written
-    # by the domain, and a request carrying them would be asking the server to lie about
-    # when something happened.
     created_at: datetime
     updated_at: datetime

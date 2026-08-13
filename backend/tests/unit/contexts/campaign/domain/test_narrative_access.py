@@ -16,7 +16,7 @@ def _scene_in(access: SceneAccess, title: str) -> Scene:
 
 def _access_for(name: str) -> SceneAccess:
     owner_id = UserId(uuid.uuid4())
-    return CampaignAccess(owner_id).narrative_at(Unsafe(Campaign(name=name, owner_id=owner_id)))
+    return CampaignAccess(owner_id).narrative_at(Unsafe(Campaign(name=name, owner_id=owner_id))).scenes
 
 
 class TestNarrativeAt:
@@ -26,7 +26,7 @@ class TestNarrativeAt:
         owner_id = UserId(uuid.uuid4())
         campaign = Campaign(name="Greyfen", owner_id=owner_id)
 
-        access = CampaignAccess(owner_id).narrative_at(Unsafe(campaign))
+        access = CampaignAccess(owner_id).narrative_at(Unsafe(campaign)).scenes
 
         assert access.campaign_id == campaign.id
         assert access.viewer_id == owner_id

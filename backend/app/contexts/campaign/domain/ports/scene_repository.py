@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.common.access import Unsafe
-from app.common.ids import SceneId
+from app.common.ids import ActId, SceneId, SequenceId
 from app.contexts.campaign.domain.narrative_access import SceneAccess
 from app.contexts.campaign.domain.scene import Scene
 
@@ -36,12 +36,20 @@ class SceneRepository(ABC):
         """
 
     @abstractmethod
-    async def last_position_in(self, access: SceneAccess) -> int | None:
-        """The highest position among the campaign's scenes, or `None` if it has none.
+    async def last_position_under(
+        self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
+    ) -> int | None:
+        """The highest position among the scenes under this parent, or `None` if it is empty.
 
         Exists so that appending a scene does not have to load every sibling to find out
         where the end is — the whole point of the sparse scheme is that placing a record
         is arithmetic, and this is the one number the arithmetic needs.
+
+        **The parent is part of the question, not a filter on the answer.** A position is
+        only meaningful among the children of one parent, so a scene appended to an act
+        counts from that act's scenes and not from the campaign's. Both ids `None` is the
+        campaign itself — a legitimate parent under #80's skippable levels, and the whole
+        of a one-shot.
         """
 
     @abstractmethod

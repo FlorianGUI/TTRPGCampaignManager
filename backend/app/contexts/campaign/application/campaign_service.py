@@ -2,10 +2,12 @@ from app.common.access import Unsafe
 from app.common.ids import CampaignId, UserId
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.character_access import CharacterAccess
-from app.contexts.campaign.domain.narrative_access import SceneAccess
+from app.contexts.campaign.domain.narrative_access import Narrative
+from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.campaign_repository import CampaignRepository
 from app.contexts.campaign.domain.ports.character_repository import CharacterRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
+from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
 
 
 class CampaignService:
@@ -25,10 +27,14 @@ class CampaignService:
         repository: CampaignRepository,
         characters: CharacterRepository,
         scenes: SceneRepository,
+        sequences: SequenceRepository,
+        acts: ActRepository,
     ) -> None:
         self._repository = repository
         self._characters = characters
         self._scenes = scenes
+        self._sequences = sequences
+        self._acts = acts
 
     async def create(self, name: str, owner_id: UserId, description: str | None = None) -> Campaign:
         campaign = Campaign(name=name, owner_id=owner_id, description=description)
@@ -50,7 +56,7 @@ class CampaignService:
         """
         return CampaignAccess(viewer_id).characters_at(await self._repository.find_by_id(id))
 
-    async def narrative_at(self, id: CampaignId, viewer_id: UserId) -> SceneAccess:
+    async def narrative_at(self, id: CampaignId, viewer_id: UserId) -> Narrative:
         """The same door, for the campaign's prep rather than its sheets.
 
         Identical in shape to `characters_at` and deliberately so: one fetch, one hand-off
@@ -83,6 +89,13 @@ class CampaignService:
         """
         access = CampaignAccess(owner_id)
         campaign = access.deletable(await self._repository.find_by_id(id))
+        narrative = access.narrative_at(Unsafe(campaign))
+
         await self._characters.delete_all_in(access.characters_at(Unsafe(campaign)))
-        await self._scenes.delete_all_in(access.narrative_at(Unsafe(campaign)))
+        # The tree is swept bottom-up, so a failure part-way leaves parents holding
+        # children that are already gone rather than children pointing at parents that
+        # are — the same argument as contents-before-campaign, one level down.
+        await self._scenes.delete_all_in(narrative.scenes)
+        await self._sequences.delete_all_in(narrative.sequences)
+        await self._acts.delete_all_in(narrative.acts)
         await self._repository.delete(campaign.id)

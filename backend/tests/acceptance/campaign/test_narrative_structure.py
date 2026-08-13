@@ -1,0 +1,396 @@
+import asyncio
+import uuid
+
+from httpx import AsyncClient
+from pytest_bdd import given, parsers, scenarios, then, when
+
+scenarios("features/narrative_structure.feature")
+
+
+def _headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _auth_headers(context: dict) -> dict:
+    return _headers(context["token"])
+
+
+def _acts(campaign_id: str) -> str:
+    return f"/campaigns/{campaign_id}/acts/"
+
+
+def _sequences(campaign_id: str) -> str:
+    return f"/campaigns/{campaign_id}/sequences/"
+
+
+def _scenes(campaign_id: str) -> str:
+    return f"/campaigns/{campaign_id}/scenes/"
+
+
+def _run(coro):
+    return asyncio.get_event_loop().run_until_complete(coro)
+
+
+def _mine(context: dict) -> str:
+    return context["my_campaign"]["id"]
+
+
+@given(parsers.parse('I create a campaign named "{name}"'))
+def create_campaign(client: AsyncClient, context: dict, name: str):
+    response = _run(client.post("/campaigns/", json={"name": name}, headers=_auth_headers(context)))
+    assert response.status_code == 201
+    context["my_campaign"] = response.json()
+
+
+@given(parsers.parse('I create a second campaign named "{name}"'))
+def create_second_campaign(client: AsyncClient, context: dict, name: str):
+    response = _run(client.post("/campaigns/", json={"name": name}, headers=_auth_headers(context)))
+    assert response.status_code == 201
+    context["my_other_campaign"] = response.json()
+
+
+@given(parsers.parse('another game master runs a campaign named "{name}"'))
+def another_game_master_runs_a_campaign(client: AsyncClient, context: dict, register_user, name: str):
+    token = register_user()
+    response = _run(client.post("/campaigns/", json={"name": name}, headers=_headers(token)))
+    assert response.status_code == 201
+    context["other_game_master"] = {"token": token, "campaign": response.json()}
+
+
+@given(parsers.parse('I create an act named "{title}" in my campaign'))
+def create_act(client: AsyncClient, context: dict, title: str):
+    response = _run(client.post(_acts(_mine(context)), json={"title": title}, headers=_auth_headers(context)))
+    assert response.status_code == 201
+    context.setdefault("acts", []).append(response.json())
+
+
+@given(parsers.parse('I create an act named "{title}" in my second campaign'))
+def create_act_elsewhere(client: AsyncClient, context: dict, title: str):
+    """An act I really do own, in a campaign I really do run — just not this one.
+
+    Deliberately not the other game master's: that would be refused by the reach check,
+    and the scenario would pass even if the same-campaign rule were deleted.
+    """
+    response = _run(
+        client.post(
+            _acts(context["my_other_campaign"]["id"]),
+            json={"title": title},
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.status_code == 201
+    context["act_elsewhere"] = response.json()
+
+
+@given(parsers.parse('I create a sequence named "{title}" under that act'))
+def create_sequence_under_act(client: AsyncClient, context: dict, title: str):
+    response = _run(
+        client.post(
+            _sequences(_mine(context)),
+            json={"title": title, "act_id": context["acts"][0]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.status_code == 201
+    context["sequence"] = response.json()
+
+
+@given(parsers.parse('I create a sequence named "{title}" in my campaign'))
+def create_loose_sequence(client: AsyncClient, context: dict, title: str):
+    response = _run(client.post(_sequences(_mine(context)), json={"title": title}, headers=_auth_headers(context)))
+    assert response.status_code == 201
+    context["sequence"] = response.json()
+
+
+@given(parsers.parse('I create a scene named "{title}" under that sequence'))
+def create_scene_under_sequence(client: AsyncClient, context: dict, title: str):
+    response = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={"title": title, "sequence_id": context["sequence"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.status_code == 201
+    context["scene"] = response.json()
+
+
+@given(parsers.parse('I create a scene named "{title}" under that act'))
+def create_scene_under_act(client: AsyncClient, context: dict, title: str):
+    response = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={"title": title, "act_id": context["acts"][0]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.status_code == 201
+    context["scene"] = response.json()
+
+
+@given(parsers.parse('I create a scene named "{title}" in my campaign'))
+def create_loose_scene(client: AsyncClient, context: dict, title: str):
+    response = _run(client.post(_scenes(_mine(context)), json={"title": title}, headers=_auth_headers(context)))
+    assert response.status_code == 201
+    context["scene"] = response.json()
+
+
+@when("I list the acts in my campaign")
+def list_acts(client: AsyncClient, context: dict):
+    context["response"] = _run(client.get(_acts(_mine(context)), headers=_auth_headers(context)))
+
+
+@when("I list the acts in the other game masters campaign")
+def list_their_acts(client: AsyncClient, context: dict):
+    other = context["other_game_master"]
+    context["response"] = _run(client.get(_acts(other["campaign"]["id"]), headers=_auth_headers(context)))
+
+
+@when("I retrieve the sequence by its ID")
+def retrieve_sequence(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.get(
+            f"{_sequences(_mine(context))}{context['sequence']['id']}",
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I retrieve the scene by its ID")
+def retrieve_scene(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.get(f"{_scenes(_mine(context))}{context['scene']['id']}", headers=_auth_headers(context))
+    )
+
+
+@when("I create a scene naming both that act and that sequence")
+def create_scene_with_two_parents(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={
+                "title": "Ambiguous",
+                "act_id": context["acts"][0]["id"],
+                "sequence_id": context["sequence"]["id"],
+            },
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I create a scene in my campaign under that act")
+def create_scene_under_a_foreign_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={"title": "Stolen", "act_id": context["act_elsewhere"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I create a sequence in my campaign under that act")
+def create_sequence_under_a_foreign_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.post(
+            _sequences(_mine(context)),
+            json={"title": "Stolen", "act_id": context["act_elsewhere"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I create a scene in my campaign under an act that does not exist")
+def create_scene_under_a_missing_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={"title": "Nowhere", "act_id": str(uuid.uuid4())},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I move the scene under the second act")
+def move_scene_to_second_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            json={"act_id": context["acts"][1]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I move the scene to the campaign")
+def move_scene_to_campaign(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            json={},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I move the scene under that act")
+def move_scene_under_a_foreign_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            json={"act_id": context["act_elsewhere"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I rewrite the sequence")
+def rewrite_sequence(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_sequences(_mine(context))}{context['sequence']['id']}",
+            json={"title": "The Causeway, rewritten", "description": "Getting across."},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I retrieve the act by its ID")
+def retrieve_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.get(f"{_acts(_mine(context))}{context['acts'][0]['id']}", headers=_auth_headers(context))
+    )
+
+
+@when(parsers.parse('I rename the act to "{title}"'))
+def rename_act(client: AsyncClient, context: dict, title: str):
+    context["response"] = _run(
+        client.put(
+            f"{_acts(_mine(context))}{context['acts'][0]['id']}",
+            json={"title": title},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I delete the act")
+def delete_act(client: AsyncClient, context: dict):
+    """An empty one. What a non-empty act does is #80's open question and PR 3's."""
+    context["response"] = _run(
+        client.delete(f"{_acts(_mine(context))}{context['acts'][0]['id']}", headers=_auth_headers(context))
+    )
+
+
+@when("I list the sequences in my campaign")
+def list_sequences(client: AsyncClient, context: dict):
+    context["response"] = _run(client.get(_sequences(_mine(context)), headers=_auth_headers(context)))
+
+
+@when("I move the sequence under that act")
+def move_sequence_under_act(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_sequences(_mine(context))}{context['sequence']['id']}/parent",
+            json={"act_id": context["acts"][0]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I move the sequence to the campaign")
+def move_sequence_to_campaign(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_sequences(_mine(context))}{context['sequence']['id']}/parent",
+            json={},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I delete the sequence")
+def delete_sequence(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.delete(f"{_sequences(_mine(context))}{context['sequence']['id']}", headers=_auth_headers(context))
+    )
+
+
+@when("I delete my campaign")
+def delete_my_campaign(client: AsyncClient, context: dict):
+    response = _run(client.delete(f"/campaigns/{_mine(context)}", headers=_auth_headers(context)))
+    assert response.status_code == 204
+
+
+@then(parsers.parse('the acts should read "{titles}"'))
+def acts_should_read(context: dict, titles: str):
+    assert context["response"].status_code == 200
+    assert [a["title"] for a in context["response"].json()] == titles.split(", ")
+
+
+@then("the sequence should be under that act")
+def sequence_under_that_act(context: dict):
+    assert context["response"].status_code == 200
+    assert context["response"].json()["act_id"] == context["acts"][0]["id"]
+
+
+@then("the sequence should be under no act")
+def sequence_under_no_act(context: dict):
+    assert context["response"].json()["act_id"] is None
+
+
+@then("the scene should be under that sequence")
+def scene_under_that_sequence(context: dict):
+    assert context["response"].status_code == 200
+    assert context["response"].json()["sequence_id"] == context["sequence"]["id"]
+
+
+@then("the scene should be under that act")
+def scene_under_that_act(context: dict):
+    assert context["response"].json()["act_id"] == context["acts"][0]["id"]
+
+
+@then("the scene should be under the second act")
+def scene_under_second_act(context: dict):
+    assert context["response"].status_code == 200
+    assert context["response"].json()["act_id"] == context["acts"][1]["id"]
+
+
+@then("the scene should be under no act")
+def scene_under_no_act(context: dict):
+    assert context["response"].json()["act_id"] is None
+
+
+@then("the scene should be under no sequence")
+def scene_under_no_sequence(context: dict):
+    assert context["response"].json()["sequence_id"] is None
+
+
+@then("the scene should be first among its siblings")
+def scene_first_among_siblings(context: dict):
+    """A new parent starts its own numbering rather than continuing the campaign's."""
+    assert context["response"].json()["position"] == 1024
+
+
+@then(parsers.parse('I should see an act named "{title}"'))
+def should_see_an_act_named(context: dict, title: str):
+    assert context["response"].status_code == 200
+    assert context["response"].json()["title"] == title
+
+
+@then("the acts should be empty")
+def acts_should_be_empty(context: dict):
+    assert context["response"].status_code == 200
+    assert context["response"].json() == []
+
+
+@then(parsers.parse("I should see {count:d} sequences"))
+def should_see_n_sequences(context: dict, count: int):
+    assert context["response"].status_code == 200
+    assert len(context["response"].json()) == count
+
+
+@then("the request should be rejected as invalid")
+def rejected_as_invalid(context: dict):
+    """422, not 404: the caller sent a contradiction rather than reached for something
+    that is not theirs, and telling them so costs nothing."""
+    assert context["response"].status_code == 422

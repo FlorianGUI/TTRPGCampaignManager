@@ -28,6 +28,15 @@ class SceneModel(Base, TimestampedModel):
     # a campaign deletes the scenes in it — an application rule carried out by
     # CampaignService, not an ON DELETE CASCADE.
     campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    # The parent, and at most one of these is ever set — see `Scene.__post_init__` for why
+    # storing both would be a scene with two answers to where it lives. Both NULL is the
+    # campaign itself, which is a parent rather than the absence of one.
+    #
+    # Only the *direct* parent is stored. A scene under a sequence does not also record
+    # that sequence's act: the act is reached by looking, not by a copy kept here that
+    # could disagree with the sequence after a move.
+    act_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    sequence_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
     # Sparse: see domain/position.py. No unique constraint on (campaign_id, position) on
     # purpose — the scheme tolerates a tie and `find_all_in` breaks one by id, whereas a
     # constraint would turn a harmless collision between two scenes created in the same

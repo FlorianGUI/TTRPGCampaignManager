@@ -43,12 +43,12 @@ def owner_id() -> UserId:
 @pytest.fixture
 def access(owner_id: UserId) -> SceneAccess:
     campaign = Campaign(name="The Drowning of Greyfen", owner_id=owner_id)
-    return CampaignAccess(owner_id).narrative_at(Unsafe(campaign))
+    return CampaignAccess(owner_id).narrative_at(Unsafe(campaign)).scenes
 
 
 @pytest.fixture
 def other_access(owner_id: UserId) -> SceneAccess:
-    return CampaignAccess(owner_id).narrative_at(Unsafe(Campaign(name="Fen Wardens", owner_id=owner_id)))
+    return CampaignAccess(owner_id).narrative_at(Unsafe(Campaign(name="Fen Wardens", owner_id=owner_id))).scenes
 
 
 class TestSave:
@@ -194,26 +194,26 @@ class TestFindAllIn:
         assert await repository.find_all_in(access) == []
 
 
-class TestLastPositionIn:
+class TestLastPositionUnder:
     async def test_answers_nothing_for_a_campaign_with_no_scenes(
         self, repository: SqlAlchemySceneRepository, access: SceneAccess
     ):
         """MAX over an empty set is NULL, which is what `position_after(None)` expects."""
-        assert await repository.last_position_in(access) is None
+        assert await repository.last_position_under(access, None, None) is None
 
     async def test_answers_the_highest_position(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
         await repository.save(_scene_in(access, "Arrival at dusk", position=1024))
         await repository.save(_scene_in(access, "The nesting pair", position=3072))
         await repository.save(_scene_in(access, "The sunken arch", position=2048))
 
-        assert await repository.last_position_in(access) == 3072
+        assert await repository.last_position_under(access, None, None) == 3072
 
     async def test_ignores_another_campaigns_scenes(
         self, repository: SqlAlchemySceneRepository, access: SceneAccess, other_access: SceneAccess
     ):
         await repository.save(_scene_in(other_access, "Session zero", position=99999))
 
-        assert await repository.last_position_in(access) is None
+        assert await repository.last_position_under(access, None, None) is None
 
 
 class TestDelete:
