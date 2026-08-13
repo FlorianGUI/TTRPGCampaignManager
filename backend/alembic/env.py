@@ -11,9 +11,11 @@ from alembic import context
 # Import every secondary-adapter model so Base.metadata is fully populated
 # before autogenerate compares it against the database schema.
 from app.contexts.campaign.adapters.secondary.persistence import (
+    act_model,  # noqa: F401
     campaign_model,  # noqa: F401
     character_model,  # noqa: F401
     scene_model,  # noqa: F401
+    sequence_model,  # noqa: F401
 )
 from app.contexts.source.adapters.secondary.persistence import source_model  # noqa: F401
 from app.contexts.user.adapters.secondary.persistence import (

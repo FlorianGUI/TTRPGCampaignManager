@@ -4,7 +4,7 @@ from enum import StrEnum
 from uuid import uuid4
 
 from app.common.errors import NotAvailable
-from app.common.ids import CampaignId, SceneId
+from app.common.ids import ActId, CampaignId, SceneId, SequenceId
 
 
 class SceneNotAvailable(NotAvailable):
@@ -41,11 +41,14 @@ class SceneStatus(StrEnum):
 class Scene:
     """A unit of play: one place, one cast — "The parley at Stonegate".
 
-    The bottom of the narrative tree and, in this PR, the whole of it. A scene hangs off
-    the campaign directly here; #80's PR 2 adds acts and sequences above it and makes the
-    parentage nullable, which is what lets a scene attach at any level. Landing this way
-    round is deliberate: a campaign with scenes and no acts is a working campaign, and
-    building the level that *cannot* be skipped first proves it rather than asserting it.
+    The bottom of the narrative tree, and the one level that cannot be skipped.
+
+    **Its parent is a sequence, an act, or the campaign itself**, which is what "the levels
+    are skippable" means in columns: both parent ids are nullable and at most one is set,
+    so a one-shot is scenes alone and an act-then-scene campaign never has to invent a
+    sequence to hold anything. Nothing here is less valid than anything else — a scene with
+    no parent is not an orphan, it belongs to the campaign, which is the only belonging
+    the authorisation rule has ever cared about.
 
     `body` is `str` here and `CampaignMarkdown` at the HTTP boundary. The domain does not
     import pydantic, and more to the point it has no business knowing the field has a
@@ -62,9 +65,27 @@ class Scene:
     position: int
     body: str = ""
     status: SceneStatus = SceneStatus.PLANNED
+    act_id: ActId | None = None
+    sequence_id: SequenceId | None = None
     id: SceneId = field(default_factory=lambda: SceneId(uuid4()))
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """A scene has one parent, or none. Never two.
+
+        Both columns set would be a scene claiming to hang off an act *and* a sequence,
+        which is not a deeper tree but an ambiguous one — and if the sequence were under a
+        different act, the two answers to "where is this scene" would disagree forever.
+        Only the direct parent is stored; the act above a sequence is reached by looking,
+        not by copying it down here where it can rot.
+
+        A guard rather than a validation: the HTTP boundary rejects this with a 422 before
+        it can reach the domain, so anything arriving here is a bug in this codebase and
+        should read like one.
+        """
+        if self.act_id is not None and self.sequence_id is not None:
+            raise ValueError("A scene hangs off an act or a sequence, not both")
 
     def revise(self, title: str, body: str, status: SceneStatus) -> None:
         """Rewrite the scene, and record that it was rewritten.
@@ -82,4 +103,23 @@ class Scene:
         self.title = title
         self.body = body
         self.status = status
+        self.updated_at = datetime.now(UTC)
+
+    def move_under(self, act_id: ActId | None, sequence_id: SequenceId | None, position: int) -> None:
+        """Reparent, and take a place among the new siblings.
+
+        Scenes move between acts, get cut and come back, so parent is mutable — that is
+        most of what #80 exists for. Parent and position move together because they are
+        one fact: a position means nothing except among the children of one parent.
+
+        Passing both ids raises, for the reason `__post_init__` gives. That the new parent
+        belongs to this campaign is checked by whoever resolved the id, through the token
+        — the sharp rule in #80, and it is deliberately not restated here.
+        """
+        if act_id is not None and sequence_id is not None:
+            raise ValueError("A scene hangs off an act or a sequence, not both")
+
+        self.act_id = act_id
+        self.sequence_id = sequence_id
+        self.position = position
         self.updated_at = datetime.now(UTC)

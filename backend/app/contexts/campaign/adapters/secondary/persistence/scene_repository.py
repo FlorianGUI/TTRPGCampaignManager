@@ -2,7 +2,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.access import Unsafe
-from app.common.ids import CampaignId, SceneId
+from app.common.ids import ActId, CampaignId, SceneId, SequenceId
 from app.contexts.campaign.adapters.secondary.persistence.scene_model import SceneModel
 from app.contexts.campaign.domain.narrative_access import SceneAccess
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
@@ -35,6 +35,8 @@ class SqlAlchemySceneRepository(SceneRepository):
                 body=scene.body,
                 status=scene.status,
                 campaign_id=scene.campaign_id,
+                act_id=scene.act_id,
+                sequence_id=scene.sequence_id,
                 position=scene.position,
                 created_at=scene.created_at,
                 updated_at=scene.updated_at,
@@ -60,11 +62,21 @@ class SqlAlchemySceneRepository(SceneRepository):
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
-    async def last_position_in(self, access: SceneAccess) -> int | None:
-        # MAX over an empty set is NULL, which is exactly "this campaign has no scenes
+    async def last_position_under(
+        self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
+    ) -> int | None:
+        # MAX over an empty set is NULL, which is exactly "nothing hangs off this parent
         # yet" — so the empty case needs no branch here and none in the caller.
+        #
+        # `is_(None)` rather than `== None` throughout: in SQL `act_id = NULL` evaluates to
+        # NULL rather than true, so the equality form matches nothing and every scene of
+        # the campaign would be appended at 1024, stacking them all on one position.
         result = await self._session.execute(
-            select(func.max(SceneModel.position)).where(SceneModel.campaign_id == access.campaign_id)
+            select(func.max(SceneModel.position)).where(
+                SceneModel.campaign_id == access.campaign_id,
+                SceneModel.act_id.is_(None) if act_id is None else SceneModel.act_id == act_id,
+                SceneModel.sequence_id.is_(None) if sequence_id is None else SceneModel.sequence_id == sequence_id,
+            )
         )
         return result.scalar_one_or_none()
 
@@ -88,6 +100,8 @@ class SqlAlchemySceneRepository(SceneRepository):
             # than travelling on as a str that only looks like a status.
             status=SceneStatus(model.status),
             campaign_id=CampaignId(model.campaign_id),
+            act_id=ActId(model.act_id) if model.act_id is not None else None,
+            sequence_id=SequenceId(model.sequence_id) if model.sequence_id is not None else None,
             position=model.position,
             created_at=model.created_at,
             updated_at=model.updated_at,
