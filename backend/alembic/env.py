@@ -13,6 +13,7 @@ from alembic import context
 from app.contexts.campaign.adapters.secondary.persistence import (
     campaign_model,  # noqa: F401
     character_model,  # noqa: F401
+    scene_model,  # noqa: F401
 )
 from app.contexts.source.adapters.secondary.persistence import source_model  # noqa: F401
 from app.contexts.user.adapters.secondary.persistence import (
