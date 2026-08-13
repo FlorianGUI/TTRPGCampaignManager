@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { h } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
@@ -8,7 +9,25 @@ import { COLLAPSED_STORAGE_KEY } from '../stores/collapsedNarrative.js'
 const request = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/client.js', () => ({ request }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ params: { campaignId: 'c-1' } }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: { campaignId: 'c-1' } }),
+  /*
+   * Every row leads to its own page now (#88's PR 2). Stubbed as a plain anchor
+   * carrying the resolved route name, so the assertions below can stay about the
+   * shape of the outline while one test checks where a row actually goes.
+   */
+  RouterLink: {
+    props: { to: { type: [String, Object], required: true } },
+    setup:
+      (props, { slots }) =>
+      () =>
+        h(
+          'a',
+          { 'data-to': props.to.name, 'data-id': Object.values(props.to.params ?? {})[1] },
+          slots.default?.(),
+        ),
+  },
+}))
 
 const act = (id, title, position, description = '') => ({ id, title, description, position })
 const sequence = (id, title, position, act_id = null) => ({

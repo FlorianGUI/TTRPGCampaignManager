@@ -51,6 +51,16 @@ const children = computed(() => structure.childrenOf(props.campaign.id))
 const tree = computed(() => structure.treeFor(props.campaign.id))
 
 const progressOf = (act) => actProgress(tree.value, act)
+
+/*
+ * Each child leads to its own page rather than to the outline. Landing on the
+ * structure and then having to find the act you just clicked is the journey this
+ * removes — the outline is one click away from there for whoever wants it.
+ */
+const to = ({ kind, node }) =>
+  kind === 'act'
+    ? { name: 'campaign-act', params: { campaignId: props.campaign.id, actId: node.id } }
+    : { name: 'campaign-scene', params: { campaignId: props.campaign.id, sceneId: node.id } }
 </script>
 
 <template>
@@ -59,7 +69,7 @@ const progressOf = (act) => actProgress(tree.value, act)
       <RouterLink
         class="nav__item"
         :class="{ 'nav__item--scene': child.kind === 'scene' }"
-        :to="{ name: 'campaign-structure', params: { campaignId: campaign.id } }"
+        :to="to(child)"
         :title="child.node.title"
         @click="$emit('navigate')"
       >
