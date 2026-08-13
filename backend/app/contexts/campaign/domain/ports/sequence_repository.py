@@ -35,6 +35,14 @@ class SequenceRepository(ABC):
         """
 
     @abstractmethod
+    async def find_under(self, access: SequenceAccess, act_id: ActId | None) -> list[Sequence]:
+        """The sequences of one act, in order, or of the campaign when `act_id` is None.
+
+        Two jobs, and they are the same query: the sibling list a drop is placed into, and
+        the children a deleted act has to rehome.
+        """
+
+    @abstractmethod
     async def last_position_under(self, access: SequenceAccess, act_id: ActId | None) -> int | None:
         """The highest position among the sequences under this act, or under no act."""
 

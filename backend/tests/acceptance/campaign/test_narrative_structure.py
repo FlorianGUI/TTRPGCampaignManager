@@ -112,6 +112,7 @@ def create_scene_under_sequence(client: AsyncClient, context: dict, title: str):
         )
     )
     assert response.status_code == 201
+    context.setdefault("first_scene", response.json())
     context["scene"] = response.json()
 
 
@@ -125,6 +126,7 @@ def create_scene_under_act(client: AsyncClient, context: dict, title: str):
         )
     )
     assert response.status_code == 201
+    context.setdefault("first_scene", response.json())
     context["scene"] = response.json()
 
 
@@ -132,7 +134,14 @@ def create_scene_under_act(client: AsyncClient, context: dict, title: str):
 def create_loose_scene(client: AsyncClient, context: dict, title: str):
     response = _run(client.post(_scenes(_mine(context)), json={"title": title}, headers=_auth_headers(context)))
     assert response.status_code == 201
+    # `scene` is always the most recent; `first_scene` is the anchor a drop names.
+    context.setdefault("first_scene", response.json())
     context["scene"] = response.json()
+
+
+@when("I list the scenes in my campaign")
+def list_scenes(client: AsyncClient, context: dict):
+    context["response"] = _run(client.get(_scenes(_mine(context)), headers=_auth_headers(context)))
 
 
 @when("I list the acts in my campaign")
@@ -215,7 +224,7 @@ def create_scene_under_a_missing_act(client: AsyncClient, context: dict):
 def move_scene_to_second_act(client: AsyncClient, context: dict):
     context["response"] = _run(
         client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
             json={"act_id": context["acts"][1]["id"]},
             headers=_auth_headers(context),
         )
@@ -226,7 +235,7 @@ def move_scene_to_second_act(client: AsyncClient, context: dict):
 def move_scene_to_campaign(client: AsyncClient, context: dict):
     context["response"] = _run(
         client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
             json={},
             headers=_auth_headers(context),
         )
@@ -237,7 +246,7 @@ def move_scene_to_campaign(client: AsyncClient, context: dict):
 def move_scene_under_a_foreign_act(client: AsyncClient, context: dict):
     context["response"] = _run(
         client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/parent",
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
             json={"act_id": context["act_elsewhere"]["id"]},
             headers=_auth_headers(context),
         )
@@ -290,7 +299,7 @@ def list_sequences(client: AsyncClient, context: dict):
 def move_sequence_under_act(client: AsyncClient, context: dict):
     context["response"] = _run(
         client.put(
-            f"{_sequences(_mine(context))}{context['sequence']['id']}/parent",
+            f"{_sequences(_mine(context))}{context['sequence']['id']}/placement",
             json={"act_id": context["acts"][0]["id"]},
             headers=_auth_headers(context),
         )
@@ -301,7 +310,7 @@ def move_sequence_under_act(client: AsyncClient, context: dict):
 def move_sequence_to_campaign(client: AsyncClient, context: dict):
     context["response"] = _run(
         client.put(
-            f"{_sequences(_mine(context))}{context['sequence']['id']}/parent",
+            f"{_sequences(_mine(context))}{context['sequence']['id']}/placement",
             json={},
             headers=_auth_headers(context),
         )
@@ -315,10 +324,74 @@ def delete_sequence(client: AsyncClient, context: dict):
     )
 
 
+@when("I drop the second scene at the top")
+def drop_second_scene_at_top(client: AsyncClient, context: dict):
+    """No anchor is the head of the list, which is what a drop above everything means."""
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
+            json={},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I drop the last scene after the first")
+def drop_last_scene_after_first(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
+            json={"after": context["first_scene"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I drop the second act at the top")
+def drop_second_act_at_top(client: AsyncClient, context: dict):
+    context["response"] = _run(
+        client.put(
+            f"{_acts(_mine(context))}{context['acts'][1]['id']}/placement",
+            json={},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I drop the scene into the second act")
+def drop_scene_into_second_act(client: AsyncClient, context: dict):
+    """Parent and place in one call — the drag that crosses acts and lands somewhere."""
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
+            json={"act_id": context["acts"][1]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I drop the campaigns scene after the one in the act")
+def drop_after_a_stranger(client: AsyncClient, context: dict):
+    """A real scene of this campaign, but not a sibling of where this one is going."""
+    context["response"] = _run(
+        client.put(
+            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
+            json={"after": context["first_scene"]["id"]},
+            headers=_auth_headers(context),
+        )
+    )
+
+
 @when("I delete my campaign")
 def delete_my_campaign(client: AsyncClient, context: dict):
     response = _run(client.delete(f"/campaigns/{_mine(context)}", headers=_auth_headers(context)))
     assert response.status_code == 204
+
+
+@then(parsers.parse('the scenes should read "{titles}"'))
+def scenes_should_read(context: dict, titles: str):
+    assert context["response"].status_code == 200
+    assert [s["title"] for s in context["response"].json()] == titles.split(", ")
 
 
 @then(parsers.parse('the acts should read "{titles}"'))

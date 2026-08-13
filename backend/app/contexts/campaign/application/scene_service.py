@@ -3,7 +3,7 @@ from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.position import position_after
+from app.contexts.campaign.domain.position import index_after, position_after, position_between, renumbered
 from app.contexts.campaign.domain.scene import Scene, SceneStatus
 
 
@@ -104,33 +104,55 @@ class SceneService:
         scene.revise(title, body, status)
         return await self._repository.save(scene)
 
-    async def move(
+    async def place(
         self,
         id: SceneId,
         narrative: Narrative,
         act_id: ActId | None = None,
         sequence_id: SequenceId | None = None,
+        after: SceneId | None = None,
     ) -> Scene:
-        """Reparent, appending to the new parent's scenes.
+        """Put the scene where the game master dropped it: a parent, and a place in it.
 
-        The operation #80 exists for — *scenes move between acts, get cut and come back* —
-        and the one where getting the rule wrong would let a game master file a scene in a
-        campaign that is not theirs. Both the scene and its new parent are resolved through
-        the same `Narrative`, so that cannot happen, and neither refusal says which of the
-        two was the problem.
+        **One operation rather than two**, and that is the point. A drag can cross acts and
+        land mid-list in a single gesture, and splitting that into "reparent" then "reorder"
+        would make it two requests, non-atomic, with a visible wrong order in between if the
+        second failed.
 
-        Moving to the campaign is `act_id=None, sequence_id=None`, which is not "no parent
-        given" but a parent in its own right — a scene demoted out of an act is a scene of
-        the campaign, exactly as if it had been written there.
+        `after` names the sibling it was dropped below; `None` means first. It has to be a
+        sibling *under the new parent* — anything else is refused as `Scene not found`,
+        which covers an anchor from another campaign, another act, and one that never
+        existed, without saying which.
+
+        The scene appends when `after` names the last sibling, so PR 2's "move to the end"
+        is this method with the obvious argument rather than a second code path.
         """
         scene = narrative.scenes.editable(await self._repository.find_by_id(id))
         act, sequence = await self._place_under(narrative, act_id, sequence_id)
-        scene.move_under(
-            act,
-            sequence,
-            position_after(await self._repository.last_position_under(narrative.scenes, act, sequence)),
+
+        # The scene's current row is excluded: it is being placed, so it is not one of the
+        # neighbours it is being placed between. Leaving it in would let a scene be dropped
+        # "after itself" and compute a midpoint against its own position.
+        siblings = [s for s in await self._repository.find_under(narrative.scenes, act, sequence) if s.id != scene.id]
+        index = index_after(siblings, after, narrative.scenes.not_available)
+
+        position = position_between(
+            siblings[index - 1].position if index > 0 else None,
+            siblings[index].position if index < len(siblings) else None,
         )
-        return await self._repository.save(scene)
+        if position is not None:
+            scene.move_under(act, sequence, position)
+            return await self._repository.save(scene)
+
+        # No integer left between those two neighbours. Renumber this sibling list — and
+        # only this one, which is #80's "reordering a sibling does not touch unrelated
+        # rows" from the other side.
+        scene.move_under(act, sequence, 0)
+        ordered = siblings[:index] + [scene] + siblings[index:]
+        for record, fresh in zip(ordered, renumbered(len(ordered)), strict=True):
+            record.reposition(fresh)
+            await self._repository.save(record)
+        return scene
 
     async def delete(self, id: SceneId, narrative: Narrative) -> None:
         scene = narrative.scenes.deletable(await self._repository.find_by_id(id))

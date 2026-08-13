@@ -44,16 +44,33 @@ class SqlAlchemySequenceRepository(SequenceRepository):
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
+    async def find_under(self, access: SequenceAccess, act_id: ActId | None) -> list[Sequence]:
+        result = await self._session.execute(
+            select(SequenceModel)
+            .where(SequenceModel.campaign_id == access.campaign_id, self._parent(act_id))
+            .order_by(SequenceModel.position, SequenceModel.id)
+        )
+        return [self._to_domain(m) for m in result.scalars().all()]
+
     async def last_position_under(self, access: SequenceAccess, act_id: ActId | None) -> int | None:
         # `is_(None)` rather than `== None`: in SQL, `act_id = NULL` is NULL rather than
         # true, so the equality form silently matches nothing and every sequence under the
         # campaign would be handed position 1024. `IS NULL` is the only form that asks the
         # question actually meant here.
-        parent = SequenceModel.act_id.is_(None) if act_id is None else SequenceModel.act_id == act_id
         result = await self._session.execute(
-            select(func.max(SequenceModel.position)).where(SequenceModel.campaign_id == access.campaign_id, parent)
+            select(func.max(SequenceModel.position)).where(
+                SequenceModel.campaign_id == access.campaign_id, self._parent(act_id)
+            )
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    def _parent(act_id: ActId | None):
+        # `is_(None)` rather than `== None`: in SQL, `act_id = NULL` is NULL rather than
+        # true, so the equality form silently matches nothing. Written once now that two
+        # queries need it, so a reorder and an append cannot drift into disagreeing about
+        # what a sequence under the campaign is.
+        return SequenceModel.act_id.is_(None) if act_id is None else SequenceModel.act_id == act_id
 
     async def delete(self, id: SequenceId) -> None:
         await self._session.execute(delete(SequenceModel).where(SequenceModel.id == id))

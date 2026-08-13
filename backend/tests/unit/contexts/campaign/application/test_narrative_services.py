@@ -45,13 +45,13 @@ def elsewhere(game_master: UserId) -> Narrative:
 
 
 @pytest.fixture
-def act_service(acts: FakeActRepository):
-    return ActService(acts)
+def act_service(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
+    return ActService(acts, sequences, scenes)
 
 
 @pytest.fixture
-def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository):
-    return SequenceService(sequences, acts)
+def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository, scenes: FakeSceneRepository):
+    return SequenceService(sequences, acts, scenes)
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ class TestActService:
         await act_service.update(act.id, narrative.acts, "Act I — Water Rising", "The Wardens' trust.")
         assert (await act_service.get_for(act.id, narrative.acts)).title == "Act I — Water Rising"
 
-        await act_service.delete(act.id, narrative.acts)
+        await act_service.delete(act.id, narrative)
         assert await act_service.list_for(narrative.acts) == []
 
 
@@ -148,7 +148,7 @@ class TestSequenceUnderAnAct:
         theirs = await act_service.create(elsewhere.acts, "Act I")
 
         with pytest.raises(ActNotAvailable):
-            await sequence_service.move(sequence.id, narrative, theirs.id)
+            await sequence_service.place(sequence.id, narrative, theirs.id)
 
     async def test_moving_to_the_campaign_clears_the_act(
         self, sequence_service: SequenceService, act_service: ActService, narrative: Narrative
@@ -156,7 +156,7 @@ class TestSequenceUnderAnAct:
         act = await act_service.create(narrative.acts, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
 
-        moved = await sequence_service.move(sequence.id, narrative, None)
+        moved = await sequence_service.place(sequence.id, narrative, None)
 
         assert moved.act_id is None
 
@@ -245,7 +245,7 @@ class TestSceneMove:
         second = await act_service.create(narrative.acts, "Act II")
         scene = await scene_service.create(narrative, "The muster", act_id=first.id)
 
-        moved = await scene_service.move(scene.id, narrative, act_id=second.id)
+        moved = await scene_service.place(scene.id, narrative, act_id=second.id)
 
         assert moved.act_id == second.id
 
@@ -260,7 +260,7 @@ class TestSceneMove:
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         scene = await scene_service.create(narrative, "Arrival at dusk", act_id=act.id)
 
-        moved = await scene_service.move(scene.id, narrative, sequence_id=sequence.id)
+        moved = await scene_service.place(scene.id, narrative, sequence_id=sequence.id)
 
         assert moved.sequence_id == sequence.id
         assert moved.act_id is None
@@ -271,7 +271,7 @@ class TestSceneMove:
         act = await act_service.create(narrative.acts, "Act I")
         scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
 
-        moved = await scene_service.move(scene.id, narrative)
+        moved = await scene_service.place(scene.id, narrative)
 
         assert moved.act_id is None
         assert moved.sequence_id is None
@@ -289,18 +289,40 @@ class TestSceneMove:
         theirs = await act_service.create(elsewhere.acts, "Act I")
 
         with pytest.raises(ActNotAvailable):
-            await scene_service.move(scene.id, narrative, act_id=theirs.id)
+            await scene_service.place(scene.id, narrative, act_id=theirs.id)
 
-    async def test_a_move_appends_to_the_new_parent(
+    async def test_no_anchor_means_first_in_the_new_parent(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
+        """`after=None` is the head of the list, not "wherever".
+
+        This is the one semantic PR 2's `move` did not have — it appended. A drop target
+        has a top, and expressing it as an absent anchor is what makes "put this first" an
+        ordinary placement rather than a second endpoint.
+        """
         act = await act_service.create(narrative.acts, "Act I")
-        await scene_service.create(narrative, "Already there", act_id=act.id)
+        already = await scene_service.create(narrative, "Already there", act_id=act.id)
         scene = await scene_service.create(narrative, "The muster")
 
-        moved = await scene_service.move(scene.id, narrative, act_id=act.id)
+        moved = await scene_service.place(scene.id, narrative, act_id=act.id)
 
-        assert moved.position == 2 * POSITION_GAP
+        assert moved.position < already.position
+        assert [s.title for s in await scene_service.list_for(narrative) if s.act_id == act.id] == [
+            "The muster",
+            "Already there",
+        ]
+
+    async def test_naming_the_last_sibling_appends(
+        self, scene_service: SceneService, act_service: ActService, narrative: Narrative
+    ):
+        """Appending is not a special case — it is a placement after the last row."""
+        act = await act_service.create(narrative.acts, "Act I")
+        already = await scene_service.create(narrative, "Already there", act_id=act.id)
+        scene = await scene_service.create(narrative, "The muster")
+
+        moved = await scene_service.place(scene.id, narrative, act_id=act.id, after=already.id)
+
+        assert moved.position > already.position
 
 
 class TestTheCampaignSweepsTheWholeTree:

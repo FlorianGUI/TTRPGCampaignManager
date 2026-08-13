@@ -38,13 +38,22 @@ def get_character_service(db: AsyncSession = Depends(get_db)) -> CharacterServic
 
 
 def get_act_service(db: AsyncSession = Depends(get_db)) -> ActService:
-    return ActService(SqlAlchemyActRepository(db))
+    # The child repositories come along because deleting an act rehomes what was in it.
+    return ActService(
+        SqlAlchemyActRepository(db),
+        SqlAlchemySequenceRepository(db),
+        SqlAlchemySceneRepository(db),
+    )
 
 
 def get_sequence_service(db: AsyncSession = Depends(get_db)) -> SequenceService:
     # The act repository comes along because a sequence may name one as its parent, and
     # a parent has to be resolved before it can be trusted.
-    return SequenceService(SqlAlchemySequenceRepository(db), SqlAlchemyActRepository(db))
+    return SequenceService(
+        SqlAlchemySequenceRepository(db),
+        SqlAlchemyActRepository(db),
+        SqlAlchemySceneRepository(db),
+    )
 
 
 def get_scene_service(db: AsyncSession = Depends(get_db)) -> SceneService:

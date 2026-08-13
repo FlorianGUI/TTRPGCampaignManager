@@ -75,6 +75,13 @@ class TestActRepository:
     ):
         assert await acts.last_position_in(narrative.acts) is None
 
+    async def test_finds_the_siblings_a_drop_is_placed_into(self, acts: SqlAlchemyActRepository, narrative: Narrative):
+        """For an act these are every act in the campaign — its only parent is the campaign."""
+        for title, position in [("Act II", 2048), ("Act I", 1024)]:
+            await acts.save(Act(title=title, campaign_id=narrative.campaign_id, position=position))
+
+        assert [a.title for a in await acts.find_under(narrative.acts)] == ["Act I", "Act II"]
+
     async def test_does_not_see_another_campaigns_acts(
         self, acts: SqlAlchemyActRepository, narrative: Narrative, elsewhere: Narrative
     ):

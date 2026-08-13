@@ -26,6 +26,15 @@ class ActRepository(ABC):
         """In `position` order, decided here rather than by whoever renders it."""
 
     @abstractmethod
+    async def find_under(self, access: ActAccess) -> list[Act]:
+        """The campaign's acts, in order — which for the top of the tree is every act.
+
+        Named for the shape the other two share rather than for what it does here, so a
+        reorder reads the same at all three levels. It is the sibling list a drop is placed
+        into, and an act is the one level whose siblings are always the whole campaign's.
+        """
+
+    @abstractmethod
     async def last_position_in(self, access: ActAccess) -> int | None:
         """The highest position among the campaign's acts, or `None` if it has none."""
 

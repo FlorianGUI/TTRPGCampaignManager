@@ -4,7 +4,12 @@ from app.common.error_handlers import not_available_responses
 from app.common.ids import ActId
 from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_act_service, get_narrative
-from app.contexts.campaign.adapters.primary.api.schemas.act import ActCreate, ActResponse, ActUpdate
+from app.contexts.campaign.adapters.primary.api.schemas.act import (
+    ActCreate,
+    ActPlacement,
+    ActResponse,
+    ActUpdate,
+)
 from app.contexts.campaign.application.act_service import ActService
 from app.contexts.campaign.domain.narrative_access import Narrative
 
@@ -61,12 +66,25 @@ async def update_act(
     return ActResponse(**act.__dict__)
 
 
+@router.put("/{act_id}/placement", response_model=ActResponse, responses=NOT_FOUND)
+async def place_act(
+    act_id: ActId,
+    body: ActPlacement,
+    narrative: Narrative = Depends(get_narrative),
+    service: ActService = Depends(get_act_service),
+):
+    """Reorder the campaign's acts. One row written, unless the gap has run out."""
+    act = await service.place(act_id, narrative.acts, ActId(body.after) if body.after else None)
+    return ActResponse(**act.__dict__)
+
+
 @router.delete("/{act_id}", status_code=204, responses=NOT_FOUND)
 async def delete_act(
     act_id: ActId,
     narrative: Narrative = Depends(get_narrative),
     service: ActService = Depends(get_act_service),
 ):
-    # Deletes the act alone. What a *non-empty* act should do — refuse, or rehome its
-    # children to the campaign — is #80's open question and PR 3's to answer.
-    await service.delete(act_id, narrative.acts)
+    # A non-empty act rehomes rather than refusing: its sequences and direct scenes go
+    # to the campaign, which is a real parent under skippable levels rather than a bin.
+    # Scenes inside its sequences are untouched — the sequence survives and takes them.
+    await service.delete(act_id, narrative)

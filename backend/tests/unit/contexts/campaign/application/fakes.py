@@ -93,6 +93,16 @@ class FakeSceneRepository(SceneRepository):
         found = [s for s in self._store.values() if s.campaign_id == access.campaign_id]
         return sorted(found, key=lambda s: (s.position, s.id))
 
+    async def find_under(
+        self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
+    ) -> list[Scene]:
+        found = [
+            s
+            for s in self._store.values()
+            if s.campaign_id == access.campaign_id and s.act_id == act_id and s.sequence_id == sequence_id
+        ]
+        return sorted(found, key=lambda s: (s.position, s.id))
+
     async def last_position_under(
         self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
     ) -> int | None:
@@ -131,6 +141,9 @@ class FakeActRepository(ActRepository):
         found = [a for a in self._store.values() if a.campaign_id == access.campaign_id]
         return sorted(found, key=lambda a: (a.position, a.id))
 
+    async def find_under(self, access: ActAccess) -> list[Act]:
+        return await self.find_all_in(access)
+
     async def last_position_in(self, access: ActAccess) -> int | None:
         positions = [a.position for a in self._store.values() if a.campaign_id == access.campaign_id]
         return max(positions) if positions else None
@@ -162,6 +175,10 @@ class FakeSequenceRepository(SequenceRepository):
 
     async def find_all_in(self, access: SequenceAccess) -> list[Sequence]:
         found = [s for s in self._store.values() if s.campaign_id == access.campaign_id]
+        return sorted(found, key=lambda s: (s.position, s.id))
+
+    async def find_under(self, access: SequenceAccess, act_id: ActId | None) -> list[Sequence]:
+        found = [s for s in self._store.values() if s.campaign_id == access.campaign_id and s.act_id == act_id]
         return sorted(found, key=lambda s: (s.position, s.id))
 
     async def last_position_under(self, access: SequenceAccess, act_id: ActId | None) -> int | None:
