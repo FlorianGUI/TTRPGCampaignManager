@@ -33,6 +33,7 @@ const to = (scene) => ({
   name: 'campaign-scene',
   params: { campaignId: props.campaignId, sceneId: scene.id },
 })
+import { titleOf } from '../../stores/structure.js'
 </script>
 
 <template>
@@ -44,13 +45,13 @@ const to = (scene) => ({
     -->
     <RouterLink v-if="previous" class="stepper__step" :to="to(previous)">
       <span class="stepper__label">Previous scene</span>
-      <span class="stepper__title">{{ previous.title }}</span>
+      <span class="stepper__title">{{ titleOf(previous, 'scene') }}</span>
     </RouterLink>
     <span v-else />
 
     <RouterLink v-if="next" class="stepper__step stepper__step--next" :to="to(next)">
       <span class="stepper__label">Next scene</span>
-      <span class="stepper__title">{{ next.title }}</span>
+      <span class="stepper__title">{{ titleOf(next, 'scene') }}</span>
     </RouterLink>
   </nav>
 </template>

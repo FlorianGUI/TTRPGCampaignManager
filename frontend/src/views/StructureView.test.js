@@ -58,7 +58,7 @@ async function render(tree) {
 
 /* Titles in the order they appear, whatever level they sit at. */
 const outline = (wrapper) =>
-  wrapper.findAll('.row__main').map((row) => row.text().split('\n')[0].trim())
+  wrapper.findAllComponents({ name: 'OutlineRow' }).map((row) => row.props('node').title)
 
 describe('the structure page', () => {
   beforeEach(() => {
@@ -182,6 +182,58 @@ describe('the structure page', () => {
       const wrapper = await render({ acts: [], sequences: [], scenes: [scene('s-1', 'One', 1024)] })
 
       expect(wrapper.find('.structure__collapse').exists()).toBe(false)
+    })
+  })
+
+  describe('adding', () => {
+    /* Every plus, and what it says may go inside the thing it sits beside. */
+    const offers = (wrapper) =>
+      wrapper.findAllComponents({ name: 'AddChild' }).map((c) => ({
+        parent: c.props('parentName'),
+        allowed: c.props('allowed'),
+      }))
+
+    it('offers an act and a scene on the campaign itself', async () => {
+      /*
+       * Both, always — a one-shot should never have to make an act it does not
+       * want in order to write its first scene.
+       */
+      const wrapper = await render(EMPTY)
+
+      expect(offers(wrapper)).toEqual([{ parent: 'the campaign', allowed: ['act', 'scene'] }])
+    })
+
+    it('offers a sequence and a scene inside an act', async () => {
+      const wrapper = await render({ acts: [act('a-1', 'Act I', 1024)], sequences: [], scenes: [] })
+
+      expect(offers(wrapper)).toContainEqual({ parent: 'Act I', allowed: ['sequence', 'scene'] })
+    })
+
+    it('offers a scene inside a sequence, and nothing at all inside a scene', async () => {
+      // There is no level below a scene, so a scene's row carries no plus.
+      const wrapper = await render({
+        acts: [act('a-1', 'Act I', 1024)],
+        sequences: [sequence('q-1', 'The Causeway', 1024, 'a-1')],
+        scenes: [scene('s-1', 'Arrival at dusk', 1024, { sequence_id: 'q-1' })],
+      })
+
+      expect(offers(wrapper)).toContainEqual({ parent: 'The Causeway', allowed: ['scene'] })
+      expect(offers(wrapper).some((o) => o.parent === 'Arrival at dusk')).toBe(false)
+    })
+
+    it('names an unnamed record rather than showing a blank row', async () => {
+      /*
+       * Adding is one click, so a record can exist before it has a title — and a
+       * game master who presses Escape keeps it that way. A blank line would read
+       * as a rendering fault.
+       */
+      const wrapper = await render({
+        acts: [],
+        sequences: [],
+        scenes: [scene('s-1', '', 1024)],
+      })
+
+      expect(wrapper.text()).toContain('Untitled scene')
     })
   })
 

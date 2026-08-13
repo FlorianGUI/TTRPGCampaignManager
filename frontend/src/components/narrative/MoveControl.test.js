@@ -175,33 +175,15 @@ describe('the move control', () => {
     expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
   })
 
-  it('offers an act no way to be moved into anything', async () => {
-    // The campaign is its only possible parent, so the item would open a picker
-    // with nothing in it.
-    const wrapper = await render({ node: ACT, kind: 'act', siblings: [ACT] })
-
-    expect(item(wrapper, 'Move into…')).toBeUndefined()
-  })
-
-  it('appends to the destination rather than putting it first', async () => {
+  it('offers reordering and nothing else', async () => {
     /*
-     * Arriving at the top of a list whose order you did not choose is more
-     * surprising than arriving at the end of it.
+     * Reparenting moved to the edit form on each record's own page — a game
+     * master looks for "which act is this in" where they look for everything
+     * else about it, and two ways to do one thing is one too many.
      */
     const wrapper = await render({ node: SIBLINGS[0] })
-    wrapper.vm.picking = true
-    wrapper.vm.chosen = { label: 'The campaign', act_id: null, sequence_id: null }
 
-    request.mockClear()
-    request.mockResolvedValue(TREE)
-    await wrapper.vm.moveInto()
-    await flushPromises()
-
-    // Nothing else is on the campaign, so there is nothing to follow.
-    expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1/placement', {
-      method: 'PUT',
-      json: { act_id: null, sequence_id: null, after: null },
-    })
+    expect(items(wrapper).map((entry) => entry.label)).toEqual(['Move up', 'Move down'])
   })
 
   it('names the row it moves, so the button is not one of forty called “Move”', async () => {

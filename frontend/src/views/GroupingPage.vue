@@ -14,12 +14,20 @@ import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import ActProgress from '../components/narrative/ActProgress.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import NodeContents from '../components/narrative/NodeContents.vue'
-import { actProgress, trailTo, useStructureStore } from '../stores/structure.js'
+import {
+  actProgress,
+  lastUnder,
+  parentsFor,
+  titleOf,
+  trailTo,
+  useStructureStore,
+} from '../stores/structure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -76,15 +84,38 @@ const children = computed(() => {
 
 /* ── editing ─────────────────────────────────────────────────────────────── */
 
+/*
+ * **Where it sits is part of editing it**, not a separate gesture. That reverses
+ * an earlier call in this PR: reparenting had its own control on the grounds that
+ * a long edit could carry a stale parent and move something nobody asked to move.
+ * The objection is real and it is also the objection to every other field here —
+ * these writes are full replacements, so a stale description overwrites just as
+ * happily. What settles it is that the parent is the thing a game master looks
+ * for on this page, and loading it fresh when Edit is pressed is what keeps it
+ * honest.
+ *
+ * Stepping a record up and down among its siblings stays in the outline, where
+ * the neighbours it is moving past are on screen.
+ */
 const editing = ref(false)
-const draft = ref({ title: '', description: '' })
+const draft = ref({ title: '', description: '', parent: null })
+
+const parents = computed(() => parentsFor(tree.value, props.kind, props.id))
+
+/* The option that matches where it currently sits, so the field opens on the truth. */
+const currentParent = () =>
+  parents.value.find((option) => option.act_id === (node.value.act_id ?? null)) ?? null
 const saving = ref(false)
 const failure = ref(null)
 
 function edit() {
   // Loaded with the current values, because the write is a full replacement: a
   // form that started empty would clear the description of whatever it saved.
-  draft.value = { title: node.value.title, description: node.value.description }
+  draft.value = {
+    title: node.value.title,
+    description: node.value.description,
+    parent: currentParent(),
+  }
   failure.value = null
   editing.value = true
 }
@@ -105,6 +136,22 @@ async function save() {
       title: draft.value.title,
       description: draft.value.description,
     })
+
+    // Two calls, because they are two endpoints: what a record says is a `PUT` on
+    // it, where it sits is a `PUT` on its placement. Only sent when it changed —
+    // a placement always appends, so issuing one for an unchanged parent would
+    // quietly move the record to the end of its own list.
+    const moved = draft.value.parent && draft.value.parent.act_id !== (node.value.act_id ?? null)
+    if (moved) {
+      await structure.place(props.campaignId, props.kind, props.id, {
+        act_id: draft.value.parent.act_id,
+        after: lastUnder(tree.value, props.kind, {
+          actId: draft.value.parent.act_id,
+          excluding: props.id,
+        }),
+      })
+    }
+
     editing.value = false
   } catch {
     failure.value = 'That could not be saved.'
@@ -122,7 +169,7 @@ async function save() {
       <p class="label-smallcaps">{{ kind }}</p>
 
       <template v-if="!editing">
-        <h1>{{ node.title }}</h1>
+        <h1>{{ titleOf(node, kind) }}</h1>
         <Button
           class="node__edit"
           size="small"
@@ -137,12 +184,27 @@ async function save() {
       <InputText v-else v-model="draft.title" class="node__title-field" aria-label="Title" />
     </header>
 
-    <ActProgress v-if="progress && !editing" :progress="progress" class="node__progress" />
+    <ActProgress
+      v-if="progress && !editing"
+      :progress="progress"
+      with-label
+      class="node__progress"
+    />
 
     <!-- Editing and reading in the same place, so the measure and the wrapping
          a game master writes against are the ones they will read back. -->
     <template v-if="editing">
       <Textarea v-model="draft.description" class="node__field" rows="6" aria-label="Description" />
+
+      <label v-if="parents.length" class="node__parent">
+        <span class="label-smallcaps">Sits in</span>
+        <Select
+          v-model="draft.parent"
+          :options="parents"
+          option-label="label"
+          aria-label="Sits in"
+        />
+      </label>
 
       <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
 
@@ -232,6 +294,14 @@ async function save() {
   width: 100%;
   font-family: var(--grimoire-font-mono);
   font-size: var(--step--1);
+}
+
+.node__parent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  max-width: 22rem;
 }
 
 .node__actions {

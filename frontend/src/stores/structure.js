@@ -144,6 +144,27 @@ export const useStructureStore = defineStore('structure', () => {
   }
 
   /*
+   * Write a new act, sequence or scene.
+   *
+   * The parent travels in the body rather than in the path, matching the API:
+   * an act takes none, a sequence may name an act, a scene may name either. It
+   * lands at the end of whatever it was given, which is what "add" means — a new
+   * record has no place in the story yet, and putting it first would push the
+   * campaign's opening down every time someone jots something.
+   */
+  async function createNode(campaignId, kind, fields) {
+    const created = await request(`/campaigns/${campaignId}/${KINDS[kind]}/`, {
+      method: 'POST',
+      json: fields,
+    })
+
+    nodes.value[`${kind}:${created.id}`] = created
+    await reload(campaignId)
+
+    return created
+  }
+
+  /*
    * Where a record sits: its parent, and its place among that parent's children.
    *
    * One call for both, because they are one gesture — the endpoint takes them
@@ -204,6 +225,7 @@ export const useStructureStore = defineStore('structure', () => {
     childrenOf,
     ensureNode,
     nodeFor,
+    createNode,
     saveNode,
     place,
   }
@@ -247,6 +269,50 @@ export function scenesUnder(tree, act) {
   return tree.scenes.filter(
     (scene) => scene.act_id === act.id || sequenceIds.has(scene.sequence_id),
   )
+}
+
+/*
+ * What to call something nobody has named yet.
+ *
+ * Adding is one click now — pick a kind, get a row, type into it — which means a
+ * record can exist before it has a title, and a game master who presses Escape
+ * gets to keep it that way. Every place a title is rendered goes through here, so
+ * an unnamed act reads as an unnamed act rather than as a blank line that looks
+ * like a rendering fault.
+ *
+ * Muted rather than bracketed: it is a real record in a real place, and the only
+ * thing missing is a word.
+ */
+export function titleOf(node, kind) {
+  return node?.title?.trim() || `Untitled ${kind}`
+}
+
+/*
+ * The last record already sitting under a parent, which is what a reparented one
+ * should follow.
+ *
+ * **Reparenting appends.** Arriving at the top of a list whose order you did not
+ * choose is more surprising than arriving at the end of it — and `after: null`,
+ * which is what an omitted anchor means, is the top. This is the difference
+ * between the two, and it is a function rather than a line in each form so the
+ * act page and the scene page cannot drift on it.
+ *
+ * The record being moved is excluded: it may already be in this list, and
+ * anchoring something to itself is not a position.
+ */
+export function lastUnder(tree, kind, { actId = null, sequenceId = null, excluding } = {}) {
+  if (!tree) return null
+
+  const family =
+    kind === 'sequence'
+      ? tree.sequences.filter((s) => s.act_id === actId)
+      : tree.scenes.filter((s) => s.act_id === actId && s.sequence_id === sequenceId)
+
+  const ordered = [...family]
+    .filter((record) => record.id !== excluding)
+    .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
+
+  return ordered.at(-1)?.id ?? null
 }
 
 /*

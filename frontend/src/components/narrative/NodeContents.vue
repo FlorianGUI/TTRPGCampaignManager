@@ -22,6 +22,7 @@ const to = (campaignId, { kind, node }) =>
   kind === 'sequence'
     ? { name: 'campaign-sequence', params: { campaignId, sequenceId: node.id } }
     : { name: 'campaign-scene', params: { campaignId, sceneId: node.id } }
+import { titleOf } from '../../stores/structure.js'
 </script>
 
 <template>
@@ -32,7 +33,7 @@ const to = (campaignId, { kind, node }) =>
           class="contents__title"
           :class="{ 'contents__title--sequence': child.kind === 'sequence' }"
         >
-          {{ child.node.title }}
+          {{ titleOf(child.node, child.kind) }}
         </span>
 
         <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" />

@@ -112,7 +112,11 @@ describe('the campaign’s own children in the sidebar', () => {
       ],
     })
 
-    expect(wrapper.get('.progress__count').text()).toBe('1/2')
+    // The count is the dot's accessible name now, not a column of digits beside
+    // every row — hover explains it, and nothing is reachable only by hovering.
+    expect(wrapper.get('.progress__dot').attributes('aria-label')).toBe(
+      'ongoing — 1 of 2 scenes played',
+    )
   })
 
   it('says an empty act is empty rather than nought of nought', async () => {
@@ -124,7 +128,9 @@ describe('the campaign’s own children in the sidebar', () => {
       scenes: [],
     })
 
-    expect(wrapper.get('.progress__count').text()).toBe('—')
+    expect(wrapper.get('.progress__dot').attributes('aria-label')).toBe(
+      'empty — nothing written in it yet',
+    )
   })
 
   it('marks a scene that belongs to no act', async () => {

@@ -19,18 +19,39 @@
  * the two that follow.
  */
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
-import ActProgress from '../components/narrative/ActProgress.vue'
-import MoveControl from '../components/narrative/MoveControl.vue'
-import SceneStatus from '../components/narrative/SceneStatus.vue'
+import AddChild from '../components/narrative/AddChild.vue'
+import OutlineRow from '../components/narrative/OutlineRow.vue'
 import { actProgress, useStructureStore } from '../stores/structure.js'
+import { useCampaignsStore } from '../stores/campaigns.js'
 import { readCollapsed, rememberCollapsed } from '../stores/collapsedNarrative.js'
 
 const route = useRoute()
 const structure = useStructureStore()
+const campaigns = useCampaignsStore()
+
+/*
+ * The page is titled with the campaign, not with the word "Structure".
+ *
+ * The sidebar already says which campaign this is and the nav says which of its
+ * pages — a heading repeating both told the reader nothing they had not just
+ * read, and spent the largest type on the page saying it.
+ */
+const campaign = computed(() => campaigns.byId(campaignId.value))
+
+/*
+ * The row that was just added, and so is still being named. One at a time: a
+ * second addition commits the first, which is what a text field losing focus
+ * means everywhere else.
+ */
+const renaming = ref(null)
+
+function added({ node }) {
+  renaming.value = node.id
+}
 
 const campaignId = computed(() => route.params.campaignId)
 const tree = computed(() => structure.treeFor(campaignId.value))
@@ -119,18 +140,6 @@ const progressOf = (act) => actProgress(tree.value, act)
  */
 const nodesOf = (entries) => entries.map((entry) => entry.node)
 
-/*
- * Every row leads to its own page (#88's PR 2). The outline stays the place you
- * reorganise from; a node page is where you read and write one.
- */
-const ROUTES = { act: 'campaign-act', sequence: 'campaign-sequence', scene: 'campaign-scene' }
-const PARAMS = { act: 'actId', sequence: 'sequenceId', scene: 'sceneId' }
-
-const to = (kind, node) => ({
-  name: ROUTES[kind],
-  params: { campaignId: campaignId.value, [PARAMS[kind]]: node.id },
-})
-
 const isEmpty = computed(() => tree.value && !children.value.length)
 
 const everything = computed(() =>
@@ -151,9 +160,15 @@ function toggleAll() {
 <template>
   <article class="structure">
     <header class="structure__head">
-      <div>
-        <p class="label-smallcaps">Campaign</p>
-        <h1>Structure</h1>
+      <div class="structure__title">
+        <h1>{{ campaign?.name ?? 'Structure' }}</h1>
+        <AddChild
+          v-if="tree"
+          :campaign-id="campaignId"
+          :allowed="['act', 'scene']"
+          :parent-name="campaign?.name ?? 'the campaign'"
+          @created="added"
+        />
       </div>
 
       <Button
@@ -191,178 +206,127 @@ function toggleAll() {
       <li v-for="child in children" :key="child.node.id" class="outline__group">
         <!-- ── An act ─────────────────────────────────────────────── -->
         <template v-if="child.kind === 'act'">
-          <div class="row row--act">
-            <button
-              type="button"
-              class="chevron"
-              :aria-expanded="!isShut(child.node.id)"
-              :aria-label="`${isShut(child.node.id) ? 'Expand' : 'Collapse'} ${child.node.title}`"
-              @click="toggle(child.node.id)"
-            >
-              <i
-                class="pi"
-                :class="isShut(child.node.id) ? 'pi-chevron-right' : 'pi-chevron-down'"
-              />
-            </button>
+          <OutlineRow
+            :campaign-id="campaignId"
+            kind="act"
+            :node="child.node"
+            :siblings="nodesOf(children)"
+            :progress="progressOf(child.node)"
+            collapsible
+            :shut="isShut(child.node.id)"
+            :allowed="['sequence', 'scene']"
+            :renaming="renaming === child.node.id"
+            @toggle="toggle"
+            @created="added"
+            @renamed="renaming = null"
+            @cancel-rename="renaming = null"
+          />
 
-            <div class="row__main">
-              <h2 class="row__title">
-                <RouterLink :to="to('act', child.node)">{{ child.node.title }}</RouterLink>
-              </h2>
-              <p v-if="child.node.description" class="row__description">
-                {{ child.node.description }}
-              </p>
-            </div>
-
-            <ActProgress :progress="progressOf(child.node)" />
-            <MoveControl
-              :campaign-id="campaignId"
-              kind="act"
-              :node="child.node"
-              :siblings="nodesOf(children)"
-            />
-          </div>
-
-          <ol v-if="!isShut(child.node.id)" class="outline__children">
-            <li v-for="under in childrenOfAct(child.node)" :key="under.node.id">
-              <!-- A sequence inside the act -->
-              <template v-if="under.kind === 'sequence'">
-                <div class="row row--sequence">
-                  <button
-                    type="button"
-                    class="chevron"
-                    :aria-expanded="!isShut(under.node.id)"
-                    :aria-label="`${isShut(under.node.id) ? 'Expand' : 'Collapse'} ${under.node.title}`"
-                    @click="toggle(under.node.id)"
-                  >
-                    <i
-                      class="pi"
-                      :class="isShut(under.node.id) ? 'pi-chevron-right' : 'pi-chevron-down'"
-                    />
-                  </button>
-
-                  <div class="row__main">
-                    <h3 class="row__title row__title--sequence">
-                      <RouterLink :to="to('sequence', under.node)">{{
-                        under.node.title
-                      }}</RouterLink>
-                    </h3>
-                    <p v-if="under.node.description" class="row__description">
-                      {{ under.node.description }}
-                    </p>
-                  </div>
-
-                  <MoveControl
+          <template v-if="!isShut(child.node.id)">
+            <ol class="outline__children">
+              <li v-for="under in childrenOfAct(child.node)" :key="under.node.id">
+                <!-- A sequence inside the act -->
+                <template v-if="under.kind === 'sequence'">
+                  <OutlineRow
                     :campaign-id="campaignId"
                     kind="sequence"
                     :node="under.node"
                     :siblings="nodesOf(childrenOfAct(child.node))"
+                    collapsible
+                    :shut="isShut(under.node.id)"
+                    :allowed="['scene']"
+                    :renaming="renaming === under.node.id"
+                    @toggle="toggle"
+                    @created="added"
+                    @renamed="renaming = null"
+                    @cancel-rename="renaming = null"
                   />
-                </div>
 
-                <ol v-if="!isShut(under.node.id)" class="outline__children">
-                  <li v-for="scene in scenesIn(under.node)" :key="scene.id">
-                    <div class="row row--scene">
-                      <span class="chevron chevron--none" aria-hidden="true" />
-                      <span class="row__main row__title--scene">
-                        <RouterLink :to="to('scene', scene)">{{ scene.title }}</RouterLink>
-                      </span>
-                      <SceneStatus :status="scene.status" />
-                      <MoveControl
+                  <ol v-if="!isShut(under.node.id)" class="outline__children">
+                    <li v-for="scene in scenesIn(under.node)" :key="scene.id">
+                      <OutlineRow
                         :campaign-id="campaignId"
                         kind="scene"
                         :node="scene"
                         :siblings="scenesIn(under.node)"
+                        :renaming="renaming === scene.id"
+                        @renamed="renaming = null"
+                        @cancel-rename="renaming = null"
                       />
-                    </div>
-                  </li>
-                </ol>
-              </template>
+                    </li>
+                  </ol>
+                </template>
 
-              <!--
-                A scene hanging off the act, skipping the sequence level. Marked,
-                because at this indent it would otherwise look like a sequence
-                with no children.
-              -->
-              <div v-else class="row row--scene">
-                <span class="chevron chevron--none" aria-hidden="true" />
-                <span class="row__skip" title="Attached to the act, skipping the sequence level"
-                  >↳</span
-                >
-                <span class="row__main row__title--scene">
-                  <RouterLink :to="to('scene', under.node)">{{ under.node.title }}</RouterLink>
-                </span>
-                <SceneStatus :status="under.node.status" />
-                <MoveControl
+                <!-- A scene hanging off the act, skipping the sequence level -->
+                <OutlineRow
+                  v-else
                   :campaign-id="campaignId"
                   kind="scene"
                   :node="under.node"
                   :siblings="nodesOf(childrenOfAct(child.node))"
+                  skips-level
+                  :renaming="renaming === under.node.id"
+                  @renamed="renaming = null"
+                  @cancel-rename="renaming = null"
                 />
-              </div>
-            </li>
-          </ol>
+              </li>
+            </ol>
 
-          <!--
-            The one place the app teaches the word. #88 asks for it explicitly:
-            "sequence" is screenwriting jargon and a game master will not arrive
-            already using it, so the empty act is where it gets a sentence.
-          -->
-          <p v-if="!isShut(child.node.id) && !childrenOfAct(child.node).length" class="empty-slot">
-            Nothing in this act yet. A <strong>sequence</strong> is a run of scenes that tells a
-            small story of its own inside it — or write a scene straight onto the act.
-          </p>
+            <!--
+              The one place the app teaches the word. #88 asks for it explicitly:
+              "sequence" is screenwriting jargon and a game master will not arrive
+              already using it, so the empty act is where it gets a sentence.
+            -->
+            <p v-if="!childrenOfAct(child.node).length" class="empty-slot">
+              Nothing in this act yet. A <strong>sequence</strong> is a run of scenes that tells a
+              small story of its own inside it — or write a scene straight onto the act.
+            </p>
+          </template>
         </template>
 
         <!-- ── A sequence written straight onto the campaign ───────── -->
         <template v-else-if="child.kind === 'sequence'">
-          <div class="row row--sequence row--at-campaign">
-            <button
-              type="button"
-              class="chevron"
-              :aria-expanded="!isShut(child.node.id)"
-              :aria-label="`${isShut(child.node.id) ? 'Expand' : 'Collapse'} ${child.node.title}`"
-              @click="toggle(child.node.id)"
-            >
-              <i
-                class="pi"
-                :class="isShut(child.node.id) ? 'pi-chevron-right' : 'pi-chevron-down'"
-              />
-            </button>
-
-            <div class="row__main">
-              <h2 class="row__title row__title--sequence">{{ child.node.title }}</h2>
-              <p v-if="child.node.description" class="row__description">
-                {{ child.node.description }}
-              </p>
-            </div>
-          </div>
+          <OutlineRow
+            :campaign-id="campaignId"
+            kind="sequence"
+            :node="child.node"
+            :siblings="nodesOf(children)"
+            collapsible
+            :shut="isShut(child.node.id)"
+            :allowed="['scene']"
+            :renaming="renaming === child.node.id"
+            @toggle="toggle"
+            @created="added"
+            @renamed="renaming = null"
+            @cancel-rename="renaming = null"
+          />
 
           <ol v-if="!isShut(child.node.id)" class="outline__children">
             <li v-for="scene in scenesIn(child.node)" :key="scene.id">
-              <div class="row row--scene">
-                <span class="chevron chevron--none" aria-hidden="true" />
-                <span class="row__main row__title--scene">{{ scene.title }}</span>
-                <SceneStatus :status="scene.status" />
-              </div>
+              <OutlineRow
+                :campaign-id="campaignId"
+                kind="scene"
+                :node="scene"
+                :siblings="scenesIn(child.node)"
+                :renaming="renaming === scene.id"
+                @renamed="renaming = null"
+                @cancel-rename="renaming = null"
+              />
             </li>
           </ol>
         </template>
 
         <!-- ── A scene on the campaign itself ─────────────────────── -->
-        <div v-else class="row row--scene row--at-campaign">
-          <span class="chevron chevron--none" aria-hidden="true" />
-          <span class="row__main row__title--scene">
-            <RouterLink :to="to('scene', child.node)">{{ child.node.title }}</RouterLink>
-          </span>
-          <SceneStatus :status="child.node.status" />
-          <MoveControl
-            :campaign-id="campaignId"
-            kind="scene"
-            :node="child.node"
-            :siblings="nodesOf(children)"
-          />
-        </div>
+        <OutlineRow
+          v-else
+          :campaign-id="campaignId"
+          kind="scene"
+          :node="child.node"
+          :siblings="nodesOf(children)"
+          :renaming="renaming === child.node.id"
+          @renamed="renaming = null"
+          @cancel-rename="renaming = null"
+        />
       </li>
     </ol>
   </article>
@@ -433,116 +397,9 @@ function toggleAll() {
   border-top: 1px solid var(--p-grimoire-rule-color);
 }
 
-.row {
+.structure__title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--p-border-radius-sm);
-}
-
-.row:hover {
-  background: var(--p-content-hover-background);
-}
-
-.row--act {
-  padding-top: var(--space-4);
-}
-
-.row__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.row__title {
-  margin: 0;
-  font-family: var(--grimoire-font-display);
-  font-size: var(--step-0);
-  line-height: 1.3;
-}
-
-.row__title--sequence {
-  font-family: var(--grimoire-font-body);
-  font-style: italic;
-  font-size: var(--step-0);
-  font-weight: 400;
-}
-
-.row__title--scene {
-  font-size: var(--step--1);
-}
-
-/*
- * Rows read as text and behave as links. The underline arrives on hover rather
- * than sitting under every row — a two-hundred-line outline with every title
- * underlined is a page of rules, not a table of contents.
- */
-.row__main a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.row__main a:hover {
-  color: var(--p-primary-color);
-  text-decoration: underline;
-}
-
-.row__main a:focus-visible {
-  outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
-  outline-offset: var(--p-focus-ring-offset);
-}
-
-.row__description {
-  margin: var(--space-1) 0 0;
-  font-size: var(--step--1);
-  font-style: italic;
-  color: var(--p-text-muted-color);
-}
-
-.row__skip {
-  color: var(--p-grimoire-rule-color);
-  font-family: var(--grimoire-font-mono);
-  flex: none;
-}
-
-/*
- * A chevron, and a space exactly its size where there is nothing to collapse —
- * so titles at one level line up whether or not the row has children.
- */
-.chevron {
-  flex: none;
-  width: 1.25rem;
-  height: 1.25rem;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--p-border-radius-sm);
-  background: transparent;
-  color: var(--p-navigation-item-icon-color);
-  cursor: pointer;
-  font-size: 0.7em;
-}
-
-.chevron:hover {
-  color: var(--p-primary-color);
-  background: var(--p-content-border-color);
-}
-
-.chevron:focus-visible {
-  outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
-  outline-offset: var(--p-focus-ring-offset);
-}
-
-.chevron--none {
-  visibility: hidden;
-}
-
-/* Touch targets, in absolute pixels so no change to the spacing scale can lower them. */
-@media (pointer: coarse) {
-  .chevron {
-    width: 44px;
-    height: 44px;
-  }
 }
 </style>
