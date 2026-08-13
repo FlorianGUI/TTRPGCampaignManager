@@ -85,6 +85,20 @@ export const routes = [
     meta: { title: 'Session notes' },
   },
   /*
+   * The campaign's shape: acts, sequences and scenes as one outline (#88).
+   *
+   * An ordinary campaign route wearing the ordinary campaign shell — no
+   * `meta.layout`, because the page splitting is a page's business and the shell
+   * knows nothing about it. Reached from the campaign's name in the sidebar,
+   * which is now a control rather than a label.
+   */
+  {
+    path: '/campaigns/:campaignId/structure',
+    name: 'campaign-structure',
+    component: () => import('../views/StructureView.vue'),
+    meta: { title: 'Structure' },
+  },
+  /*
    * Editing one, and the only place it can be deleted. Reached from the cog in
    * the top bar, beside the campaign it belongs to — which is why it needs no
    * entry point on the chooser: you are already in the campaign you want to

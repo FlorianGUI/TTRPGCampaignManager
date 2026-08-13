@@ -2,12 +2,18 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import Tooltip from 'primevue/tooltip'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import CampaignTitle from './CampaignTitle.vue'
 
 /*
- * The campaign's name at the head of its own navigation — a label, not a
- * control. What you can do to a campaign is in the account menu; this only says
- * where you are.
+ * The campaign's name at the head of its own navigation, and the way into its
+ * structure (#88).
+ *
+ * It was deliberately not a control until now, and the test below that asserted
+ * so has been rewritten rather than deleted. #79's objection was to a thing that
+ * *invited* a click and answered with nothing; the name has somewhere to go now,
+ * so the objection is met by giving it a destination and the affordances that
+ * promise one, rather than by taking the affordances away.
  */
 
 const campaign = { id: 'c-1', name: 'The Hollow Crown', description: 'A kingdom with no heir.' }
@@ -25,24 +31,39 @@ globalThis.ResizeObserver ??= class {
  * jsdom lays nothing out — every element is 0 wide — so whether the name is
  * ellipsised has to be stated rather than produced. These are the two numbers
  * the component compares: what the name needs, and what the column gives it.
- * Only `<p>` is affected, and the tooltip's own popup is a `<div>`.
+ * Only `<a>` is affected, and the tooltip's own popup is a `<div>`.
  */
 function measuring({ name, column }) {
-  Object.defineProperty(HTMLParagraphElement.prototype, 'scrollWidth', {
+  Object.defineProperty(HTMLAnchorElement.prototype, 'scrollWidth', {
     configurable: true,
     get: () => name,
   })
-  Object.defineProperty(HTMLParagraphElement.prototype, 'clientWidth', {
+  Object.defineProperty(HTMLAnchorElement.prototype, 'clientWidth', {
     configurable: true,
     get: () => column,
   })
 }
 
-function mountTitle(props = {}) {
+/*
+ * A real router rather than a stub, because the point of this component now is
+ * where it goes: a stubbed RouterLink would let the destination be wrong and the
+ * test still pass.
+ */
+function routerWith(structure = '/campaigns/:campaignId/structure') {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'home', component: { template: '<div />' } },
+      { path: structure, name: 'campaign-structure', component: { template: '<div />' } },
+    ],
+  })
+}
+
+function mountTitle(props = {}, router = routerWith()) {
   return mount(CampaignTitle, {
     props: { campaign, ...props },
     // The directive is registered in main.js, which tests do not run.
-    global: { plugins: [PrimeVue], directives: { tooltip: Tooltip } },
+    global: { plugins: [PrimeVue, router], directives: { tooltip: Tooltip } },
   })
 }
 
@@ -68,25 +89,43 @@ describe('CampaignTitle', () => {
    * this a later test reads the previous one's popup. */
   afterEach(() => {
     document.querySelectorAll('.p-tooltip').forEach((el) => el.remove())
-    delete HTMLParagraphElement.prototype.scrollWidth
-    delete HTMLParagraphElement.prototype.clientWidth
+    delete HTMLAnchorElement.prototype.scrollWidth
+    delete HTMLAnchorElement.prototype.clientWidth
   })
 
   it('names the campaign you are in', () => {
     expect(mountTitle().text()).toBe('The Hollow Crown')
   })
 
-  it('is not a control', () => {
+  it('goes to the campaign structure, which is what earns it a click', async () => {
+    /*
+     * The rewrite of "is not a control". #79 refused an affordance because there
+     * was nothing behind it; this asserts there is, so the two cannot both be
+     * true and a future reader is not left choosing between them.
+     */
     const wrapper = mountTitle()
 
-    /*
-     * The tag this replaced looked pressable and mostly was not, which is the
-     * worst of both. Nothing here presses: no button, no link, and no
-     * aria-haspopup promising a menu that lives in the top bar.
-     */
-    expect(wrapper.find('button').exists()).toBe(false)
-    expect(wrapper.find('a').exists()).toBe(false)
-    expect(wrapper.get('.campaign-title').attributes('aria-haspopup')).toBeUndefined()
+    expect(wrapper.get('a').attributes('href')).toBe('/campaigns/c-1/structure')
+  })
+
+  it('still promises no menu', () => {
+    // It navigates. It does not open anything — what you can *do* to a campaign
+    // is still the account menu's, which #79 settled and #88 does not touch.
+    expect(mountTitle().get('.campaign-title').attributes('aria-haspopup')).toBeUndefined()
+  })
+
+  it('says so when you are already looking at the structure', async () => {
+    const router = routerWith()
+    await router.push({ name: 'campaign-structure', params: { campaignId: 'c-1' } })
+    await router.isReady()
+
+    const wrapper = mountTitle({}, router)
+
+    expect(wrapper.get('a').attributes('aria-current')).toBe('page')
+  })
+
+  it('does not claim to be the page you are on when you are elsewhere', () => {
+    expect(mountTitle().get('a').attributes('aria-current')).toBeUndefined()
   })
 
   it('does not truncate the accessible name, only the visible one', () => {

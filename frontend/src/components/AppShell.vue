@@ -4,6 +4,7 @@ import Button from 'primevue/button'
 import Drawer from 'primevue/drawer'
 import AppNav from './AppNav.vue'
 import CampaignTitle from './CampaignTitle.vue'
+import CampaignNav from './narrative/CampaignNav.vue'
 import ChromeActions from './ChromeActions.vue'
 import VerificationNotice from './VerificationNotice.vue'
 
@@ -100,7 +101,13 @@ if (typeof window !== 'undefined' && window.matchMedia) {
 
     <div class="shell__body">
       <nav class="shell__sidebar texture-grain" aria-label="Campaign">
+        <!--
+          The campaign's name, then what it holds, then the rest of the app. The
+          name heads its own list rather than sitting above a section labelled
+          "Campaign" — the same word twice in two lines read as a mistake.
+        -->
         <CampaignTitle v-if="campaign" :campaign="campaign" />
+        <CampaignNav v-if="campaign" :campaign="campaign" />
         <AppNav :sections="sections" :active="active" />
       </nav>
 
@@ -121,6 +128,7 @@ if (typeof window !== 'undefined' && window.matchMedia) {
         place the campaign is named at all.
       -->
       <CampaignTitle v-if="campaign" :campaign="campaign" />
+      <CampaignNav v-if="campaign" :campaign="campaign" @navigate="navOpen = false" />
       <AppNav :sections="sections" :active="active" @navigate="navOpen = false" />
     </Drawer>
   </div>
