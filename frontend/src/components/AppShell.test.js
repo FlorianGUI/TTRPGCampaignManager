@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { h } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
@@ -11,7 +12,24 @@ const router = { push: vi.fn() }
 
 vi.mock('vue-router', () => ({
   useRouter: () => router,
+  /*
+   * The campaign's name is a link into the structure now (#88), and it renders a
+   * `custom` RouterLink so it can own the anchor it measures. The stub has to
+   * hand the slot the same three values the real one does, or the title renders
+   * nothing at all and every assertion below fails for the wrong reason.
+   */
+  RouterLink: {
+    props: { to: { type: [String, Object], required: true }, custom: Boolean },
+    setup(props, { slots }) {
+      const slotProps = { href: '/stub', navigate: () => {}, isActive: false }
+      return () => (props.custom ? slots.default(slotProps) : h('a', slots.default?.(slotProps)))
+    },
+  },
 }))
+
+// The sidebar reads the campaign's tree on every campaign route. This suite is
+// about the shell's layout, so the request is stubbed rather than answered.
+vi.mock('../api/client.js', () => ({ request: vi.fn(() => new Promise(() => {})) }))
 
 /*
  * Covers the small-screen navigation contract from issue #25: below the

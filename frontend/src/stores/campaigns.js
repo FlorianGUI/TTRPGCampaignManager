@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { request } from '../api/client.js'
+import { forgetCollapsed } from './collapsedNarrative.js'
 
 /*
  * The campaigns a game master owns.
@@ -129,6 +130,9 @@ export const useCampaignsStore = defineStore('campaigns', () => {
     await request(`/campaigns/${id}`, { method: 'DELETE' })
 
     items.value = items.value.filter((campaign) => campaign.id !== id)
+    // The campaign is gone, so which of its acts were shut is not a preference
+    // any more — it is the one place a deleted campaign would live on.
+    forgetCollapsed(id)
   }
 
   return { items, loading, loaded, error, ensureLoaded, reload, byId, create, update, remove }

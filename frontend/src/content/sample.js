@@ -9,16 +9,11 @@
  */
 
 export const sections = [
-  {
-    label: 'Campaign',
-    context: 'campaign',
-    items: [
-      { label: 'Session notes', icon: 'pi-file-edit', count: 14 },
-      { label: 'Timeline', icon: 'pi-clock' },
-      { label: 'Factions', icon: 'pi-flag', count: 6 },
-      { label: 'Locations', icon: 'pi-map-marker', count: 23 },
-    ],
-  },
+  /*
+   * The Campaign section is gone from here: what a campaign holds is real now
+   * (#88) and comes from `CampaignNav`, which reads the structure endpoint.
+   * Library and Characters are still invented, and stay here until they are not.
+   */
   {
     label: 'Library',
     context: 'library',
