@@ -74,6 +74,75 @@ export const useStructureStore = defineStore('structure', () => {
     }
   }
 
+  /*
+   * One act, sequence or scene, whole.
+   *
+   * The tree deliberately carries no scene bodies (#88), so a scene's page has
+   * to ask for its own — and once one level needs a detail read, all three may
+   * as well go through the same door rather than have the scene page be the odd
+   * one out.
+   *
+   * Keyed by kind *and* id because the three levels have their own id spaces:
+   * nothing stops an act and a scene sharing a uuid, and a single map keyed by
+   * id alone would have them overwriting each other.
+   */
+  const nodes = ref({})
+
+  const nodeInflight = {}
+
+  const KINDS = { act: 'acts', sequence: 'sequences', scene: 'scenes' }
+
+  const pathTo = (campaignId, kind, id) => `/campaigns/${campaignId}/${KINDS[kind]}/${id}`
+
+  function ensureNode(campaignId, kind, id) {
+    const key = `${kind}:${id}`
+    nodeInflight[key] ??= loadNode(campaignId, kind, id, key)
+    return nodeInflight[key]
+  }
+
+  async function loadNode(campaignId, kind, id, key) {
+    try {
+      nodes.value[key] = await request(pathTo(campaignId, kind, id))
+      error.value = null
+    } catch (failure) {
+      error.value = failure
+      // Left absent rather than written as an empty record: a node that is not
+      // this viewer's answers 404 exactly as one that never existed, and the
+      // page shows the same thing for both.
+    }
+  }
+
+  function nodeFor(kind, id) {
+    return nodes.value[`${kind}:${id}`] ?? null
+  }
+
+  /*
+   * A full replacement, not a patch — the rule every write in this API follows.
+   * Every field goes on every save, so a body left out of the request would be
+   * cleared rather than kept, and the forms are loaded with current values for
+   * exactly that reason.
+   *
+   * Rejects rather than parking the failure, the way the campaign store's writes
+   * do: a form has somewhere to put a rejected promise and needs to know which
+   * field the API objected to, and painting the whole page as broken because one
+   * save was refused would be the wrong screen showing the wrong thing.
+   */
+  async function saveNode(campaignId, kind, id, fields) {
+    const saved = await request(pathTo(campaignId, kind, id), { method: 'PUT', json: fields })
+
+    nodes.value[`${kind}:${id}`] = saved
+    /*
+     * The tree carries this record's title, and now says something out of date.
+     * Refetched rather than patched here: patching would put the tree's shape in
+     * a second place, and the two would drift the first time a field was added.
+     * A save is a deliberate act and rare — one extra request is the cheaper
+     * kind of cost.
+     */
+    await reload(campaignId)
+
+    return saved
+  }
+
   function treeFor(campaignId) {
     return trees.value[campaignId] ?? null
   }
@@ -100,7 +169,19 @@ export const useStructureStore = defineStore('structure', () => {
     ].sort((a, b) => a.node.position - b.node.position || a.node.id.localeCompare(b.node.id))
   }
 
-  return { trees, loading, error, ensureLoaded, reload, treeFor, childrenOf }
+  return {
+    trees,
+    nodes,
+    loading,
+    error,
+    ensureLoaded,
+    reload,
+    treeFor,
+    childrenOf,
+    ensureNode,
+    nodeFor,
+    saveNode,
+  }
 })
 
 /*
@@ -141,4 +222,75 @@ export function scenesUnder(tree, act) {
   return tree.scenes.filter(
     (scene) => scene.act_id === act.id || sequenceIds.has(scene.sequence_id),
   )
+}
+
+/*
+ * Every scene in the campaign, in the order the story goes in.
+ *
+ * Depth-first through the tree by `position`, which is what makes the stepper on
+ * a scene page walk to *the next scene in the story* rather than the next
+ * sibling — across the end of a sequence, out of an act and into the next one.
+ * That is the payoff for ordering being explicit in the data rather than implied
+ * by a timestamp, and it is the only place the flattened order exists.
+ */
+export function scenesInOrder(tree) {
+  const byPosition = (a, b) => a.position - b.position || a.id.localeCompare(b.id)
+  const scenesOf = (predicate) => tree.scenes.filter(predicate).sort(byPosition)
+
+  const walkSequence = (sequence) => scenesOf((scene) => scene.sequence_id === sequence.id)
+
+  const walkAct = (act) =>
+    [
+      ...tree.sequences
+        .filter((s) => s.act_id === act.id)
+        .map((node) => ({ kind: 'sequence', node })),
+      ...scenesOf((scene) => scene.act_id === act.id).map((node) => ({ kind: 'scene', node })),
+    ]
+      .sort((a, b) => byPosition(a.node, b.node))
+      .flatMap((child) => (child.kind === 'sequence' ? walkSequence(child.node) : [child.node]))
+
+  return [
+    ...tree.acts.map((node) => ({ kind: 'act', node })),
+    ...tree.sequences.filter((s) => s.act_id === null).map((node) => ({ kind: 'sequence', node })),
+    ...scenesOf((scene) => scene.act_id === null && scene.sequence_id === null).map((node) => ({
+      kind: 'scene',
+      node,
+    })),
+  ]
+    .sort((a, b) => byPosition(a.node, b.node))
+    .flatMap((child) => {
+      if (child.kind === 'act') return walkAct(child.node)
+      if (child.kind === 'sequence') return walkSequence(child.node)
+      return [child.node]
+    })
+}
+
+/*
+ * What sits above a node, nearest last.
+ *
+ * Only the direct parent is stored — a scene under a sequence does not also
+ * record that sequence's act, because a copy kept there could disagree after a
+ * move — so the chain is walked here rather than read off the row.
+ */
+export function trailTo(tree, kind, node) {
+  if (!tree || !node) return []
+
+  if (kind === 'sequence') {
+    const act = tree.acts.find((a) => a.id === node.act_id)
+    return act ? [{ kind: 'act', node: act }] : []
+  }
+
+  if (kind === 'scene') {
+    if (node.act_id) {
+      const act = tree.acts.find((a) => a.id === node.act_id)
+      return act ? [{ kind: 'act', node: act }] : []
+    }
+
+    const sequence = tree.sequences.find((s) => s.id === node.sequence_id)
+    if (!sequence) return []
+
+    return [...trailTo(tree, 'sequence', sequence), { kind: 'sequence', node: sequence }]
+  }
+
+  return []
 }

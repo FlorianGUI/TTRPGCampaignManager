@@ -19,7 +19,7 @@
  * the two that follow.
  */
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
@@ -104,6 +104,18 @@ const childrenOfAct = (act) =>
 
 const progressOf = (act) => actProgress(tree.value, act)
 
+/*
+ * Every row leads to its own page (#88's PR 2). The outline stays the place you
+ * reorganise from; a node page is where you read and write one.
+ */
+const ROUTES = { act: 'campaign-act', sequence: 'campaign-sequence', scene: 'campaign-scene' }
+const PARAMS = { act: 'actId', sequence: 'sequenceId', scene: 'sceneId' }
+
+const to = (kind, node) => ({
+  name: ROUTES[kind],
+  params: { campaignId: campaignId.value, [PARAMS[kind]]: node.id },
+})
+
 const isEmpty = computed(() => tree.value && !children.value.length)
 
 const everything = computed(() =>
@@ -179,7 +191,9 @@ function toggleAll() {
             </button>
 
             <div class="row__main">
-              <h2 class="row__title">{{ child.node.title }}</h2>
+              <h2 class="row__title">
+                <RouterLink :to="to('act', child.node)">{{ child.node.title }}</RouterLink>
+              </h2>
               <p v-if="child.node.description" class="row__description">
                 {{ child.node.description }}
               </p>
@@ -207,7 +221,11 @@ function toggleAll() {
                   </button>
 
                   <div class="row__main">
-                    <h3 class="row__title row__title--sequence">{{ under.node.title }}</h3>
+                    <h3 class="row__title row__title--sequence">
+                      <RouterLink :to="to('sequence', under.node)">{{
+                        under.node.title
+                      }}</RouterLink>
+                    </h3>
                     <p v-if="under.node.description" class="row__description">
                       {{ under.node.description }}
                     </p>
@@ -218,7 +236,9 @@ function toggleAll() {
                   <li v-for="scene in scenesIn(under.node)" :key="scene.id">
                     <div class="row row--scene">
                       <span class="chevron chevron--none" aria-hidden="true" />
-                      <span class="row__main row__title--scene">{{ scene.title }}</span>
+                      <span class="row__main row__title--scene">
+                        <RouterLink :to="to('scene', scene)">{{ scene.title }}</RouterLink>
+                      </span>
                       <SceneStatus :status="scene.status" />
                     </div>
                   </li>
@@ -235,7 +255,9 @@ function toggleAll() {
                 <span class="row__skip" title="Attached to the act, skipping the sequence level"
                   >↳</span
                 >
-                <span class="row__main row__title--scene">{{ under.node.title }}</span>
+                <span class="row__main row__title--scene">
+                  <RouterLink :to="to('scene', under.node)">{{ under.node.title }}</RouterLink>
+                </span>
                 <SceneStatus :status="under.node.status" />
               </div>
             </li>
@@ -290,7 +312,9 @@ function toggleAll() {
         <!-- ── A scene on the campaign itself ─────────────────────── -->
         <div v-else class="row row--scene row--at-campaign">
           <span class="chevron chevron--none" aria-hidden="true" />
-          <span class="row__main row__title--scene">{{ child.node.title }}</span>
+          <span class="row__main row__title--scene">
+            <RouterLink :to="to('scene', child.node)">{{ child.node.title }}</RouterLink>
+          </span>
           <SceneStatus :status="child.node.status" />
         </div>
       </li>
@@ -400,6 +424,26 @@ function toggleAll() {
 
 .row__title--scene {
   font-size: var(--step--1);
+}
+
+/*
+ * Rows read as text and behave as links. The underline arrives on hover rather
+ * than sitting under every row — a two-hundred-line outline with every title
+ * underlined is a page of rules, not a table of contents.
+ */
+.row__main a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.row__main a:hover {
+  color: var(--p-primary-color);
+  text-decoration: underline;
+}
+
+.row__main a:focus-visible {
+  outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
+  outline-offset: var(--p-focus-ring-offset);
 }
 
 .row__description {

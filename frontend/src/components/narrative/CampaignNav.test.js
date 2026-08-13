@@ -30,6 +30,16 @@ function routerFor() {
         name: 'campaign-structure',
         component: { template: '<div />' },
       },
+      {
+        path: '/campaigns/:campaignId/acts/:actId',
+        name: 'campaign-act',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/campaigns/:campaignId/scenes/:sceneId',
+        name: 'campaign-scene',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
@@ -135,13 +145,28 @@ describe('the campaign’s own children in the sidebar', () => {
     expect(wrapper.find('.campaign-nav').exists()).toBe(false)
   })
 
-  it('leads into the structure', async () => {
+  it('leads to the act itself, not to the outline', async () => {
+    /*
+     * Landing on the structure and then having to find the act you just clicked
+     * is the journey this removes — the outline is one click away from the act's
+     * own page for whoever wants it.
+     */
     const wrapper = await render({
       acts: [{ id: 'a-1', title: 'Act I', description: '', position: 1024 }],
       sequences: [],
       scenes: [],
     })
 
-    expect(wrapper.get('a').attributes('href')).toBe('/campaigns/c-1/structure')
+    expect(wrapper.get('a').attributes('href')).toBe('/campaigns/c-1/acts/a-1')
+  })
+
+  it('leads a campaign-level scene to its own page too', async () => {
+    const wrapper = await render({
+      acts: [],
+      sequences: [],
+      scenes: [scene('s-1', 'Session zero', 1024)],
+    })
+
+    expect(wrapper.get('a').attributes('href')).toBe('/campaigns/c-1/scenes/s-1')
   })
 })

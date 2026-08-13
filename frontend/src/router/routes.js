@@ -99,6 +99,36 @@ export const routes = [
     meta: { title: 'Structure' },
   },
   /*
+   * One act, sequence or scene, each on its own page (#88).
+   *
+   * Three routes rather than one with a kind in the path: they are three
+   * resources with three ids, and the API already spells them out that way. It
+   * also means a scene's page carries only what a scene needs — a body and a
+   * stepper — rather than a view branching three ways on every render.
+   *
+   * Nothing here is carried alongside the tree. Getting back is the breadcrumb,
+   * which always starts at Structure, and the sidebar; moving sideways is the
+   * previous/next stepper at the foot of a scene.
+   */
+  {
+    path: '/campaigns/:campaignId/acts/:actId',
+    name: 'campaign-act',
+    component: () => import('../views/ActView.vue'),
+    meta: { title: 'Act' },
+  },
+  {
+    path: '/campaigns/:campaignId/sequences/:sequenceId',
+    name: 'campaign-sequence',
+    component: () => import('../views/SequenceView.vue'),
+    meta: { title: 'Sequence' },
+  },
+  {
+    path: '/campaigns/:campaignId/scenes/:sceneId',
+    name: 'campaign-scene',
+    component: () => import('../views/SceneView.vue'),
+    meta: { title: 'Scene' },
+  },
+  /*
    * Editing one, and the only place it can be deleted. Reached from the cog in
    * the top bar, beside the campaign it belongs to — which is why it needs no
    * entry point on the chooser: you are already in the campaign you want to

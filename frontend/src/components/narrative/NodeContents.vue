@@ -1,0 +1,98 @@
+<script setup>
+/*
+ * What a grouping holds, as a list you can click straight through.
+ *
+ * A node page carries no tree beside it, so this is how an act reaches its own
+ * scenes — the outline is one navigation away and going back to it to descend
+ * one level is the journey this removes.
+ *
+ * Ordered by `position`, mixing sequences and scenes, because that is the order
+ * the story goes in and separating them would put every scene written straight
+ * onto an act after all its sequences regardless of where it belongs.
+ */
+import { RouterLink } from 'vue-router'
+import SceneStatus from './SceneStatus.vue'
+
+defineProps({
+  campaignId: { type: String, required: true },
+  children: { type: Array, required: true },
+})
+
+const to = (campaignId, { kind, node }) =>
+  kind === 'sequence'
+    ? { name: 'campaign-sequence', params: { campaignId, sequenceId: node.id } }
+    : { name: 'campaign-scene', params: { campaignId, sceneId: node.id } }
+</script>
+
+<template>
+  <ul class="contents">
+    <li v-for="child in children" :key="child.node.id">
+      <RouterLink class="contents__item" :to="to(campaignId, child)">
+        <span
+          class="contents__title"
+          :class="{ 'contents__title--sequence': child.kind === 'sequence' }"
+        >
+          {{ child.node.title }}
+        </span>
+
+        <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" />
+        <span v-else class="contents__kind">sequence</span>
+      </RouterLink>
+    </li>
+  </ul>
+</template>
+
+<style scoped>
+.contents {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.contents__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--p-content-border-color);
+  color: var(--p-text-color);
+  text-decoration: none;
+}
+
+.contents li:last-child .contents__item {
+  border-bottom: 0;
+}
+
+.contents__item:hover .contents__title {
+  color: var(--p-primary-color);
+}
+
+.contents__item:focus-visible {
+  outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
+  outline-offset: var(--p-focus-ring-offset);
+}
+
+.contents__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.contents__title--sequence {
+  font-style: italic;
+}
+
+.contents__kind {
+  font-family: var(--grimoire-font-mono);
+  font-size: var(--step--2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--p-text-muted-color);
+}
+
+@media (pointer: coarse) {
+  .contents__item {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+</style>
