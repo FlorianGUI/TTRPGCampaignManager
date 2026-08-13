@@ -6,7 +6,7 @@ from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_narrative, get_sequence_service
 from app.contexts.campaign.adapters.primary.api.schemas.sequence import (
     SequenceCreate,
-    SequenceMove,
+    SequencePlacement,
     SequenceResponse,
     SequenceUpdate,
 )
@@ -67,20 +67,25 @@ async def update_sequence(
     return SequenceResponse(**sequence.__dict__)
 
 
-@router.put("/{sequence_id}/parent", response_model=SequenceResponse, responses=NOT_FOUND)
-async def move_sequence(
+@router.put("/{sequence_id}/placement", response_model=SequenceResponse, responses=NOT_FOUND)
+async def place_sequence(
     sequence_id: SequenceId,
-    body: SequenceMove,
+    body: SequencePlacement,
     narrative: Narrative = Depends(get_narrative),
     service: SequenceService = Depends(get_sequence_service),
 ):
-    """Reparenting is its own route, not a field on the update.
+    """Where it sits, in one call: its act, and its place among that act's sequences.
 
-    A move is a different act from an edit — it changes where everything underneath lives
-    — and giving it a URL of its own means a rename can never perform one by accident with
-    a stale id. `{"act_id": null}` moves the sequence to the campaign.
+    Kept apart from the update for the reason that route gives — a rename must never move
+    anything by carrying a stale id. `{"act_id": null}` puts the sequence on the campaign,
+    and `after` names the sibling it was dropped below.
     """
-    sequence = await service.move(sequence_id, narrative, ActId(body.act_id) if body.act_id else None)
+    sequence = await service.place(
+        sequence_id,
+        narrative,
+        ActId(body.act_id) if body.act_id else None,
+        SequenceId(body.after) if body.after else None,
+    )
     return SequenceResponse(**sequence.__dict__)
 
 

@@ -140,6 +140,58 @@ Feature: Narrative Structure
     And I retrieve the sequence by its ID
     Then the sequence should be under that act
 
+  Scenario: Drop a scene above the one it used to follow
+    Given I create a scene named "Arrival at dusk" in my campaign
+    And I create a scene named "The sunken arch" in my campaign
+    When I drop the second scene at the top
+    And I list the scenes in my campaign
+    Then the scenes should read "The sunken arch, Arrival at dusk"
+
+  Scenario: Drop a scene between two others
+    Given I create a scene named "Arrival at dusk" in my campaign
+    And I create a scene named "The sunken arch" in my campaign
+    And I create a scene named "The nesting pair" in my campaign
+    When I drop the last scene after the first
+    And I list the scenes in my campaign
+    Then the scenes should read "Arrival at dusk, The nesting pair, The sunken arch"
+
+  Scenario: Reorder the acts of a campaign
+    Given I create an act named "Act I" in my campaign
+    And I create an act named "Act II" in my campaign
+    When I drop the second act at the top
+    And I list the acts in my campaign
+    Then the acts should read "Act II, Act I"
+
+  Scenario: Drop a scene into another act and place it at once
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a scene named "The muster at Greyfen" under that act
+    And I create an act named "Act II — The War for the Fen" in my campaign
+    When I drop the scene into the second act
+    Then the scene should be under the second act
+
+  Scenario: An anchor from another act is refused
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a scene named "Interlude" under that act
+    And I create a scene named "Session zero" in my campaign
+    When I drop the campaigns scene after the one in the act
+    Then I should get a not found error
+
+  Scenario: Removing an act hands its scenes to the campaign
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a scene named "Interlude — the road back" under that act
+    When I delete the act
+    And I retrieve the scene by its ID
+    Then the scene should be under no act
+
+  Scenario: Removing a sequence hands its scenes to the act above it
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a sequence named "The Causeway" under that act
+    And I create a scene named "Arrival at dusk" under that sequence
+    When I delete the sequence
+    And I retrieve the scene by its ID
+    Then the scene should be under that act
+    And the scene should be under no sequence
+
   Scenario: Closing a campaign takes the whole tree with it
     Given I create an act named "Act I — Water Rising" in my campaign
     And I create a sequence named "The Causeway" under that act

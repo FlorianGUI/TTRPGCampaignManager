@@ -62,6 +62,16 @@ class SqlAlchemySceneRepository(SceneRepository):
         )
         return [self._to_domain(m) for m in result.scalars().all()]
 
+    async def find_under(
+        self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
+    ) -> list[Scene]:
+        result = await self._session.execute(
+            select(SceneModel)
+            .where(SceneModel.campaign_id == access.campaign_id, *self._parent(act_id, sequence_id))
+            .order_by(SceneModel.position, SceneModel.id)
+        )
+        return [self._to_domain(m) for m in result.scalars().all()]
+
     async def last_position_under(
         self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
     ) -> int | None:
@@ -73,12 +83,21 @@ class SqlAlchemySceneRepository(SceneRepository):
         # the campaign would be appended at 1024, stacking them all on one position.
         result = await self._session.execute(
             select(func.max(SceneModel.position)).where(
-                SceneModel.campaign_id == access.campaign_id,
-                SceneModel.act_id.is_(None) if act_id is None else SceneModel.act_id == act_id,
-                SceneModel.sequence_id.is_(None) if sequence_id is None else SceneModel.sequence_id == sequence_id,
+                SceneModel.campaign_id == access.campaign_id, *self._parent(act_id, sequence_id)
             )
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    def _parent(act_id: ActId | None, sequence_id: SequenceId | None):
+        # `is_(None)` rather than `== None`: in SQL, `act_id = NULL` is NULL rather than
+        # true, so the equality form matches nothing and every scene of the campaign would
+        # look like a sibling of every other. Written once now that two queries need it, so
+        # a reorder and an append cannot disagree about who the siblings are.
+        return (
+            SceneModel.act_id.is_(None) if act_id is None else SceneModel.act_id == act_id,
+            SceneModel.sequence_id.is_(None) if sequence_id is None else SceneModel.sequence_id == sequence_id,
+        )
 
     async def delete(self, id: SceneId) -> None:
         await self._session.execute(delete(SceneModel).where(SceneModel.id == id))

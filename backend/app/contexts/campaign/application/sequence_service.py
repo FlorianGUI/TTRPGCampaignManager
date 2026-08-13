@@ -1,8 +1,15 @@
 from app.common.ids import ActId, SequenceId
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
+from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.position import position_after
+from app.contexts.campaign.domain.position import (
+    POSITION_GAP,
+    index_after,
+    position_after,
+    position_between,
+    renumbered,
+)
 from app.contexts.campaign.domain.sequence import Sequence
 
 
@@ -15,9 +22,16 @@ class SequenceService:
     the reach rule #80 spends a section forbidding.
     """
 
-    def __init__(self, repository: SequenceRepository, acts: ActRepository) -> None:
+    def __init__(
+        self,
+        repository: SequenceRepository,
+        acts: ActRepository,
+        scenes: SceneRepository,
+    ) -> None:
         self._repository = repository
         self._acts = acts
+        # For `delete`, which hands the sequence's scenes to the act above it.
+        self._scenes = scenes
 
     async def _place_under(self, narrative: Narrative, act_id: ActId | None) -> ActId | None:
         """Resolve the parent, and prove it belongs to this campaign.
@@ -69,23 +83,57 @@ class SequenceService:
         sequence.revise(title, description)
         return await self._repository.save(sequence)
 
-    async def move(self, id: SequenceId, narrative: Narrative, act_id: ActId | None) -> Sequence:
-        """Reparent, appending to the new act's sequences.
+    async def place(
+        self, id: SequenceId, narrative: Narrative, act_id: ActId | None = None, after: SequenceId | None = None
+    ) -> Sequence:
+        """Put the sequence where it was dropped: an act, and a place among its siblings.
 
-        Both the sequence and the act it is moving to are resolved through the same
-        `Narrative`, so a game master cannot move their sequence under someone else's act
-        — nor someone else's sequence under their own — and neither refusal says which of
-        the two was the problem.
+        The same shape as `SceneService.place` and for the same reasons — see it for why
+        parent and position are one operation rather than two. Both the sequence and the
+        act it is moving to are resolved through the same `Narrative`, so a game master
+        cannot move their sequence under someone else's act, nor someone else's under
+        their own, and neither refusal says which of the two was the problem.
         """
         sequence = narrative.sequences.editable(await self._repository.find_by_id(id))
         parent = await self._place_under(narrative, act_id)
-        sequence.move_under(
-            parent,
-            position_after(await self._repository.last_position_under(narrative.sequences, parent)),
+
+        siblings = [s for s in await self._repository.find_under(narrative.sequences, parent) if s.id != sequence.id]
+        index = index_after(siblings, after, narrative.sequences.not_available)
+
+        position = position_between(
+            siblings[index - 1].position if index > 0 else None,
+            siblings[index].position if index < len(siblings) else None,
         )
-        return await self._repository.save(sequence)
+        if position is not None:
+            sequence.move_under(parent, position)
+            return await self._repository.save(sequence)
+
+        sequence.move_under(parent, 0)
+        ordered = siblings[:index] + [sequence] + siblings[index:]
+        for record, fresh in zip(ordered, renumbered(len(ordered)), strict=True):
+            record.reposition(fresh)
+            await self._repository.save(record)
+        return sequence
 
     async def delete(self, id: SequenceId, narrative: Narrative) -> None:
-        """As with acts: one row, and PR 3 decides what a non-empty one does."""
+        """Remove the sequence, and give its scenes to the act above it.
+
+        The same policy as an act, one level down, and this is where "nearest surviving
+        ancestor" earns the phrase rather than just "the campaign": a sequence inside an
+        act hands its scenes to **that act**, not to the campaign root. The act is still
+        there and still the right place — sending its scenes past it would throw away a
+        grouping the game master did not ask to lose.
+
+        A sequence that was on the campaign has no act above it, so its scenes go to the
+        campaign. That falls out of `sequence.act_id` being `None` rather than needing a
+        branch, which is the same reason `None` is a parent everywhere else here.
+        """
         sequence = narrative.sequences.deletable(await self._repository.find_by_id(id))
+
+        next_position = position_after(await self._scenes.last_position_under(narrative.scenes, sequence.act_id, None))
+        for scene in await self._scenes.find_under(narrative.scenes, None, sequence.id):
+            scene.move_under(sequence.act_id, None, next_position)
+            await self._scenes.save(scene)
+            next_position += POSITION_GAP
+
         await self._repository.delete(sequence.id)

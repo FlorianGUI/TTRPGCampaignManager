@@ -44,6 +44,19 @@ class Sequence:
         self.description = description
         self.updated_at = datetime.now(UTC)
 
+    def reposition(self, position: int) -> None:
+        """Take a new number in the same list, without claiming to have been edited.
+
+        `updated_at` deliberately does not move. This is what a **neighbour** gets when
+        someone else's drop exhausted the gap and the sibling list had to be renumbered —
+        the record itself did not change, its surroundings did. Moving the timestamp on
+        thirty rows because one scene was dragged past another would make "last changed"
+        mean "was near something that moved", and every list ordered by it useless.
+
+        The record being moved goes through `move_under` instead, which does move it.
+        """
+        self.position = position
+
     def move_under(self, act_id: ActId | None, position: int) -> None:
         """Reparent, and take a place among its new siblings.
 

@@ -6,7 +6,7 @@ from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_narrative, get_scene_service
 from app.contexts.campaign.adapters.primary.api.schemas.scene import (
     SceneCreate,
-    SceneMove,
+    ScenePlacement,
     SceneResponse,
     SceneUpdate,
 )
@@ -86,21 +86,30 @@ async def update_scene(
     return SceneResponse(**scene.__dict__)
 
 
-@router.put("/{scene_id}/parent", response_model=SceneResponse, responses=NOT_FOUND)
-async def move_scene(
+@router.put("/{scene_id}/placement", response_model=SceneResponse, responses=NOT_FOUND)
+async def place_scene(
     scene_id: SceneId,
-    body: SceneMove,
+    body: ScenePlacement,
     narrative: Narrative = Depends(get_narrative),
     service: SceneService = Depends(get_scene_service),
 ):
-    """Reparenting is its own route, not a field on the update.
+    """Where it sits, in one call: its parent, and its place among that parent's scenes.
 
     *Scenes move between acts, get cut and come back* — #80's own words, and most of what
-    this feature is for. It is a different act from rewriting a body, and it gets a
-    different URL so a long edit can never move a scene by carrying a parent it read an
-    hour ago. Both ids null moves the scene to the campaign.
+    this feature is for. One request rather than two, because a drag that crosses acts and
+    lands mid-list is one gesture and splitting it would show a wrong order in between.
+
+    Kept apart from the update so a body typed over an hour can never move a scene by
+    carrying a parent it read before someone reorganised in another tab. Both parent ids
+    null puts the scene on the campaign; `after` names the sibling it was dropped below.
     """
-    scene = await service.move(scene_id, narrative, _act(body.act_id), _sequence(body.sequence_id))
+    scene = await service.place(
+        scene_id,
+        narrative,
+        _act(body.act_id),
+        _sequence(body.sequence_id),
+        SceneId(body.after) if body.after else None,
+    )
     return SceneResponse(**scene.__dict__)
 
 

@@ -18,6 +18,16 @@ class ActUpdate(BaseModel):
     description: CampaignMarkdown = ""
 
 
+class ActPlacement(BaseModel):
+    """Where the act sits among the campaign's acts.
+
+    `after` names the sibling it was dropped below; null is first. An act has no parent to
+    name, so placing one is entirely a question of order.
+    """
+
+    after: UUID | None = None
+
+
 class ActResponse(BaseModel):
     id: UUID
     title: str

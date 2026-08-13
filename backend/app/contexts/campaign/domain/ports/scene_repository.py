@@ -36,6 +36,16 @@ class SceneRepository(ABC):
         """
 
     @abstractmethod
+    async def find_under(
+        self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
+    ) -> list[Scene]:
+        """The scenes of one parent, in order. Both ids None is the campaign's own.
+
+        The sibling list a drop is placed into, and the children a deleted act or sequence
+        has to rehome — one query for both, because they are the same question.
+        """
+
+    @abstractmethod
     async def last_position_under(
         self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None
     ) -> int | None:
