@@ -13,6 +13,7 @@ from app.contexts.campaign.application.campaign_service import CampaignService
 from app.contexts.campaign.application.character_service import CharacterService
 from app.contexts.campaign.application.scene_service import SceneService
 from app.contexts.campaign.application.sequence_service import SequenceService
+from app.contexts.campaign.application.structure_service import StructureService
 from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.user.domain.user import User
@@ -62,6 +63,15 @@ def get_scene_service(db: AsyncSession = Depends(get_db)) -> SceneService:
         SqlAlchemySceneRepository(db),
         SqlAlchemyActRepository(db),
         SqlAlchemySequenceRepository(db),
+    )
+
+
+def get_structure_service(db: AsyncSession = Depends(get_db)) -> StructureService:
+    # All three levels, because the tree is all three. No writes reach this one.
+    return StructureService(
+        SqlAlchemyActRepository(db),
+        SqlAlchemySequenceRepository(db),
+        SqlAlchemySceneRepository(db),
     )
 
 

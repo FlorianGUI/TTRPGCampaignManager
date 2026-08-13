@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.access import Unsafe
-from app.common.ids import SceneId, UserId
+from app.common.ids import ActId, SceneId, UserId
 from app.contexts.campaign.adapters.secondary.persistence.scene_repository import SqlAlchemySceneRepository
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import SceneAccess
@@ -192,6 +192,47 @@ class TestFindAllIn:
         await repository.save(_scene_in(other_access, "Session zero"))
 
         assert await repository.find_all_in(access) == []
+
+
+class TestFindSummariesIn:
+    """The read the whole tree is drawn from."""
+
+    async def test_a_summary_has_no_body_to_carry(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
+        """The column is never selected, so there is nothing to leave out at the boundary."""
+        await repository.save(_scene_in(access, "The sunken arch", body=READ_ALOUD))
+
+        summary = (await repository.find_summaries_in(access))[0]
+
+        assert summary.title == "The sunken arch"
+        assert not hasattr(summary, "body")
+
+    async def test_carries_everything_the_tree_needs(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
+        act_id = ActId(uuid.uuid4())
+        await repository.save(_scene_in(access, "Interlude", position=2048, act_id=act_id, status=SceneStatus.PLAYED))
+
+        summary = (await repository.find_summaries_in(access))[0]
+
+        assert summary.status is SceneStatus.PLAYED
+        assert summary.act_id == act_id
+        assert summary.sequence_id is None
+        assert summary.position == 2048
+        assert summary.created_at is not None
+
+    async def test_comes_back_in_narrative_order(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
+        await repository.save(_scene_in(access, "The nesting pair", position=3072))
+        await repository.save(_scene_in(access, "Arrival at dusk", position=1024))
+
+        assert [s.title for s in await repository.find_summaries_in(access)] == [
+            "Arrival at dusk",
+            "The nesting pair",
+        ]
+
+    async def test_does_not_reach_another_campaign(
+        self, repository: SqlAlchemySceneRepository, access: SceneAccess, other_access: SceneAccess
+    ):
+        await repository.save(_scene_in(other_access, "Session zero"))
+
+        assert await repository.find_summaries_in(access) == []
 
 
 class TestLastPositionUnder:

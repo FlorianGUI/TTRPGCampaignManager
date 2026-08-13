@@ -192,6 +192,22 @@ Feature: Narrative Structure
     Then the scene should be under that act
     And the scene should be under no sequence
 
+  Scenario: Read the whole tree in one request
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a sequence named "The Causeway" under that act
+    And I create a scene named "Arrival at dusk" under that sequence
+    When I read the structure of my campaign
+    Then the structure should hold 1 act, 1 sequence and 1 scene
+
+  Scenario: The tree does not carry the prose
+    Given I create a scene named "The sunken arch" with a read-aloud body
+    When I read the structure of my campaign
+    Then no scene in the structure should carry a body
+
+  Scenario: Read the structure of a campaign I do not run
+    When I read the structure of the other game masters campaign
+    Then I should get a not found error
+
   Scenario: Closing a campaign takes the whole tree with it
     Given I create an act named "Act I — Water Rising" in my campaign
     And I create a sequence named "The Causeway" under that act

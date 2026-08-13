@@ -6,7 +6,7 @@ from app.common.ids import ActId, CampaignId, SceneId, SequenceId
 from app.contexts.campaign.adapters.secondary.persistence.scene_model import SceneModel
 from app.contexts.campaign.domain.narrative_access import SceneAccess
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
-from app.contexts.campaign.domain.scene import Scene, SceneStatus
+from app.contexts.campaign.domain.scene import Scene, SceneStatus, SceneSummary
 
 
 class SqlAlchemySceneRepository(SceneRepository):
@@ -61,6 +61,41 @@ class SqlAlchemySceneRepository(SceneRepository):
             .order_by(SceneModel.position, SceneModel.id)
         )
         return [self._to_domain(m) for m in result.scalars().all()]
+
+    async def find_summaries_in(self, access: SceneAccess) -> list[SceneSummary]:
+        # Columns named one by one rather than `select(SceneModel)`, which is the entire
+        # point: this is the query that must never touch `body`. Adding a column to the
+        # model does not silently join it to this read, and a reviewer can see what is
+        # being fetched without knowing how the ORM defers loading.
+        result = await self._session.execute(
+            select(
+                SceneModel.id,
+                SceneModel.title,
+                SceneModel.status,
+                SceneModel.campaign_id,
+                SceneModel.position,
+                SceneModel.act_id,
+                SceneModel.sequence_id,
+                SceneModel.created_at,
+                SceneModel.updated_at,
+            )
+            .where(SceneModel.campaign_id == access.campaign_id)
+            .order_by(SceneModel.position, SceneModel.id)
+        )
+        return [
+            SceneSummary(
+                id=SceneId(row.id),
+                title=row.title,
+                status=SceneStatus(row.status),
+                campaign_id=CampaignId(row.campaign_id),
+                position=row.position,
+                act_id=ActId(row.act_id) if row.act_id is not None else None,
+                sequence_id=SequenceId(row.sequence_id) if row.sequence_id is not None else None,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+            for row in result.all()
+        ]
 
     async def find_under(
         self, access: SceneAccess, act_id: ActId | None, sequence_id: SequenceId | None

@@ -382,6 +382,32 @@ def drop_after_a_stranger(client: AsyncClient, context: dict):
     )
 
 
+@given(parsers.parse('I create a scene named "{title}" with a read-aloud body'))
+def create_scene_with_a_body(client: AsyncClient, context: dict, title: str):
+    response = _run(
+        client.post(
+            _scenes(_mine(context)),
+            json={"title": title, "body": ":::read-aloud\nThe gate does not swing.\n:::"},
+            headers=_auth_headers(context),
+        )
+    )
+    assert response.status_code == 201
+    context["scene"] = response.json()
+
+
+@when("I read the structure of my campaign")
+def read_structure(client: AsyncClient, context: dict):
+    context["response"] = _run(client.get(f"/campaigns/{_mine(context)}/structure/", headers=_auth_headers(context)))
+
+
+@when("I read the structure of the other game masters campaign")
+def read_their_structure(client: AsyncClient, context: dict):
+    other = context["other_game_master"]
+    context["response"] = _run(
+        client.get(f"/campaigns/{other['campaign']['id']}/structure/", headers=_auth_headers(context))
+    )
+
+
 @when("I delete my campaign")
 def delete_my_campaign(client: AsyncClient, context: dict):
     response = _run(client.delete(f"/campaigns/{_mine(context)}", headers=_auth_headers(context)))
@@ -460,6 +486,20 @@ def acts_should_be_empty(context: dict):
 def should_see_n_sequences(context: dict, count: int):
     assert context["response"].status_code == 200
     assert len(context["response"].json()) == count
+
+
+@then(parsers.parse("the structure should hold {acts:d} act, {sequences:d} sequence and {scenes:d} scene"))
+def structure_should_hold(context: dict, acts: int, sequences: int, scenes: int):
+    assert context["response"].status_code == 200
+    tree = context["response"].json()
+    assert (len(tree["acts"]), len(tree["sequences"]), len(tree["scenes"])) == (acts, sequences, scenes)
+
+
+@then("no scene in the structure should carry a body")
+def no_body_in_the_structure(context: dict):
+    """The reason this endpoint exists, asserted against the wire rather than the code."""
+    assert context["response"].status_code == 200
+    assert all("body" not in scene for scene in context["response"].json()["scenes"])
 
 
 @then("the request should be rejected as invalid")
