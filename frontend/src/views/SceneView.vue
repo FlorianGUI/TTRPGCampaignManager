@@ -24,7 +24,14 @@ import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import SceneStatus from '../components/narrative/SceneStatus.vue'
 import SceneStepper from '../components/narrative/SceneStepper.vue'
-import { scenesInOrder, trailTo, useStructureStore } from '../stores/structure.js'
+import {
+  lastUnder,
+  parentsFor,
+  scenesInOrder,
+  titleOf,
+  trailTo,
+  useStructureStore,
+} from '../stores/structure.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -61,8 +68,24 @@ const STATUSES = [
   { label: 'Skipped', value: 'skipped' },
 ]
 
+/*
+ * Which act or sequence the scene sits in is a field here, for the reason
+ * `GroupingPage` sets out at length: it is what a game master looks for on this
+ * page, and the stale-value risk it carries is the risk every other field on a
+ * full-replacement write already carries. Stepping among siblings stays in the
+ * outline, where the neighbours are visible.
+ */
 const editing = ref(false)
-const draft = ref({ title: '', body: '', status: 'planned' })
+const draft = ref({ title: '', body: '', status: 'planned', parent: null })
+
+const parents = computed(() => parentsFor(tree.value, 'scene', sceneId.value))
+
+const currentParent = () =>
+  parents.value.find(
+    (option) =>
+      option.act_id === (scene.value.act_id ?? null) &&
+      option.sequence_id === (scene.value.sequence_id ?? null),
+  ) ?? null
 const saving = ref(false)
 const failure = ref(null)
 
@@ -70,7 +93,12 @@ function edit() {
   // Every field, because the write is a full replacement: a body left out of the
   // request is cleared rather than kept, and this is the field a game master
   // spent an hour on.
-  draft.value = { title: scene.value.title, body: scene.value.body, status: scene.value.status }
+  draft.value = {
+    title: scene.value.title,
+    body: scene.value.body,
+    status: scene.value.status,
+    parent: currentParent(),
+  }
   failure.value = null
   editing.value = true
 }
@@ -84,7 +112,28 @@ async function save() {
   saving.value = true
 
   try {
-    await structure.saveNode(campaignId.value, 'scene', sceneId.value, { ...draft.value })
+    const { parent, ...fields } = draft.value
+    await structure.saveNode(campaignId.value, 'scene', sceneId.value, fields)
+
+    // Only when it actually changed: a placement always appends, so sending one
+    // for an unchanged parent would move the scene to the end of its own list.
+    const moved =
+      parent &&
+      (parent.act_id !== (scene.value.act_id ?? null) ||
+        parent.sequence_id !== (scene.value.sequence_id ?? null))
+
+    if (moved) {
+      await structure.place(campaignId.value, 'scene', sceneId.value, {
+        act_id: parent.act_id,
+        sequence_id: parent.sequence_id,
+        after: lastUnder(tree.value, 'scene', {
+          actId: parent.act_id,
+          sequenceId: parent.sequence_id,
+          excluding: sceneId.value,
+        }),
+      })
+    }
+
     editing.value = false
   } catch {
     failure.value = 'That could not be saved.'
@@ -102,8 +151,8 @@ async function save() {
       <p class="label-smallcaps">Scene</p>
 
       <template v-if="!editing">
-        <h1>{{ scene.title }}</h1>
-        <SceneStatus :status="scene.status" />
+        <h1>{{ titleOf(scene, 'scene') }}</h1>
+        <SceneStatus :status="scene.status" with-label />
         <Button
           size="small"
           severity="secondary"
@@ -137,6 +186,17 @@ async function save() {
       rows="18"
       aria-label="Body"
     />
+
+    <label v-if="editing && parents.length" class="scene__parent">
+      <span class="label-smallcaps">Sits in</span>
+      <Select
+        v-model="draft.parent"
+        class="scene__parent-select"
+        :options="parents"
+        option-label="label"
+        aria-label="Sits in"
+      />
+    </label>
 
     <CampaignMarkdown v-else-if="scene.body" class="prose scene__body" :source="scene.body" />
 
@@ -208,6 +268,14 @@ async function save() {
 .scene__unwritten {
   color: var(--p-text-muted-color);
   font-style: italic;
+}
+
+.scene__parent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  max-width: 22rem;
 }
 
 .scene__actions {

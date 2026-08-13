@@ -25,7 +25,7 @@ import { computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ActProgress from './ActProgress.vue'
 import SceneStatus from './SceneStatus.vue'
-import { actProgress, useStructureStore } from '../../stores/structure.js'
+import { actProgress, useStructureStore, titleOf } from '../../stores/structure.js'
 
 const props = defineProps({
   campaign: { type: Object, required: true },
@@ -70,10 +70,10 @@ const to = ({ kind, node }) =>
         class="nav__item"
         :class="{ 'nav__item--scene': child.kind === 'scene' }"
         :to="to(child)"
-        :title="child.node.title"
+        :title="titleOf(child.node, child.kind)"
         @click="$emit('navigate')"
       >
-        <span class="nav__item-label">{{ child.node.title }}</span>
+        <span class="nav__item-label">{{ titleOf(child.node, child.kind) }}</span>
 
         <ActProgress v-if="child.kind === 'act'" :progress="progressOf(child.node)" />
         <!--

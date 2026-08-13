@@ -2,23 +2,32 @@
 /*
  * Whether a scene is still to come, has been played, or was cut.
  *
+ * **A dot, with the word in a tooltip.** Forty rows each carrying PLANNED in
+ * small caps is forty words competing with the titles they sit beside — and the
+ * question an outline is scanned for is "what is left", which a column of dots
+ * answers and a column of words obscures.
+ *
+ * The word is the accessible name rather than absent, so nothing is reachable
+ * only by hovering. Where there is room for it — a scene's own page — `withLabel`
+ * puts it back.
+ *
  * Three values and not a boolean, because `skipped` is the interesting one: a
  * scene cut in play is not the same as one still waiting, and a campaign that
- * deleted its cut scenes would lose the reason the next act reads the way it
- * does.
+ * deleted its cut scenes would lose the reason the next act reads the way it does.
  *
- * Never colour alone — the word is written out beside the dot, and the dot's
- * shape differs too (hollow for planned, solid for played, faded for skipped).
+ * The three are never told apart by colour alone: the dot's *shape* differs too —
+ * hollow for planned, solid for played, faded for skipped.
  */
 defineProps({
   status: { type: String, required: true },
+  withLabel: { type: Boolean, default: false },
 })
 </script>
 
 <template>
   <span class="status" :class="`status--${status}`">
-    <span class="status__dot" aria-hidden="true" />
-    <span class="status__word">{{ status }}</span>
+    <span v-tooltip.left="status" class="status__dot" role="img" :aria-label="status" />
+    <span v-if="withLabel" class="status__word" aria-hidden="true">{{ status }}</span>
   </span>
 </template>
 
@@ -34,8 +43,8 @@ defineProps({
 }
 
 .status__dot {
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   flex: none;
   border-radius: 50%;
 }

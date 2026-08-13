@@ -28,6 +28,7 @@ const to = (campaignId, { kind, node }) => ({
   name: ROUTES[kind],
   params: { campaignId, [PARAMS[kind]]: node.id },
 })
+import { titleOf } from '../../stores/structure.js'
 </script>
 
 <template>
@@ -40,7 +41,7 @@ const to = (campaignId, { kind, node }) => ({
       </li>
       <li v-for="step in trail" :key="step.node.id">
         <span class="trail__separator" aria-hidden="true">/</span>
-        <RouterLink :to="to(campaignId, step)">{{ step.node.title }}</RouterLink>
+        <RouterLink :to="to(campaignId, step)">{{ titleOf(step.node, step.kind) }}</RouterLink>
       </li>
     </ol>
   </nav>
