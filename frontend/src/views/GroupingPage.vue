@@ -294,9 +294,14 @@ async function save() {
   border-top: 1px solid var(--p-grimoire-rule-color);
 }
 
+/*
+ * The heading left, the plus right — above the column the rows put their own
+ * controls in, so it is the same target at the same edge one line further up.
+ */
 .node__section-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
 }
 

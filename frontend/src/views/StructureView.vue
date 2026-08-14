@@ -160,8 +160,22 @@ function toggleAll() {
 <template>
   <article class="structure">
     <header class="structure__head">
-      <div class="structure__title">
-        <h1>{{ campaign?.name ?? 'Structure' }}</h1>
+      <h1>{{ campaign?.name ?? 'Structure' }}</h1>
+
+      <!-- The campaign's own controls, laid out like a row's: whatever else is
+           here, then the plus, then the column a row keeps its status and move
+           menu in. So the campaign's plus sits above every act's plus. -->
+      <div class="structure__actions">
+        <Button
+          v-if="everything.length"
+          class="structure__collapse"
+          size="small"
+          severity="secondary"
+          outlined
+          :label="allShut ? 'Expand all' : 'Collapse all'"
+          @click="toggleAll"
+        />
+
         <AddChild
           v-if="tree"
           :campaign-id="campaignId"
@@ -169,17 +183,12 @@ function toggleAll() {
           :parent-name="campaign?.name ?? 'the campaign'"
           @created="added"
         />
-      </div>
 
-      <Button
-        v-if="everything.length"
-        class="structure__collapse"
-        size="small"
-        severity="secondary"
-        outlined
-        :label="allShut ? 'Expand all' : 'Collapse all'"
-        @click="toggleAll"
-      />
+        <!-- A campaign has no status of its own and cannot be moved, so its
+             copy of the row's trailing column is empty — but it is still there,
+             which is what puts the plus above the plus on every act. -->
+        <span class="structure__meta" aria-hidden="true" />
+      </div>
     </header>
 
     <ProgressSpinner
@@ -397,9 +406,20 @@ function toggleAll() {
   border-top: 1px solid var(--p-grimoire-rule-color);
 }
 
-.structure__title {
+/*
+ * Right-aligned and inset by the padding a row carries, so the plus inside lands
+ * on the same vertical line as the plus on every act below rather than ten
+ * pixels shy of it — which reads as a mistake in a way a frank difference would
+ * not.
+ */
+.structure__actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  padding-right: var(--space-2);
+}
+
+.structure__meta {
+  width: var(--outline-meta);
 }
 </style>
