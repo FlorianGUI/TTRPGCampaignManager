@@ -135,42 +135,50 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
     >
 
     <div class="row__main">
-      <component :is="tag" class="row__title" :class="`row__title--${kind}`">
-        <input
-          v-if="renaming"
-          ref="field"
-          v-model="draft"
-          class="row__field"
-          :aria-label="`Name this ${kind}`"
-          :placeholder="`Name this ${kind}`"
-          @keyup.enter="commit"
-          @keyup.esc="$emit('cancel-rename')"
-          @blur="commit"
+      <!--
+        The title and the controls are one line, which is what holds them level
+        with each other. The description belongs under that line rather than
+        beside it, so it sits outside and moves nothing.
+      -->
+      <div class="row__line">
+        <component :is="tag" class="row__title" :class="`row__title--${kind}`">
+          <input
+            v-if="renaming"
+            ref="field"
+            v-model="draft"
+            class="row__field"
+            :aria-label="`Name this ${kind}`"
+            :placeholder="`Name this ${kind}`"
+            @keyup.enter="commit"
+            @keyup.esc="$emit('cancel-rename')"
+            @blur="commit"
+          />
+          <RouterLink v-else :to="to" :class="{ 'row__title--unnamed': !node.title?.trim() }">{{
+            name
+          }}</RouterLink>
+        </component>
+
+        <!-- Where a new record lands is read before it is added. -->
+        <AddChild
+          v-if="allowed.length"
+          :campaign-id="campaignId"
+          :allowed="allowed"
+          :parent-name="name"
+          :act-id="kind === 'act' ? node.id : null"
+          :sequence-id="kind === 'sequence' ? node.id : null"
+          @created="$emit('created', $event)"
         />
-        <RouterLink v-else :to="to" :class="{ 'row__title--unnamed': !node.title?.trim() }">{{
-          name
-        }}</RouterLink>
-      </component>
+
+        <span class="row__meta">
+          <ActProgress v-if="progress" :progress="progress" />
+          <SceneStatus v-else-if="kind === 'scene'" :status="node.status" @cycle="cycle" />
+
+          <MoveControl :campaign-id="campaignId" :kind="kind" :node="node" :siblings="siblings" />
+        </span>
+      </div>
+
       <p v-if="node.description" class="row__description">{{ node.description }}</p>
     </div>
-
-    <!-- Beside the name, so where a new record lands is read before it is added. -->
-    <AddChild
-      v-if="allowed.length"
-      :campaign-id="campaignId"
-      :allowed="allowed"
-      :parent-name="name"
-      :act-id="kind === 'act' ? node.id : null"
-      :sequence-id="kind === 'sequence' ? node.id : null"
-      @created="$emit('created', $event)"
-    />
-
-    <span class="row__meta">
-      <ActProgress v-if="progress" :progress="progress" />
-      <SceneStatus v-else-if="kind === 'scene'" :status="node.status" @cycle="cycle" />
-
-      <MoveControl :campaign-id="campaignId" :kind="kind" :node="node" :siblings="siblings" />
-    </span>
   </div>
 </template>
 
@@ -197,6 +205,8 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
 }
 
 .row__title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-family: var(--grimoire-font-display);
   font-size: var(--step-0);
@@ -216,9 +226,8 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
 }
 
 /*
- * Rows read as text and behave as links. The underline arrives on hover rather
- * than sitting under every row — a two-hundred-line outline with every title
- * underlined is a page of rules, not a table of contents.
+ * Rows read as text and behave as links. Like the contents table, colour is the
+ * hover cue; underlines turn a long outline into a page of rules.
  */
 .row__main a {
   color: inherit;
@@ -227,7 +236,6 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
 
 .row__main a:hover {
   color: var(--p-primary-color);
-  text-decoration: underline;
 }
 
 .row__main a:focus-visible {
@@ -273,6 +281,28 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
   color: var(--p-grimoire-rule-color);
   font-family: var(--grimoire-font-mono);
   flex: none;
+}
+
+/*
+ * Controls centred on the title, by sharing its line rather than by being
+ * aligned to it.
+ *
+ * They are empty boxes, and an empty box's baseline is its bottom edge — so the
+ * row's `baseline` hung them off their own height. Invisible while the status
+ * mark was a 10px dot; six pixels of drift once it grew to a 24px hit area,
+ * which took the move menu up with it and left the add button behind.
+ *
+ * Neither alignment on the row itself would do. `center` drops the controls
+ * between the title and the description below it, and a fixed height computed
+ * off the type scale is wrong for exactly the rows that are set smaller: a scene
+ * title is an inline box, so its line box comes from the block's strut and not
+ * from its own `line-height`. Sharing the line asks the browser for that height
+ * instead of restating it.
+ */
+.row__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 /*

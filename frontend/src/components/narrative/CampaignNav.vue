@@ -115,13 +115,16 @@ const to = ({ kind, node }) =>
 .nav__item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 0.55rem;
   padding: 0.35rem var(--space-2);
   border-radius: var(--p-border-radius-sm);
   border-left: 2px solid transparent;
   font-size: var(--step--1);
   color: var(--p-navigation-item-color);
   text-decoration: none;
+  transition:
+    background var(--p-transition-duration),
+    color var(--p-transition-duration);
 }
 
 .nav__item:hover {
@@ -134,16 +137,21 @@ const to = ({ kind, node }) =>
   outline-offset: calc(-1 * var(--p-focus-ring-width));
 }
 
+/* RouterLink supplies this class for the page being read; it is styled like
+   Library's active entry so the two lists remain one navigation. */
+.nav__item.router-link-active {
+  color: var(--p-primary-color);
+  border-left-color: var(--p-primary-color);
+  background: var(--p-navigation-item-active-background);
+  font-weight: 600;
+}
+
 .nav__item-label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.nav__item--scene .nav__item-label {
-  font-style: italic;
 }
 
 .nav__item-loose {

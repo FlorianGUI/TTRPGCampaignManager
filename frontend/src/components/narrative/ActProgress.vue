@@ -50,13 +50,23 @@ const spellOut = ({ total, played, label }) =>
 }
 
 .progress__dot {
+  /* Match the status control's marker box, so act progress and scene status
+     land on the same centre line in the outline and sidebar. */
+  width: 24px;
+  height: 24px;
+  flex: none;
+  position: relative;
+}
+
+.progress__dot::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
   width: 10px;
   height: 10px;
-  flex: none;
-  border-radius: 50%;
+  transform: translate(-50%, -50%);
   border: 1px solid var(--p-text-muted-color);
-  position: relative;
-  overflow: hidden;
+  border-radius: 50%;
 }
 
 /*
@@ -66,13 +76,17 @@ const spellOut = ({ total, played, label }) =>
 .progress__dot::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 50% auto auto 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
   background: var(--p-grimoire-context-characters);
-  clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
+  border-radius: 50%;
+  clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0 round 50%);
 }
 
-.progress__dot--ongoing,
-.progress__dot--finished {
+.progress__dot--ongoing::before,
+.progress__dot--finished::before {
   border-color: var(--p-grimoire-context-characters);
 }
 
