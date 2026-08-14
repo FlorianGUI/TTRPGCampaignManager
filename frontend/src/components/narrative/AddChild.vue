@@ -2,11 +2,16 @@
 /*
  * The plus beside a parent's own name: write something new inside this.
  *
- * **Beside the name, not at the end of the list.** A button under a list has to
- * be read as belonging to the thing above it; a plus on the row itself says
- * where the new record goes before you press it — which matters most in the case
- * that is otherwise ambiguous, an act whose last child is a sequence with
+ * **On the parent's own row, not at the end of the list.** A button under a list
+ * has to be read as belonging to the thing above it; a plus on the row itself
+ * says where the new record goes before you press it — which matters most in the
+ * case that is otherwise ambiguous, an act whose last child is a sequence with
  * children of its own.
+ *
+ * It rides at the right of that row, with the other controls, everywhere it
+ * appears — page headings included. Trailing it after the title put it at a
+ * different place on every line, since titles are different lengths, and a
+ * control you have to find again on each row is one you stop reaching for.
  *
  * **No title is asked for.** Sketching an act is six additions in a row, and six
  * dialogs is five too many: the row appears at the end and its title is already
@@ -76,10 +81,12 @@ async function add(kind) {
 
 <template>
   <span class="add">
+    <!-- Not `rounded`: the radius comes from the button token, and the ramp it
+         reads is tight on purpose — "a book has crisp edges, not rounded app
+         chrome". A pill here is a shape the design system does not have. -->
     <Button
       class="add__button"
       text
-      rounded
       size="small"
       icon="pi pi-plus"
       :loading="saving"
@@ -111,11 +118,22 @@ async function add(kind) {
 }
 
 /*
- * Quiet until wanted. One of these sits on every container in the outline, so at
- * full strength they would out-shout the campaign they are meant to be adding to.
+ * Quiet until wanted, relative to whatever it is sitting on.
+ *
+ * One of these is on every container in the outline, so at full strength they
+ * would out-shout the campaign they are meant to be adding to. But it was a flat
+ * `--p-text-muted-color`, and muted is an absolute: a token picked against the
+ * page background, which is not the only background this lands on. Under a
+ * display title, or in the dark theme, it faded to something you had to already
+ * know was there.
+ *
+ * Mixed off `currentColor` instead, so it is derived from the text around it and
+ * dims by the same proportion wherever it goes — one step quieter than its
+ * neighbours in both themes rather than one fixed grey that happens to work in
+ * one place.
  */
 .add__button {
-  color: var(--p-text-muted-color);
+  color: color-mix(in oklab, currentColor 72%, transparent);
 }
 
 .add__button:hover {

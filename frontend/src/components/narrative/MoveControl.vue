@@ -176,9 +176,9 @@ const items = computed(() => [
 
 <template>
   <span class="move">
+    <!-- Square, like `AddChild` beside it — see the note there. -->
     <Button
       text
-      rounded
       size="small"
       icon="pi pi-ellipsis-v"
       :loading="moving"

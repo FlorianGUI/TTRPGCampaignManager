@@ -266,7 +266,7 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  width: 4.5rem;
+  width: var(--outline-meta);
 }
 
 /*

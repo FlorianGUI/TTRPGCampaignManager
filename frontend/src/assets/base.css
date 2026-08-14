@@ -38,6 +38,14 @@
     --measure: 68ch;
     --shell-sidebar: 15rem;
     --shell-topbar: 3.25rem;
+
+    /*
+     * The trailing controls column on an outline row — the status dot and the
+     * move menu. Shared, because a page heading has to reserve the same slot to
+     * put its own add button in the same column as the rows beneath it, and two
+     * copies of one width is how a column stops being a column.
+     */
+    --outline-meta: 4.5rem;
   }
 
   /* Ornament kill-switch: one class turns off every decorative flourish. */
