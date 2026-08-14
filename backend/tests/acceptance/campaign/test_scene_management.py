@@ -146,13 +146,13 @@ def retrieve_their_scene_through_my_campaign(client: AsyncClient, context: dict)
     )
 
 
-@when("I mark the scene as played")
-def mark_the_scene_as_played(client: AsyncClient, context: dict):
+@when("I mark the scene as done")
+def mark_the_scene_as_done(client: AsyncClient, context: dict):
     scene = _my_scene(context)
     context["response"] = _run(
         client.put(
             f"{_scenes(context['my_campaign']['id'])}{scene['id']}",
-            json={"title": scene["title"], "body": scene["body"], "status": "played"},
+            json={"title": scene["title"], "body": scene["body"], "status": "done"},
             headers=_auth_headers(context),
         )
     )
@@ -164,7 +164,7 @@ def rewrite_the_scene(client: AsyncClient, context: dict, title: str):
     context["response"] = _run(
         client.put(
             f"{_scenes(context['my_campaign']['id'])}{scene['id']}",
-            json={"title": title, "body": READ_ALOUD, "status": "played"},
+            json={"title": title, "body": READ_ALOUD, "status": "done"},
             headers=_auth_headers(context),
         )
     )
@@ -260,6 +260,6 @@ def scene_should_be_planned(context: dict):
     assert context["response"].json()["status"] == "planned"
 
 
-@then("the scene should be played")
-def scene_should_be_played(context: dict):
-    assert context["response"].json()["status"] == "played"
+@then("the scene should be done")
+def scene_should_be_done(context: dict):
+    assert context["response"].json()["status"] == "done"

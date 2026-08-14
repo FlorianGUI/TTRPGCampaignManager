@@ -132,11 +132,11 @@ class TestUpdate:
     async def test_rewrites_the_scene(self, service: SceneService, access: Narrative):
         created = await service.create(access, "The parley")
 
-        updated = await service.update(created.id, access, "The parley at Stonegate", READ_ALOUD, SceneStatus.PLAYED)
+        updated = await service.update(created.id, access, "The parley at Stonegate", READ_ALOUD, SceneStatus.DONE)
 
         assert updated.title == "The parley at Stonegate"
         assert updated.body == READ_ALOUD
-        assert updated.status is SceneStatus.PLAYED
+        assert updated.status is SceneStatus.DONE
 
     async def test_leaves_the_scene_where_it_was(self, service: SceneService, access: Narrative):
         """Editing is not reordering. A body edit that moved the scene would make the
@@ -144,7 +144,7 @@ class TestUpdate:
         await service.create(access, "Arrival at dusk")
         second = await service.create(access, "The sunken arch")
 
-        updated = await service.update(second.id, access, "The sunken arch", READ_ALOUD, SceneStatus.PLAYED)
+        updated = await service.update(second.id, access, "The sunken arch", READ_ALOUD, SceneStatus.DONE)
 
         assert updated.position == second.position
 

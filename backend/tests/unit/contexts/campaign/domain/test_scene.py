@@ -45,11 +45,11 @@ class TestScene:
 
 class TestSceneStatus:
     def test_is_the_three_the_game_master_marks(self):
-        assert [s.value for s in SceneStatus] == ["planned", "played", "skipped"]
+        assert [s.value for s in SceneStatus] == ["planned", "done", "skipped"]
 
     def test_reads_as_its_own_value(self):
         """A StrEnum, so it goes into a String column and comes back out of one."""
-        assert SceneStatus.PLAYED == "played"
+        assert SceneStatus.DONE == "done"
 
 
 class TestSceneTimestamps:
@@ -73,7 +73,7 @@ class TestSceneTimestamps:
         scene = a_scene()
         scene.updated_at = self.LONG_AGO
 
-        scene.revise("The parley", "It sinks.", SceneStatus.PLAYED)
+        scene.revise("The parley", "It sinks.", SceneStatus.DONE)
 
         assert scene.updated_at > self.LONG_AGO
 
@@ -81,7 +81,7 @@ class TestSceneTimestamps:
         scene = a_scene()
         created = scene.created_at
 
-        scene.revise("The parley", "It sinks.", SceneStatus.PLAYED)
+        scene.revise("The parley", "It sinks.", SceneStatus.DONE)
 
         assert scene.created_at == created
 
@@ -90,11 +90,11 @@ class TestRevise:
     def test_rewrites_every_field_it_is_given(self):
         scene = a_scene()
 
-        scene.revise("The parley", "Torvald hears them standing.", SceneStatus.PLAYED)
+        scene.revise("The parley", "Torvald hears them standing.", SceneStatus.DONE)
 
         assert scene.title == "The parley"
         assert scene.body == "Torvald hears them standing."
-        assert scene.status is SceneStatus.PLAYED
+        assert scene.status is SceneStatus.DONE
 
     def test_leaves_the_position_alone(self):
         """Reordering is its own operation (PR 3), not a side effect of editing.
@@ -105,7 +105,7 @@ class TestRevise:
         """
         scene = a_scene(position=4096)
 
-        scene.revise("The parley", "It sinks.", SceneStatus.PLAYED)
+        scene.revise("The parley", "It sinks.", SceneStatus.DONE)
 
         assert scene.position == 4096
 

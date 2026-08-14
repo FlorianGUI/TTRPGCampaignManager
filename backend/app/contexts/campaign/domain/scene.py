@@ -18,14 +18,14 @@ class SceneNotAvailable(NotAvailable):
 
 
 class SceneStatus(StrEnum):
-    """Whether the table has played this yet, as the game master marks it.
+    """Whether the game master has got through this yet, as they mark it.
 
     Three values and not a boolean, because `skipped` is the interesting one: a scene
     that was cut in play is not the same as one still waiting, and a campaign that
     deleted its cut scenes would lose the reason the next act reads the way it does.
 
     **Set by hand, never derived.** #81 joins sessions to scenes, and it would be easy to
-    let an appearance in a session log imply `played` — which is exactly the second source
+    let an appearance in a session log imply `done` — which is exactly the second source
     of truth #80 rules out. This is the game master's own mark on their own prep.
 
     An act's progress is read off these and is not stored anywhere; see #88 for what the
@@ -33,7 +33,7 @@ class SceneStatus(StrEnum):
     """
 
     PLANNED = "planned"
-    PLAYED = "played"
+    DONE = "done"
     SKIPPED = "skipped"
 
 
