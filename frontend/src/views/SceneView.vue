@@ -108,7 +108,7 @@ async function save() {
 
       <template v-if="!editing">
         <h1>{{ titleOf(scene, 'scene') }}</h1>
-        <SceneStatus :status="scene.status" with-label />
+        <SceneStatus :status="scene.status" with-label readonly />
         <Button
           size="small"
           severity="secondary"

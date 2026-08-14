@@ -67,6 +67,26 @@ watch(
  * moments ago — an existing row is renamed on its own page, where the rest of it
  * is on screen to be replaced knowingly.
  */
+/*
+ * Marking a scene off, from the outline.
+ *
+ * A full replacement like every other write here, and safe to send the body back
+ * unchanged because the tree does not carry it — the scene's own record does, and
+ * that is what is being echoed. `saveNode` refetches the tree, so the act's
+ * progress dot above catches up in the same round trip.
+ */
+async function cycle(status) {
+  const scene =
+    (await structure.ensureNode(props.campaignId, 'scene', props.node.id)) ??
+    structure.nodeFor('scene', props.node.id)
+
+  await structure.saveNode(props.campaignId, 'scene', props.node.id, {
+    title: props.node.title,
+    body: scene?.body ?? '',
+    status,
+  })
+}
+
 async function commit() {
   if (!props.renaming) return
 
@@ -147,7 +167,7 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
 
     <span class="row__meta">
       <ActProgress v-if="progress" :progress="progress" />
-      <SceneStatus v-else-if="kind === 'scene'" :status="node.status" />
+      <SceneStatus v-else-if="kind === 'scene'" :status="node.status" @cycle="cycle" />
 
       <MoveControl :campaign-id="campaignId" :kind="kind" :node="node" :siblings="siblings" />
     </span>

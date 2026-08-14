@@ -80,7 +80,7 @@ const to = ({ kind, node }) =>
           eye can run down, which is the whole reason for using a dot.
         -->
         <ActProgress v-if="child.kind === 'act'" :progress="progressOf(child.node)" />
-        <SceneStatus v-else :status="child.node.status" />
+        <SceneStatus v-else :status="child.node.status" readonly />
 
         <span class="nav__item-label">{{ titleOf(child.node, child.kind) }}</span>
 

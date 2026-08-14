@@ -37,7 +37,7 @@ import { titleOf } from '../../stores/structure.js'
           {{ titleOf(child.node, child.kind) }}
         </span>
 
-        <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" />
+        <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" readonly />
         <span v-else class="contents__kind">sequence</span>
       </RouterLink>
 
