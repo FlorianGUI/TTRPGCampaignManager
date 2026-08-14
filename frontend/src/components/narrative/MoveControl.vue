@@ -234,6 +234,23 @@ const items = computed(() => [
   flex: none;
 }
 
+/*
+ * The focus ring hugs the button rather than floating off it.
+ *
+ * The global ring is 2px at 2px offset — right on a text field, and heavy on a
+ * 28px circle, where the halo ends up wider than the icon inside it and reads as
+ * a selection rather than a cursor position. Same thickness and same colour, so
+ * it is no less visible and still clears the 3:1 that WCAG 1.4.11 asks of a focus
+ * indicator; only the offset goes.
+ *
+ * Scoped rather than changed in `semantic.js`, because the token is right for
+ * everything it was written for. `AddChild` carries the same rule — the two
+ * sit beside each other in every row and must not disagree about this.
+ */
+.move :deep(.p-button):focus-visible {
+  outline-offset: 0;
+}
+
 .move__consequence {
   margin: 0 0 var(--space-4);
   color: var(--p-text-muted-color);

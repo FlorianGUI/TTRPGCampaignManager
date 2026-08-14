@@ -122,6 +122,23 @@ async function add(kind) {
   color: var(--p-primary-color);
 }
 
+/*
+ * The focus ring hugs the button rather than floating off it.
+ *
+ * The global ring is 2px at 2px offset — right on a text field, and heavy on a
+ * 28px circle, where the halo ends up wider than the icon inside it and reads as
+ * a selection rather than a cursor position. Same thickness and same colour, so
+ * it is no less visible and still clears the 3:1 that WCAG 1.4.11 asks of a focus
+ * indicator; only the offset goes.
+ *
+ * Scoped rather than changed in `semantic.js`, because the token is right for
+ * everything it was written for. `MoveControl` carries the same rule — the two
+ * sit beside each other in every row and must not disagree about this.
+ */
+.add__button:focus-visible {
+  outline-offset: 0;
+}
+
 .add__choices {
   list-style: none;
   margin: 0;
