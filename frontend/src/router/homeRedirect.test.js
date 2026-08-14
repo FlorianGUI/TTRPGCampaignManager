@@ -43,8 +43,10 @@ describe('entering the remembered campaign', () => {
     request.mockResolvedValue([HOLLOW])
     rememberCurrentCampaign('c-1')
 
+    // Where the chooser's own cards go, so being remembered here and picking it
+    // by hand land in the same place.
     expect(await enterRememberedCampaign()).toEqual({
-      name: 'campaign-sessions',
+      name: 'campaign-structure',
       params: { campaignId: 'c-1' },
       // Or Back from the campaign lands on a `/` that bounces straight here
       // again — an entrance no one can get past.

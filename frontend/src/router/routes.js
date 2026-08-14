@@ -56,9 +56,16 @@ export async function enterRememberedCampaign() {
     return true
   }
 
-  // `replace`, so Back from the campaign does not land on a `/` that bounces
-  // straight here again — an entry no one can ever get past.
-  return { name: 'campaign-sessions', params: { campaignId }, replace: true }
+  /*
+   * The structure, which is where the chooser's own cards go. Being returned to
+   * the campaign you left should put you where choosing it would have — landing
+   * somewhere else depending on whether you clicked a card or were remembered
+   * here is the kind of difference that reads as a bug.
+   *
+   * `replace`, so Back from the campaign does not land on a `/` that bounces
+   * straight here again — an entry no one can ever get past.
+   */
+  return { name: 'campaign-structure', params: { campaignId }, replace: true }
 }
 
 export const routes = [
@@ -77,6 +84,11 @@ export const routes = [
    * `SpikeView` stands in for session notes until that context exists. It is no
    * longer the landing route, which is what #59 set out to fix: its counts come
    * from `content/sample.js` and are invented.
+   *
+   * Nothing links here any more — opening a campaign goes to its structure — so
+   * the route is reachable by URL and by nothing else. Left standing rather than
+   * deleted because #52 is the context that will fill it, and a path that has
+   * been bookmarked should not start answering 404 in the meantime.
    */
   {
     path: '/campaigns/:campaignId/sessions',
