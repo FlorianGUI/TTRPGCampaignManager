@@ -8,28 +8,56 @@
  * real source-book data, not lorem ipsum.
  */
 
+import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+
+/*
+ * The Campaign section is gone from here: what a campaign holds is real now
+ * (#88) and comes from `CampaignNav`, which reads the structure endpoint. These
+ * two are still invented, and stay here until they are not.
+ *
+ * **What a campaign is made of, and what running it takes.** The split was
+ * `Library` and `Characters`, which cut the wrong way twice: it put the party
+ * and the NPCs in one place and the world they move through in another, and it
+ * called a shelf of rulebooks the library when what a game master actually keeps
+ * is their own material. Resources is everything the campaign is made of;
+ * Organization is the work of running it.
+ *
+ * The icons come from `ENTITY_KINDS` wherever an item names a kind that exists
+ * there, which is the authority on how a kind is marked. So the chip a
+ * `:location[…]` renders as in a scene and the way into every location carry the
+ * same icon, rather than the sidebar picking its own.
+ *
+ * **No counts.** The old ones were invented — #59 says so of the spike, and
+ * `SpikeView`'s are the same numbers — and there is nothing to count for a
+ * location or an agenda yet. A number nobody has counted is worse than no
+ * number: it reads as data.
+ */
 export const sections = [
-  /*
-   * The Campaign section is gone from here: what a campaign holds is real now
-   * (#88) and comes from `CampaignNav`, which reads the structure endpoint.
-   * Library and Characters are still invented, and stay here until they are not.
-   */
   {
-    label: 'Library',
-    context: 'library',
+    label: 'Resources',
+    context: 'resources',
     items: [
-      { label: 'Bestiary', icon: 'pi-eye', count: 318 },
-      { label: 'Spells', icon: 'pi-sparkles', count: 477 },
-      { label: 'Magic items', icon: 'pi-box', count: 362 },
-      { label: 'Sources', icon: 'pi-book', count: 4 },
+      { label: 'PCs', icon: 'pi-users' },
+      { label: 'NPCs', icon: ENTITY_KINDS.npc.icon },
+      { label: 'Locations', icon: ENTITY_KINDS.location.icon },
+      { label: 'Factions', icon: ENTITY_KINDS.faction.icon },
     ],
   },
   {
-    label: 'Characters',
-    context: 'characters',
+    label: 'Organization',
+    context: 'organization',
     items: [
-      { label: 'Party', icon: 'pi-users', count: 5 },
-      { label: 'NPCs', icon: 'pi-user', count: 41 },
+      /*
+       * These two pick their own, and are the exception to the rule above.
+       *
+       * The calendar goes to the agenda, which is the thing with dates in it —
+       * what is coming, and when. Sessions are what has already been played, so
+       * they take the list. `ENTITY_KINDS.session` keeps the calendar for the
+       * chip a `:session[…]` renders as in prose, where it names one evening
+       * rather than the record of all of them.
+       */
+      { label: 'Sessions', icon: 'pi-list' },
+      { label: 'Agenda', icon: 'pi-calendar' },
     ],
   },
 ]

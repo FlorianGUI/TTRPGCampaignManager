@@ -214,13 +214,25 @@ function scheme({ ramp, roles, accent, onAccent, tone }) {
           fumbleBorderColor: tone.dangerBorder,
         },
         // Per-section accent, so each nav section is recognisable at a glance.
-        // These are nav sections, not backend contexts: `library` is the frontend
-        // name for a game master's sources, and has no context of its own.
+        // These are nav sections, not backend contexts: `resources` is the
+        // frontend name for what a campaign is made of, and has no context of
+        // its own. The keys track the section names, which is why renaming the
+        // sections renamed these — an accent called `library` on a section
+        // called Resources is how a token starts meaning nothing.
         context: {
           campaign: accent[700],
-          library: tone.info,
-          characters: tone.success,
+          resources: tone.info,
+          organization: tone.success,
         },
+        /*
+         * How far through a scene, and an act, the table has got.
+         *
+         * Its own token because it is not navigation. It read the `characters`
+         * nav accent until the sections were renamed, which is the tell: a dot
+         * saying a scene is done has no business changing colour because a
+         * sidebar heading was reworded.
+         */
+        scene: { doneColor: tone.success },
         entity: {
           npc: tone.info,
           location: tone.success,

@@ -80,14 +80,14 @@ const spellOut = ({ total, played, label }) =>
   width: 10px;
   height: 10px;
   transform: translate(-50%, -50%);
-  background: var(--p-grimoire-context-characters);
+  background: var(--p-grimoire-scene-done-color);
   border-radius: 50%;
   clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0 round 50%);
 }
 
 .progress__dot--ongoing::before,
 .progress__dot--finished::before {
-  border-color: var(--p-grimoire-context-characters);
+  border-color: var(--p-grimoire-scene-done-color);
 }
 
 .progress__count {
