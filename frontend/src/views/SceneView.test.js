@@ -85,9 +85,6 @@ async function click(wrapper, label) {
   await flushPromises()
 }
 
-/* Two selects on the page — the status and the parent. Named, not counted. */
-const picker = (wrapper) => wrapper.findComponent('.scene__parent-select')
-
 async function render({ sceneId = 's-1', ...rest } = {}) {
   answering(rest)
   const router = routerFor()
@@ -180,35 +177,11 @@ describe('a scene’s page', () => {
       })
     })
 
-    it('offers the parent as a field, because moving is editing', async () => {
+    it('sends no placement at all, because this form does not move things', async () => {
       /*
-       * The reversal in this PR: "which act is this in" is what a game master
-       * looks for on the page where everything else about the scene lives.
-       */
-      const wrapper = await render()
-      await click(wrapper, 'Edit')
-
-      expect(
-        picker(wrapper)
-          .props('options')
-          .map((o) => o.label),
-      ).toEqual(['The campaign', 'Act I', 'The Causeway'])
-    })
-
-    it('opens the picker on where the scene actually sits', async () => {
-      // Loaded fresh when Edit is pressed, which is what keeps a full-replacement
-      // write from carrying a parent read an hour ago.
-      const wrapper = await render()
-      await click(wrapper, 'Edit')
-
-      expect(picker(wrapper).props('modelValue').sequence_id).toBe('q-1')
-    })
-
-    it('sends no placement when the parent was not touched', async () => {
-      /*
-       * A placement always appends, so issuing one for an unchanged parent would
-       * quietly move the scene to the end of its own list — a save that reorders
-       * is the bug this guard exists for.
+       * The form owns what the scene says; the three-dots menu owns where it
+       * sits. A Save that could also reorganise would put a rename and a move
+       * behind one button, and only one of those is undone by doing it again.
        */
       const wrapper = await render()
       await click(wrapper, 'Edit')
@@ -219,33 +192,6 @@ describe('a scene’s page', () => {
 
       const paths = request.mock.calls.map(([path]) => path)
       expect(paths.some((path) => path.endsWith('/placement'))).toBe(false)
-    })
-
-    it('sends a placement when it was', async () => {
-      const wrapper = await render()
-      await click(wrapper, 'Edit')
-
-      picker(wrapper).vm.$emit('update:modelValue', {
-        label: 'Act I',
-        act_id: 'a-1',
-        sequence_id: null,
-      })
-      await flushPromises()
-
-      request.mockClear()
-      answering()
-      await click(wrapper, 'Save')
-
-      /*
-       * Anchored to whatever already sits last in the destination, not to `null`
-       * — which is the top. Arriving at the head of a list whose order you did
-       * not choose is more surprising than arriving at the end of it, and the
-       * browser is where the first version of this was caught doing the opposite.
-       */
-      expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1/placement', {
-        method: 'PUT',
-        json: { act_id: 'a-1', sequence_id: null, after: 's-3' },
-      })
     })
 
     it('refuses to save a scene with no title', async () => {

@@ -11,6 +11,7 @@
  * onto an act after all its sequences regardless of where it belongs.
  */
 import { RouterLink } from 'vue-router'
+import MoveControl from './MoveControl.vue'
 import SceneStatus from './SceneStatus.vue'
 
 defineProps({
@@ -27,7 +28,7 @@ import { titleOf } from '../../stores/structure.js'
 
 <template>
   <ul class="contents">
-    <li v-for="child in children" :key="child.node.id">
+    <li v-for="child in children" :key="child.node.id" class="contents__row">
       <RouterLink class="contents__item" :to="to(campaignId, child)">
         <span
           class="contents__title"
@@ -39,6 +40,18 @@ import { titleOf } from '../../stores/structure.js'
         <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" />
         <span v-else class="contents__kind">sequence</span>
       </RouterLink>
+
+      <!--
+        The same menu the outline carries, so a list of children behaves the same
+        wherever it is read. Outside the link, not inside it: a control nested in
+        an anchor is a control that navigates when it misses.
+      -->
+      <MoveControl
+        :campaign-id="campaignId"
+        :kind="child.kind"
+        :node="child.node"
+        :siblings="children.map((entry) => entry.node)"
+      />
     </li>
   </ul>
 </template>
@@ -50,18 +63,26 @@ import { titleOf } from '../../stores/structure.js'
   padding: 0;
 }
 
+.contents__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--p-content-border-color);
+}
+
+.contents__row:last-child {
+  border-bottom: 0;
+}
+
 .contents__item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--p-content-border-color);
   color: var(--p-text-color);
   text-decoration: none;
-}
-
-.contents li:last-child .contents__item {
-  border-bottom: 0;
 }
 
 .contents__item:hover .contents__title {

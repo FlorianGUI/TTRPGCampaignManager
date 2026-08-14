@@ -181,11 +181,11 @@ describe('the move control', () => {
     expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
   })
 
-  it('offers reordering and deleting, and not reparenting', async () => {
+  it('owns every kind of move, and the deleting', async () => {
     /*
-     * Reparenting moved to the edit form on each record's own page — a game
-     * master looks for "which act is this in" where they look for everything
-     * else about it, and two ways to do one thing is one too many.
+     * The split that settled: this menu is where a record *moves*, the edit form
+     * is where it *says* things. One Save button covering both would have put a
+     * rename and a reorganisation behind the same press.
      */
     const wrapper = await render({ node: SIBLINGS[0] })
 
@@ -193,7 +193,32 @@ describe('the move control', () => {
       items(wrapper)
         .map((entry) => entry.label)
         .filter(Boolean),
-    ).toEqual(['Move up', 'Move down', 'Delete'])
+    ).toEqual(['Move up', 'Move down', 'Move into…', 'Delete'])
+  })
+
+  it('offers an act nowhere to be moved into, the campaign being its only parent', async () => {
+    const wrapper = await render({ node: ACT, kind: 'act', siblings: [ACT] })
+
+    expect(item(wrapper, 'Move into…')).toBeUndefined()
+  })
+
+  it('appends to the destination rather than putting it first', async () => {
+    // Arriving at the top of a list whose order you did not choose is more
+    // surprising than arriving at the end of it.
+    const wrapper = await render({ node: SIBLINGS[0] })
+    item(wrapper, 'Move into…').command()
+    await flushPromises()
+
+    wrapper.vm.chosen = { label: 'Act I', act_id: 'a-1', sequence_id: null }
+    request.mockClear()
+    request.mockResolvedValue(TREE)
+    await wrapper.vm.moveInto()
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1/placement', {
+      method: 'PUT',
+      json: { act_id: 'a-1', sequence_id: null, after: null },
+    })
   })
 
   it('asks before deleting, and says what it costs rather than warning', async () => {

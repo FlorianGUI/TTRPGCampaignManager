@@ -2,11 +2,11 @@
 /*
  * Stepping a record one place up or down among its siblings.
  *
- * **Reordering only.** Changing which act or sequence something sits in used to
- * live here too, and moved to the edit form on its own page: a game master looks
- * for "which act is this in" where they look for everything else about it, and
- * two ways to do one thing is one too many. What is left is the move whose
- * neighbours are on screen — which is exactly the move that belongs in a list.
+ * **Every kind of move, and only moves.** Reparenting lived here, moved to the
+ * edit form, and has come back — the split that settled is between *what a record
+ * says* and *where it sits*: the form owns the first and this owns the second. An
+ * edit form that could also move something meant a rename and a reorganisation
+ * shared one Save button, and only one of those is undone by doing it again.
  *
  * Controls rather than drag, deliberately. Drag is the obvious gesture for an
  * outline and the one thing a keyboard and a screen reader cannot do, so a
@@ -22,7 +22,14 @@ import { computed, ref } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Menu from 'primevue/menu'
-import { anchorForStep, titleOf, useStructureStore } from '../../stores/structure.js'
+import Select from 'primevue/select'
+import {
+  anchorForStep,
+  lastUnder,
+  parentsFor,
+  titleOf,
+  useStructureStore,
+} from '../../stores/structure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -40,6 +47,40 @@ const menu = ref(null)
 const moving = ref(false)
 const confirming = ref(false)
 const removing = ref(false)
+const picking = ref(false)
+const chosen = ref(null)
+
+const parents = computed(() =>
+  parentsFor(structure.treeFor(props.campaignId), props.kind, props.node.id),
+)
+
+/*
+ * Reparenting appends. Arriving at the top of a list whose order you did not
+ * choose is more surprising than arriving at the end of it — and an omitted
+ * anchor means the top, which is the difference `lastUnder` exists to hold.
+ */
+async function moveInto() {
+  if (!chosen.value) return
+
+  const { act_id, sequence_id } = chosen.value
+  moving.value = true
+
+  try {
+    await structure.place(props.campaignId, props.kind, props.node.id, {
+      ...(props.kind !== 'act' && { act_id }),
+      ...(props.kind === 'scene' && { sequence_id }),
+      after: lastUnder(structure.treeFor(props.campaignId), props.kind, {
+        actId: act_id,
+        sequenceId: sequence_id,
+        excluding: props.node.id,
+      }),
+    })
+    picking.value = false
+    chosen.value = null
+  } finally {
+    moving.value = false
+  }
+}
 
 /*
  * What deleting this actually costs, said plainly in the confirmation.
@@ -109,6 +150,17 @@ const items = computed(() => [
     disabled: down.value === undefined,
     command: () => stepTo(down.value),
   },
+  ...(parents.value.length
+    ? [
+        {
+          label: 'Move into…',
+          icon: 'pi pi-sign-in',
+          command: () => {
+            picking.value = true
+          },
+        },
+      ]
+    : []),
   { separator: true },
   {
     label: 'Delete',
@@ -137,6 +189,31 @@ const items = computed(() => [
     <Menu ref="menu" :model="items" popup />
 
     <Dialog
+      v-model:visible="picking"
+      modal
+      :header="`Move ${titleOf(node, kind)}`"
+      :style="{ width: 'min(28rem, 92vw)' }"
+    >
+      <p class="move__consequence">
+        It goes to the end of whatever you choose. The campaign is a place in its own right — a
+        scene does not need an act to belong to.
+      </p>
+
+      <Select
+        v-model="chosen"
+        class="move__parent"
+        :options="parents"
+        option-label="label"
+        placeholder="Choose where it goes"
+      />
+
+      <template #footer>
+        <Button label="Cancel" text severity="secondary" @click="picking = false" />
+        <Button label="Move" :disabled="!chosen" :loading="moving" @click="moveInto" />
+      </template>
+    </Dialog>
+
+    <Dialog
       v-model:visible="confirming"
       modal
       :header="`Delete ${titleOf(node, kind)}?`"
@@ -158,7 +235,11 @@ const items = computed(() => [
 }
 
 .move__consequence {
-  margin: 0;
+  margin: 0 0 var(--space-4);
   color: var(--p-text-muted-color);
+}
+
+.move__parent {
+  width: 100%;
 }
 </style>
