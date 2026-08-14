@@ -70,6 +70,18 @@ const draft = ref({ title: '', body: '', status: 'planned' })
 const saving = ref(false)
 const failure = ref(null)
 
+async function cycle(status) {
+  try {
+    await structure.saveNode(campaignId.value, 'scene', sceneId.value, {
+      title: scene.value.title,
+      body: scene.value.body,
+      status,
+    })
+  } catch {
+    failure.value = 'That could not be saved.'
+  }
+}
+
 function edit() {
   // Every field, because the write is a full replacement: a body left out of the
   // request is cleared rather than kept, and this is the field a game master
@@ -108,7 +120,7 @@ async function save() {
 
       <template v-if="!editing">
         <h1>{{ titleOf(scene, 'scene') }}</h1>
-        <SceneStatus :status="scene.status" with-label readonly />
+        <SceneStatus :status="scene.status" with-label @cycle="cycle" />
         <Button
           size="small"
           severity="secondary"

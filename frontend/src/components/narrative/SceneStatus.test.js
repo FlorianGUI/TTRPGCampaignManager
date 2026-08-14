@@ -18,7 +18,7 @@ function render(props) {
 const dot = (wrapper) => wrapper.get('.status__dot')
 
 describe('a scene’s status', () => {
-  it('cycles to do → done → cut → to do', async () => {
+  it('cycles planned → done → skipped → planned', async () => {
     /*
      * A loop, not a line: a scene brought back from the cut pile takes one press
      * rather than three, and there is never an end of the list to notice.
@@ -37,15 +37,15 @@ describe('a scene’s status', () => {
   })
 
   it('says what pressing it will do, not only what it is', async () => {
-    // The next state is the thing worth knowing before pressing; the current one
-    // is already visible in the dot.
-    expect(dot(render({ status: 'planned' })).attributes('aria-label')).toBe('to do — set to done')
+    // Both, because this is the accessible name: the dot's shape carries the
+    // current state for an eye and for nothing else.
+    expect(dot(render({ status: 'planned' })).attributes('aria-label')).toBe(
+      'planned — mark as done',
+    )
   })
 
-  it('calls a cut scene cut rather than skipped', () => {
-    // The stored value is unchanged; `skipped` is a word about a process and
-    // `cut` is what a game master calls the scene.
-    expect(render({ status: 'skipped', withLabel: true }).text()).toBe('cut')
+  it('uses the stored status words in its label', () => {
+    expect(render({ status: 'skipped', withLabel: true }).text()).toBe('skipped')
   })
 
   it('is a plain mark where something else already sets it', async () => {
@@ -58,7 +58,7 @@ describe('a scene’s status', () => {
 
     expect(wrapper.find('button').exists()).toBe(false)
     expect(dot(wrapper).attributes('role')).toBe('img')
-    expect(dot(wrapper).attributes('aria-label')).toBe('to do')
+    expect(dot(wrapper).attributes('aria-label')).toBe('planned')
   })
 
   it('does not carry the row it sits in along with the press', async () => {

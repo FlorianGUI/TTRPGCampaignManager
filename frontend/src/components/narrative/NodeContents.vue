@@ -13,6 +13,7 @@
 import { RouterLink } from 'vue-router'
 import MoveControl from './MoveControl.vue'
 import SceneStatus from './SceneStatus.vue'
+import { useStructureStore } from '../../stores/structure.js'
 
 defineProps({
   campaignId: { type: String, required: true },
@@ -24,6 +25,20 @@ const to = (campaignId, { kind, node }) =>
     ? { name: 'campaign-sequence', params: { campaignId, sequenceId: node.id } }
     : { name: 'campaign-scene', params: { campaignId, sceneId: node.id } }
 import { titleOf } from '../../stores/structure.js'
+
+const structure = useStructureStore()
+
+async function cycle(campaignId, node, status) {
+  const scene =
+    (await structure.ensureNode(campaignId, 'scene', node.id)) ??
+    structure.nodeFor('scene', node.id)
+
+  await structure.saveNode(campaignId, 'scene', node.id, {
+    title: node.title,
+    body: scene?.body ?? '',
+    status,
+  })
+}
 </script>
 
 <template>
@@ -37,9 +52,14 @@ import { titleOf } from '../../stores/structure.js'
           {{ titleOf(child.node, child.kind) }}
         </span>
 
-        <SceneStatus v-if="child.kind === 'scene'" :status="child.node.status" readonly />
-        <span v-else class="contents__kind">sequence</span>
+        <span v-if="child.kind === 'sequence'" class="contents__kind">sequence</span>
       </RouterLink>
+
+      <SceneStatus
+        v-if="child.kind === 'scene'"
+        :status="child.node.status"
+        @cycle="cycle(campaignId, child.node, $event)"
+      />
 
       <!--
         The same menu the outline carries, so a list of children behaves the same
@@ -63,9 +83,15 @@ import { titleOf } from '../../stores/structure.js'
   padding: 0;
 }
 
+/*
+ * Centred, not baseline-aligned. The status mark is an empty box, and an empty
+ * box's baseline is its bottom edge — so once it grew to a 24px hit area it
+ * carried the controls beside it several pixels above the title they belong to.
+ * A row here is one line, so centring is the whole answer.
+ */
 .contents__row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   border-bottom: 1px solid var(--p-content-border-color);
 }
