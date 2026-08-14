@@ -165,6 +165,25 @@ export const useStructureStore = defineStore('structure', () => {
   }
 
   /*
+   * Remove one act, sequence or scene.
+   *
+   * What was inside it is **not** removed with it: the API rehomes children to
+   * the nearest surviving parent, because cascading is the one answer #80 ruled
+   * out — it loses an evening's prep to a single click. An act's sequences and
+   * scenes go to the campaign; a sequence's scenes go to the act above it.
+   *
+   * So this is far less dangerous than it looks, and the confirmation says so
+   * rather than trying to frighten anyone out of it.
+   */
+  async function deleteNode(campaignId, kind, id) {
+    await request(pathTo(campaignId, kind, id), { method: 'DELETE' })
+
+    delete nodes.value[`${kind}:${id}`]
+    delete nodeInflight[`${kind}:${id}`]
+    await reload(campaignId)
+  }
+
+  /*
    * Where a record sits: its parent, and its place among that parent's children.
    *
    * One call for both, because they are one gesture — the endpoint takes them
@@ -227,6 +246,7 @@ export const useStructureStore = defineStore('structure', () => {
     nodeFor,
     createNode,
     saveNode,
+    deleteNode,
     place,
   }
 })
