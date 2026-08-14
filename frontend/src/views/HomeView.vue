@@ -395,7 +395,7 @@ async function create(values) {
 
 .chip .pi {
   font-size: 0.8em;
-  color: var(--p-grimoire-context-library);
+  color: var(--p-grimoire-context-resources);
 }
 
 .shelf__note {

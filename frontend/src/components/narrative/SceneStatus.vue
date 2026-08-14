@@ -123,7 +123,7 @@ const hint = computed(() => `${word.value} — mark as ${WORDS[next.value]}`)
 }
 
 .status--done {
-  color: var(--p-grimoire-context-characters);
+  color: var(--p-grimoire-scene-done-color);
 }
 .status--done .status__dot::before {
   background: currentColor;
