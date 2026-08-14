@@ -73,17 +73,28 @@ const to = ({ kind, node }) =>
         :title="titleOf(child.node, child.kind)"
         @click="$emit('navigate')"
       >
+        <!--
+          Ahead of the title, not after it. The titles here are ellipsised at a
+          15rem column, so a trailing dot sat at a different distance from the
+          left on every row and read as scattered; leading, they are a column an
+          eye can run down, which is the whole reason for using a dot.
+        -->
+        <ActProgress v-if="child.kind === 'act'" :progress="progressOf(child.node)" />
+        <SceneStatus v-else :status="child.node.status" />
+
         <span class="nav__item-label">{{ titleOf(child.node, child.kind) }}</span>
 
-        <ActProgress v-if="child.kind === 'act'" :progress="progressOf(child.node)" />
         <!--
           A scene at this level belongs to no act, and the marker says so: at a
           glance it is otherwise indistinguishable from an act with no scenes.
         -->
-        <template v-else>
-          <SceneStatus :status="child.node.status" />
-          <span class="nav__item-loose" aria-hidden="true" title="In no act">↳</span>
-        </template>
+        <span
+          v-if="child.kind === 'scene'"
+          class="nav__item-loose"
+          aria-hidden="true"
+          title="In no act"
+          >↳</span
+        >
       </RouterLink>
     </li>
   </ul>

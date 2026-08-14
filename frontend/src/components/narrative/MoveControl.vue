@@ -20,6 +20,7 @@
  */
 import { computed, ref } from 'vue'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import Menu from 'primevue/menu'
 import { anchorForStep, titleOf, useStructureStore } from '../../stores/structure.js'
 
@@ -37,6 +38,41 @@ const structure = useStructureStore()
 
 const menu = ref(null)
 const moving = ref(false)
+const confirming = ref(false)
+const removing = ref(false)
+
+/*
+ * What deleting this actually costs, said plainly in the confirmation.
+ *
+ * Nothing inside it is lost: the API rehomes children to the nearest surviving
+ * parent, because cascading is the answer #80 ruled out. So the dialog explains
+ * where things go rather than asking anyone to be sure — a warning that
+ * overstates the danger is one people learn to click through, and then it is
+ * there for the delete that really is dangerous.
+ *
+ * That is also why this is an ordinary confirmation and not the typed-name gate
+ * the campaign delete uses: closing a table takes every sheet and every scene at
+ * it with no undo, and removing an act takes a heading.
+ */
+const consequence = computed(
+  () =>
+    ({
+      act: 'Its sequences and scenes move to the campaign. Nothing in it is deleted.',
+      sequence: 'Its scenes move to the act above it. Nothing in it is deleted.',
+      scene: 'The scene and everything written in it goes.',
+    })[props.kind],
+)
+
+async function remove() {
+  removing.value = true
+
+  try {
+    await structure.deleteNode(props.campaignId, props.kind, props.node.id)
+    confirming.value = false
+  } finally {
+    removing.value = false
+  }
+}
 
 const up = computed(() => anchorForStep(props.siblings, props.node.id, 'up'))
 const down = computed(() => anchorForStep(props.siblings, props.node.id, 'down'))
@@ -73,6 +109,16 @@ const items = computed(() => [
     disabled: down.value === undefined,
     command: () => stepTo(down.value),
   },
+  { separator: true },
+  {
+    label: 'Delete',
+    icon: 'pi pi-trash',
+    // The one item here that cannot be undone by doing it again.
+    class: 'move__delete',
+    command: () => {
+      confirming.value = true
+    },
+  },
 ])
 </script>
 
@@ -89,11 +135,30 @@ const items = computed(() => [
       @click="menu.toggle($event)"
     />
     <Menu ref="menu" :model="items" popup />
+
+    <Dialog
+      v-model:visible="confirming"
+      modal
+      :header="`Delete ${titleOf(node, kind)}?`"
+      :style="{ width: 'min(28rem, 92vw)' }"
+    >
+      <p class="move__consequence">{{ consequence }}</p>
+
+      <template #footer>
+        <Button label="Cancel" text severity="secondary" @click="confirming = false" />
+        <Button label="Delete" severity="danger" :loading="removing" @click="remove" />
+      </template>
+    </Dialog>
   </span>
 </template>
 
 <style scoped>
 .move {
   flex: none;
+}
+
+.move__consequence {
+  margin: 0;
+  color: var(--p-text-muted-color);
 }
 </style>

@@ -60,6 +60,9 @@ async function render({ node = SIBLINGS[2], kind = 'scene', siblings = SIBLINGS 
   return wrapper
 }
 
+/* The dialog is teleported to the body, so it is nowhere inside the wrapper. */
+const dialogText = () => document.body.textContent
+
 /* The menu is a popup, so its items are read off the model rather than the DOM. */
 const items = (wrapper) => wrapper.findComponent({ name: 'Menu' }).props('model')
 const item = (wrapper, label) => items(wrapper).find((entry) => entry.label === label)
@@ -136,6 +139,9 @@ describe('the move control', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     request.mockReset()
+    // The dialog outlives its component in the body; without this a later test
+    // reads the previous one's copy.
+    document.body.innerHTML = ''
   })
 
   it('greys out the ends rather than hiding them', async () => {
@@ -175,7 +181,7 @@ describe('the move control', () => {
     expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
   })
 
-  it('offers reordering and nothing else', async () => {
+  it('offers reordering and deleting, and not reparenting', async () => {
     /*
      * Reparenting moved to the edit form on each record's own page — a game
      * master looks for "which act is this in" where they look for everything
@@ -183,7 +189,52 @@ describe('the move control', () => {
      */
     const wrapper = await render({ node: SIBLINGS[0] })
 
-    expect(items(wrapper).map((entry) => entry.label)).toEqual(['Move up', 'Move down'])
+    expect(
+      items(wrapper)
+        .map((entry) => entry.label)
+        .filter(Boolean),
+    ).toEqual(['Move up', 'Move down', 'Delete'])
+  })
+
+  it('asks before deleting, and says what it costs rather than warning', async () => {
+    /*
+     * Nothing inside is lost — the API rehomes children to the nearest surviving
+     * parent. A dialog that overstated the danger would be one people learn to
+     * click through, and then it is there for the delete that really is.
+     */
+    const wrapper = await render({ node: SIBLINGS[0] })
+
+    item(wrapper, 'Delete').command()
+    await flushPromises()
+
+    expect(dialogText()).toContain('The scene and everything written in it goes.')
+    expect(request).not.toHaveBeenCalledWith(
+      expect.stringContaining('/scenes/'),
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('says where an act’s children go, because they are not deleted with it', async () => {
+    const wrapper = await render({ node: ACT, kind: 'act', siblings: [ACT] })
+
+    item(wrapper, 'Delete').command()
+    await flushPromises()
+
+    expect(dialogText()).toContain('move to the campaign')
+  })
+
+  it('deletes once confirmed, then asks the tree again', async () => {
+    const wrapper = await render({ node: SIBLINGS[0] })
+    item(wrapper, 'Delete').command()
+    await flushPromises()
+
+    request.mockClear()
+    request.mockResolvedValue(TREE)
+    await wrapper.vm.remove()
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1', { method: 'DELETE' })
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
   })
 
   it('names the row it moves, so the button is not one of forty called “Move”', async () => {
