@@ -30,9 +30,9 @@ const TREE = {
   acts: [ACT_I, ACT_II],
   sequences: [CAUSEWAY],
   scenes: [
-    scene('s-1', 'Arrival at dusk', 1024, { sequence_id: 'q-1', status: 'played' }),
+    scene('s-1', 'Arrival at dusk', 1024, { sequence_id: 'q-1', status: 'done' }),
     scene('s-2', 'Interlude', 2048, { act_id: 'a-1' }),
-    scene('s-3', 'Session zero', 1536, { status: 'played' }),
+    scene('s-3', 'Session zero', 1536, { status: 'done' }),
   ],
 }
 
@@ -147,7 +147,7 @@ describe('an act’s progress', () => {
     expect(scenesUnder(TREE, ACT_I).map((s) => s.id)).toEqual(['s-1', 's-2'])
   })
 
-  it('is ongoing when some are played and some are not', () => {
+  it('is ongoing when some are done and some are not', () => {
     expect(actProgress(TREE, ACT_I)).toEqual({ total: 2, played: 1, label: 'ongoing', fill: 50 })
   })
 
@@ -162,7 +162,7 @@ describe('an act’s progress', () => {
     const tree = {
       ...TREE,
       scenes: [
-        scene('s-9', 'Played', 1024, { act_id: 'a-2', status: 'played' }),
+        scene('s-9', 'Played', 1024, { act_id: 'a-2', status: 'done' }),
         scene('s-10', 'Cut', 2048, { act_id: 'a-2', status: 'skipped' }),
       ],
     }

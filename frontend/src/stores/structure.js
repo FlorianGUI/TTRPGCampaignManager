@@ -245,14 +245,14 @@ export const useStructureStore = defineStore('structure', () => {
  */
 export function actProgress(tree, act) {
   const scenes = scenesUnder(tree, act)
-  const played = scenes.filter((scene) => scene.status === 'played').length
+  const done = scenes.filter((scene) => scene.status === 'done').length
   const pending = scenes.filter((scene) => scene.status === 'planned').length
 
   return {
     total: scenes.length,
-    played,
-    label: !scenes.length ? 'empty' : !played ? 'not started' : !pending ? 'finished' : 'ongoing',
-    fill: scenes.length ? Math.round((played / scenes.length) * 100) : 0,
+    played: done,
+    label: !scenes.length ? 'empty' : !done ? 'not started' : !pending ? 'finished' : 'ongoing',
+    fill: scenes.length ? Math.round((done / scenes.length) * 100) : 0,
   }
 }
 
