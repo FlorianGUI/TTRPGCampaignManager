@@ -64,7 +64,7 @@ const order = computed(() => (tree.value ? scenesInOrder(tree.value) : []))
 
 const STATUSES = [
   { label: 'Planned', value: 'planned' },
-  { label: 'Played', value: 'played' },
+  { label: 'Done', value: 'done' },
   { label: 'Skipped', value: 'skipped' },
 ]
 

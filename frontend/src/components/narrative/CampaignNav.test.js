@@ -107,7 +107,7 @@ describe('the campaign’s own children in the sidebar', () => {
       acts: [{ id: 'a-1', title: 'Act I', description: '', position: 1024 }],
       sequences: [],
       scenes: [
-        scene('s-1', 'Played', 1024, { act_id: 'a-1', status: 'played' }),
+        scene('s-1', 'Played', 1024, { act_id: 'a-1', status: 'done' }),
         scene('s-2', 'Waiting', 2048, { act_id: 'a-1' }),
       ],
     })

@@ -49,10 +49,10 @@ defineProps({
   border-radius: 50%;
 }
 
-.status--played {
+.status--done {
   color: var(--p-grimoire-context-characters);
 }
-.status--played .status__dot {
+.status--done .status__dot {
   background: var(--p-grimoire-context-characters);
 }
 

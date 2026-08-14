@@ -37,7 +37,7 @@ const TREE = {
   acts: [ACT],
   sequences: [CAUSEWAY],
   scenes: [
-    scene('s-1', 'Arrival at dusk', 1024, { sequence_id: 'q-1', status: 'played' }),
+    scene('s-1', 'Arrival at dusk', 1024, { sequence_id: 'q-1', status: 'done' }),
     // On the act, and *before* the sequence — so ordering the two kinds together
     // is the only way it lands in the right place.
     scene('s-2', 'Interlude', 1024, { act_id: 'a-1' }),
