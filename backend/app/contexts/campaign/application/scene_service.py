@@ -1,10 +1,12 @@
 from app.common.ids import ActId, SceneId, SequenceId
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.position import index_after, position_after, position_between, renumbered
+from app.contexts.campaign.domain.position import position_after
 from app.contexts.campaign.domain.scene import Scene, SceneStatus
+from app.contexts.campaign.domain.siblings import SiblingId, place_among
 
 
 class SceneService:
@@ -26,10 +28,12 @@ class SceneService:
         repository: SceneRepository,
         acts: ActRepository,
         sequences: SequenceRepository,
+        siblings: SiblingGroups,
     ) -> None:
         self._repository = repository
         self._acts = acts
         self._sequences = sequences
+        self._siblings = siblings
 
     async def _place_under(
         self, narrative: Narrative, act_id: ActId | None, sequence_id: SequenceId | None
@@ -75,7 +79,7 @@ class SceneService:
         scene = Scene(
             title=title,
             campaign_id=narrative.campaign_id,
-            position=position_after(await self._repository.last_position_under(narrative.scenes, act, sequence)),
+            position=position_after(await self._siblings.last_position(narrative, act, sequence)),
             body=body,
             status=status,
             act_id=act,
@@ -110,7 +114,7 @@ class SceneService:
         narrative: Narrative,
         act_id: ActId | None = None,
         sequence_id: SequenceId | None = None,
-        after: SceneId | None = None,
+        after: SiblingId | None = None,
     ) -> Scene:
         """Put the scene where the game master dropped it: a parent, and a place in it.
 
@@ -133,25 +137,19 @@ class SceneService:
         # The scene's current row is excluded: it is being placed, so it is not one of the
         # neighbours it is being placed between. Leaving it in would let a scene be dropped
         # "after itself" and compute a midpoint against its own position.
-        siblings = [s for s in await self._repository.find_under(narrative.scenes, act, sequence) if s.id != scene.id]
-        index = index_after(siblings, after, narrative.scenes.not_available)
+        siblings = [s for s in await self._siblings.under(narrative, act, sequence) if s.id != scene.id]
+        placement = place_among(siblings, scene, after, narrative.scenes.not_available)
 
-        position = position_between(
-            siblings[index - 1].position if index > 0 else None,
-            siblings[index].position if index < len(siblings) else None,
-        )
-        if position is not None:
-            scene.move_under(act, sequence, position)
+        if placement.position is not None:
+            scene.move_under(act, sequence, placement.position)
             return await self._repository.save(scene)
 
-        # No integer left between those two neighbours. Renumber this sibling list — and
+        # No integer left between those two neighbours. Renumber this sibling group — and
         # only this one, which is #80's "reordering a sibling does not touch unrelated
-        # rows" from the other side.
+        # rows" from the other side. The group spans two tables where the parent holds
+        # both kinds, so the renumber does too.
         scene.move_under(act, sequence, 0)
-        ordered = siblings[:index] + [scene] + siblings[index:]
-        for record, fresh in zip(ordered, renumbered(len(ordered)), strict=True):
-            record.reposition(fresh)
-            await self._repository.save(record)
+        await self._siblings.renumber(placement.ordered)
         return scene
 
     async def delete(self, id: SceneId, narrative: Narrative) -> None:

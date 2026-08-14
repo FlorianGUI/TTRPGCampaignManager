@@ -7,6 +7,7 @@ from app.common.ids import SceneId, UserId
 from app.contexts.campaign.application.act_service import ActService
 from app.contexts.campaign.application.scene_service import SceneService
 from app.contexts.campaign.application.sequence_service import SequenceService
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.act import ActNotAvailable
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
@@ -41,17 +42,23 @@ def elsewhere(game_master: UserId) -> Narrative:
 
 @pytest.fixture
 def act_service(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
-    return ActService(acts, sequences, scenes)
+    return ActService(acts, sequences, scenes, SiblingGroups(acts, sequences, scenes))
+
+
+@pytest.fixture
+def siblings(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
+    """The group loader itself, for asserting the one list a parent actually holds."""
+    return SiblingGroups(acts, sequences, scenes)
 
 
 @pytest.fixture
 def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository, scenes: FakeSceneRepository):
-    return SequenceService(sequences, acts, scenes)
+    return SequenceService(sequences, acts, scenes, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
 def scene_service(scenes: FakeSceneRepository, acts: FakeActRepository, sequences: FakeSequenceRepository):
-    return SceneService(scenes, acts, sequences)
+    return SceneService(scenes, acts, sequences, SiblingGroups(acts, sequences, scenes))
 
 
 async def titles_in(scene_service: SceneService, narrative: Narrative) -> list[str]:
@@ -102,7 +109,7 @@ class TestReorderingWithinOneParent:
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
         """A real scene of this campaign, but not a sibling of where this one is going."""
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         in_the_act = await scene_service.create(narrative, "Arrival at dusk", act_id=act.id)
         loose = await scene_service.create(narrative, "Session zero")
 
@@ -147,7 +154,7 @@ class TestRenumberingWhenTheGapRunsOut:
         scenes: FakeSceneRepository,
     ):
         """Scoped to one sibling list, which is the requirement in #80's own words."""
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         untouched = await scene_service.create(narrative, "In the act", act_id=act.id)
 
         first = await scene_service.create(narrative, "Arrival at dusk")
@@ -166,20 +173,150 @@ class TestRenumberingWhenTheGapRunsOut:
         assert still.updated_at == untouched.updated_at
 
 
+class TestOneParentIsOneList:
+    """#101: a sibling group is everything under one parent, whatever kind it is.
+
+    The tests that existed before this each stayed inside one kind, so all of them passed
+    against an implementation that gave a sequence and a scene in the same act the same
+    number and let their uuids decide the story order. These are the ones that would have
+    noticed.
+    """
+
+    async def test_a_sequence_and_a_scene_in_one_act_do_not_share_a_position(
+        self,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        narrative: Narrative,
+    ):
+        act = await act_service.create(narrative, "Act I")
+
+        sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
+        scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
+
+        # The whole defect in one line: both were handed POSITION_GAP, and nothing a game
+        # master could do would order them against each other again.
+        assert sequence.position != scene.position
+
+    async def test_a_scene_can_be_placed_after_a_sequence_in_the_same_act(
+        self,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        siblings: SiblingGroups,
+        narrative: Narrative,
+    ):
+        act = await act_service.create(narrative, "Act I")
+        scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
+        sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
+
+        # The anchor is a sequence and the record is a scene. This was the request the
+        # outline sent and the API answered 404 to — #110.
+        await scene_service.place(scene.id, narrative, act_id=act.id, after=sequence.id)
+
+        assert [s.title for s in await siblings.under(narrative, act.id, None)] == [
+            "The Causeway",
+            "Interlude",
+        ]
+
+    async def test_a_sequence_can_be_placed_after_a_scene_in_the_same_act(
+        self,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        siblings: SiblingGroups,
+        narrative: Narrative,
+    ):
+        act = await act_service.create(narrative, "Act I")
+        sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
+        scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
+
+        await sequence_service.place(sequence.id, narrative, act_id=act.id, after=scene.id)
+
+        assert [s.title for s in await siblings.under(narrative, act.id, None)] == [
+            "Interlude",
+            "The Causeway",
+        ]
+
+    async def test_an_act_and_a_campaign_scene_order_against_each_other(
+        self,
+        act_service: ActService,
+        scene_service: SceneService,
+        siblings: SiblingGroups,
+        narrative: Narrative,
+    ):
+        """The same thing one level up, where a one-shot lives."""
+        act = await act_service.create(narrative, "Act I")
+        scene = await scene_service.create(narrative, "Session zero")
+
+        await act_service.place(act.id, narrative, after=scene.id)
+
+        assert [s.title for s in await siblings.under(narrative, None, None)] == [
+            "Session zero",
+            "Act I",
+        ]
+
+    async def test_an_anchor_from_another_parent_is_still_refused(
+        self,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        narrative: Narrative,
+    ):
+        """Widened to every kind, not to every record. A group is still a group."""
+        first = await act_service.create(narrative, "Act I")
+        second = await act_service.create(narrative, "Act II")
+        elsewhere = await sequence_service.create(narrative, "The Causeway", act_id=second.id)
+        scene = await scene_service.create(narrative, "Interlude", act_id=first.id)
+
+        with pytest.raises(SceneNotAvailable):
+            await scene_service.place(scene.id, narrative, act_id=first.id, after=elsewhere.id)
+
+    async def test_a_renumber_spans_both_kinds(
+        self,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        siblings: SiblingGroups,
+        narrative: Narrative,
+    ):
+        """The escape hatch has to renumber the group, not the caller's own table.
+
+        A renumber that touched only scenes would space them out around a sequence still
+        sitting on its old number, which is the same defect wearing a different hat.
+        """
+        act = await act_service.create(narrative, "Act I")
+        sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
+        scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
+
+        # Wedge them together so there is no integer left between the two.
+        sequence.reposition(10)
+        scene.reposition(11)
+        await siblings.save(sequence)
+        await siblings.save(scene)
+
+        third = await scene_service.create(narrative, "The rubbing", act_id=act.id)
+        await scene_service.place(third.id, narrative, act_id=act.id, after=sequence.id)
+
+        group = await siblings.under(narrative, act.id, None)
+        assert [s.title for s in group] == ["The Causeway", "The rubbing", "Interlude"]
+        assert [s.position for s in group] == [POSITION_GAP, 2 * POSITION_GAP, 3 * POSITION_GAP]
+
+
 class TestReorderingActsAndSequences:
     async def test_acts_reorder(self, act_service: ActService, narrative: Narrative):
-        first = await act_service.create(narrative.acts, "Act I")
-        await act_service.create(narrative.acts, "Act II")
-        third = await act_service.create(narrative.acts, "Act III")
+        first = await act_service.create(narrative, "Act I")
+        await act_service.create(narrative, "Act II")
+        third = await act_service.create(narrative, "Act III")
 
-        await act_service.place(third.id, narrative.acts, after=first.id)
+        await act_service.place(third.id, narrative, after=first.id)
 
         assert [a.title for a in await act_service.list_for(narrative.acts)] == ["Act I", "Act III", "Act II"]
 
     async def test_sequences_reorder_within_their_act(
         self, sequence_service: SequenceService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         first = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         second = await sequence_service.create(narrative, "What the Wardens Want", act_id=act.id)
 
@@ -199,7 +336,7 @@ class TestReorderingActsAndSequences:
         """Placement resolves the parent exactly as PR 2's move did — the rule did not
         move when the operation grew a position."""
         sequence = await sequence_service.create(narrative, "The Causeway")
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await sequence_service.place(sequence.id, narrative, act_id=theirs.id)
@@ -216,15 +353,15 @@ class TestRenumberingAtTheOtherTwoLevels:
     async def test_acts_renumber_when_the_gap_runs_out(
         self, act_service: ActService, narrative: Narrative, acts: FakeActRepository
     ):
-        first = await act_service.create(narrative.acts, "Act I")
-        second = await act_service.create(narrative.acts, "Act II")
-        third = await act_service.create(narrative.acts, "Act III")
+        first = await act_service.create(narrative, "Act I")
+        second = await act_service.create(narrative, "Act II")
+        third = await act_service.create(narrative, "Act III")
         first.reposition(1024)
         second.reposition(1025)
         await acts.save(first)
         await acts.save(second)
 
-        await act_service.place(third.id, narrative.acts, after=first.id)
+        await act_service.place(third.id, narrative, after=first.id)
 
         placed = await act_service.list_for(narrative.acts)
         assert [a.title for a in placed] == ["Act I", "Act III", "Act II"]
@@ -252,7 +389,7 @@ class TestDeletingAnActRehomes:
     async def test_its_sequences_go_to_the_campaign(
         self, act_service: ActService, sequence_service: SequenceService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
 
         await act_service.delete(act.id, narrative)
@@ -263,7 +400,7 @@ class TestDeletingAnActRehomes:
     async def test_its_own_scenes_go_to_the_campaign(
         self, act_service: ActService, scene_service: SceneService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
 
         await act_service.delete(act.id, narrative)
@@ -284,7 +421,7 @@ class TestDeletingAnActRehomes:
         The sequence survives the act, so its scenes have not lost their parent and must
         not be scattered — that would throw away a grouping nobody asked to lose.
         """
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         scene = await scene_service.create(narrative, "Arrival at dusk", sequence_id=sequence.id)
 
@@ -302,7 +439,7 @@ class TestDeletingAnActRehomes:
         campaign's own first scene and the order would be decided by an id tie-break.
         """
         already = await scene_service.create(narrative, "Session zero")
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         rehomed = await scene_service.create(narrative, "Interlude", act_id=act.id)
         assert rehomed.position == already.position  # both first, in different parents
 
@@ -311,7 +448,7 @@ class TestDeletingAnActRehomes:
         assert await titles_in(scene_service, narrative) == ["Session zero", "Interlude"]
 
     async def test_an_empty_act_still_just_goes(self, act_service: ActService, narrative: Narrative):
-        act = await act_service.create(narrative.acts, "Act III — Low Water")
+        act = await act_service.create(narrative, "Act III — Low Water")
 
         await act_service.delete(act.id, narrative)
 
@@ -327,7 +464,7 @@ class TestDeletingASequenceRehomes:
         narrative: Narrative,
     ):
         """The phrase "nearest surviving ancestor" earning itself: the act is still there."""
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         scene = await scene_service.create(narrative, "Arrival at dusk", sequence_id=sequence.id)
 
@@ -386,5 +523,10 @@ class TestDeletingASequenceRehomes:
 
         await sequence_service.delete(sequence.id, narrative)
 
+        # Spaced, ordered, and clear of the campaign's own children — which under #101's
+        # fix means clear of the sequence too, since it is still in the group at the
+        # moment its scenes are given somewhere to go. That leaves the gap it occupied
+        # unused, which is what a sparse scheme is for: the numbers are opaque, and only
+        # their order and the room between them is a promise.
         positions = [s.position for s in await scene_service.list_for(narrative)]
-        assert positions == [POSITION_GAP, 2 * POSITION_GAP]
+        assert positions == [2 * POSITION_GAP, 3 * POSITION_GAP]

@@ -1,16 +1,12 @@
 from app.common.ids import ActId, SequenceId
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.position import (
-    POSITION_GAP,
-    index_after,
-    position_after,
-    position_between,
-    renumbered,
-)
+from app.contexts.campaign.domain.position import POSITION_GAP, position_after
 from app.contexts.campaign.domain.sequence import Sequence
+from app.contexts.campaign.domain.siblings import SiblingId, place_among
 
 
 class SequenceService:
@@ -27,11 +23,13 @@ class SequenceService:
         repository: SequenceRepository,
         acts: ActRepository,
         scenes: SceneRepository,
+        siblings: SiblingGroups,
     ) -> None:
         self._repository = repository
         self._acts = acts
         # For `delete`, which hands the sequence's scenes to the act above it.
         self._scenes = scenes
+        self._siblings = siblings
 
     async def _place_under(self, narrative: Narrative, act_id: ActId | None) -> ActId | None:
         """Resolve the parent, and prove it belongs to this campaign.
@@ -60,7 +58,7 @@ class SequenceService:
         sequence = Sequence(
             title=title,
             campaign_id=narrative.campaign_id,
-            position=position_after(await self._repository.last_position_under(narrative.sequences, parent)),
+            position=position_after(await self._siblings.last_position(narrative, parent, None)),
             description=description,
             act_id=parent,
         )
@@ -84,7 +82,7 @@ class SequenceService:
         return await self._repository.save(sequence)
 
     async def place(
-        self, id: SequenceId, narrative: Narrative, act_id: ActId | None = None, after: SequenceId | None = None
+        self, id: SequenceId, narrative: Narrative, act_id: ActId | None = None, after: SiblingId | None = None
     ) -> Sequence:
         """Put the sequence where it was dropped: an act, and a place among its siblings.
 
@@ -97,22 +95,15 @@ class SequenceService:
         sequence = narrative.sequences.editable(await self._repository.find_by_id(id))
         parent = await self._place_under(narrative, act_id)
 
-        siblings = [s for s in await self._repository.find_under(narrative.sequences, parent) if s.id != sequence.id]
-        index = index_after(siblings, after, narrative.sequences.not_available)
+        siblings = [s for s in await self._siblings.under(narrative, parent, None) if s.id != sequence.id]
+        placement = place_among(siblings, sequence, after, narrative.sequences.not_available)
 
-        position = position_between(
-            siblings[index - 1].position if index > 0 else None,
-            siblings[index].position if index < len(siblings) else None,
-        )
-        if position is not None:
-            sequence.move_under(parent, position)
+        if placement.position is not None:
+            sequence.move_under(parent, placement.position)
             return await self._repository.save(sequence)
 
         sequence.move_under(parent, 0)
-        ordered = siblings[:index] + [sequence] + siblings[index:]
-        for record, fresh in zip(ordered, renumbered(len(ordered)), strict=True):
-            record.reposition(fresh)
-            await self._repository.save(record)
+        await self._siblings.renumber(placement.ordered)
         return sequence
 
     async def delete(self, id: SequenceId, narrative: Narrative) -> None:
@@ -130,7 +121,7 @@ class SequenceService:
         """
         sequence = narrative.sequences.deletable(await self._repository.find_by_id(id))
 
-        next_position = position_after(await self._scenes.last_position_under(narrative.scenes, sequence.act_id, None))
+        next_position = position_after(await self._siblings.last_position(narrative, sequence.act_id, None))
         for scene in await self._scenes.find_under(narrative.scenes, None, sequence.id):
             scene.move_under(sequence.act_id, None, next_position)
             await self._scenes.save(scene)

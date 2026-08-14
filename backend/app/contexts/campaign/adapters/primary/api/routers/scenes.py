@@ -108,7 +108,7 @@ async def place_scene(
         narrative,
         _act(body.act_id),
         _sequence(body.sequence_id),
-        SceneId(body.after) if body.after else None,
+        body.after,
     )
     return SceneResponse(**scene.__dict__)
 

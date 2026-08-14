@@ -8,6 +8,7 @@ from app.common.ids import UserId
 from app.contexts.campaign.application.act_service import ActService
 from app.contexts.campaign.application.scene_service import SceneService
 from app.contexts.campaign.application.sequence_service import SequenceService
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.application.structure_service import StructureService
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
@@ -45,17 +46,17 @@ def elsewhere(game_master: UserId) -> Narrative:
 
 @pytest.fixture
 def act_service(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
-    return ActService(acts, sequences, scenes)
+    return ActService(acts, sequences, scenes, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
 def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository, scenes: FakeSceneRepository):
-    return SequenceService(sequences, acts, scenes)
+    return SequenceService(sequences, acts, scenes, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
 def scene_service(scenes: FakeSceneRepository, acts: FakeActRepository, sequences: FakeSequenceRepository):
-    return SceneService(scenes, acts, sequences)
+    return SceneService(scenes, acts, sequences, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
@@ -89,7 +90,7 @@ class TestTheWholeTree:
         scene_service: SceneService,
         narrative: Narrative,
     ):
-        act = await act_service.create(narrative.acts, "Act I — Water Rising")
+        act = await act_service.create(narrative, "Act I — Water Rising")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         await scene_service.create(narrative, "Arrival at dusk", sequence_id=sequence.id)
         await scene_service.create(narrative, "Session zero")
@@ -109,7 +110,7 @@ class TestTheWholeTree:
         narrative: Narrative,
     ):
         """Flat plus parentage, which is what makes the skippable levels need no bucket."""
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         await scene_service.create(narrative, "Arrival at dusk", sequence_id=sequence.id)
         await scene_service.create(narrative, "Interlude", act_id=act.id)
@@ -141,7 +142,7 @@ class TestTheWholeTree:
         narrative: Narrative,
         elsewhere: Narrative,
     ):
-        await act_service.create(elsewhere.acts, "Theirs")
+        await act_service.create(elsewhere, "Theirs")
 
         assert (await structure.of(narrative)).acts == []
 
