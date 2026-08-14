@@ -14,20 +14,13 @@ import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
-import Select from 'primevue/select'
 import Textarea from 'primevue/textarea'
 import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import ActProgress from '../components/narrative/ActProgress.vue'
+import AddChild from '../components/narrative/AddChild.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import NodeContents from '../components/narrative/NodeContents.vue'
-import {
-  actProgress,
-  lastUnder,
-  parentsFor,
-  titleOf,
-  trailTo,
-  useStructureStore,
-} from '../stores/structure.js'
+import { actProgress, titleOf, trailTo, useStructureStore } from '../stores/structure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -85,37 +78,22 @@ const children = computed(() => {
 /* ── editing ─────────────────────────────────────────────────────────────── */
 
 /*
- * **Where it sits is part of editing it**, not a separate gesture. That reverses
- * an earlier call in this PR: reparenting had its own control on the grounds that
- * a long edit could carry a stale parent and move something nobody asked to move.
- * The objection is real and it is also the objection to every other field here —
- * these writes are full replacements, so a stale description overwrites just as
- * happily. What settles it is that the parent is the thing a game master looks
- * for on this page, and loading it fresh when Edit is pressed is what keeps it
- * honest.
+ * **This form owns what the record says, and nothing about where it sits.**
  *
- * Stepping a record up and down among its siblings stays in the outline, where
- * the neighbours it is moving past are on screen.
+ * A parent picker lived here for a while. The split that settled is cleaner: the
+ * form is content, the three-dots menu is movement — because an edit form that
+ * could also reparent meant a rename and a reorganisation shared one Save button,
+ * and only one of those is undone by doing it again.
  */
 const editing = ref(false)
-const draft = ref({ title: '', description: '', parent: null })
-
-const parents = computed(() => parentsFor(tree.value, props.kind, props.id))
-
-/* The option that matches where it currently sits, so the field opens on the truth. */
-const currentParent = () =>
-  parents.value.find((option) => option.act_id === (node.value.act_id ?? null)) ?? null
+const draft = ref({ title: '', description: '' })
 const saving = ref(false)
 const failure = ref(null)
 
 function edit() {
   // Loaded with the current values, because the write is a full replacement: a
   // form that started empty would clear the description of whatever it saved.
-  draft.value = {
-    title: node.value.title,
-    description: node.value.description,
-    parent: currentParent(),
-  }
+  draft.value = { title: node.value.title, description: node.value.description }
   failure.value = null
   editing.value = true
 }
@@ -136,21 +114,6 @@ async function save() {
       title: draft.value.title,
       description: draft.value.description,
     })
-
-    // Two calls, because they are two endpoints: what a record says is a `PUT` on
-    // it, where it sits is a `PUT` on its placement. Only sent when it changed —
-    // a placement always appends, so issuing one for an unchanged parent would
-    // quietly move the record to the end of its own list.
-    const moved = draft.value.parent && draft.value.parent.act_id !== (node.value.act_id ?? null)
-    if (moved) {
-      await structure.place(props.campaignId, props.kind, props.id, {
-        act_id: draft.value.parent.act_id,
-        after: lastUnder(tree.value, props.kind, {
-          actId: draft.value.parent.act_id,
-          excluding: props.id,
-        }),
-      })
-    }
 
     editing.value = false
   } catch {
@@ -196,16 +159,6 @@ async function save() {
     <template v-if="editing">
       <Textarea v-model="draft.description" class="node__field" rows="6" aria-label="Description" />
 
-      <label v-if="parents.length" class="node__parent">
-        <span class="label-smallcaps">Sits in</span>
-        <Select
-          v-model="draft.parent"
-          :options="parents"
-          option-label="label"
-          aria-label="Sits in"
-        />
-      </label>
-
       <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
 
       <div class="node__actions">
@@ -231,7 +184,16 @@ async function save() {
     </p>
 
     <section class="node__section">
-      <h2 class="label-smallcaps">Contains</h2>
+      <div class="node__section-head">
+        <h2 class="label-smallcaps">Contains</h2>
+        <AddChild
+          :campaign-id="campaignId"
+          :allowed="kind === 'act' ? ['sequence', 'scene'] : ['scene']"
+          :parent-name="titleOf(node, kind)"
+          :act-id="kind === 'act' ? id : null"
+          :sequence-id="kind === 'sequence' ? id : null"
+        />
+      </div>
 
       <NodeContents v-if="children.length" :campaign-id="campaignId" :children="children" />
       <p v-else class="node__empty">
@@ -253,9 +215,23 @@ async function save() {
 </template>
 
 <style scoped>
+/*
+ * Two thirds of the pane, at every width above the breakpoint.
+ *
+ * A proportion rather than a fixed measure, so the page keeps the same shape on
+ * a laptop and on a wide monitor instead of becoming a narrow ribbon adrift in
+ * whitespace. Below the sidebar's breakpoint it takes the width it is given —
+ * two thirds of a phone is not a column, it is a margin.
+ */
 .node {
   padding: var(--space-5) 0 var(--space-7);
-  max-width: 52rem;
+  width: 66.6667%;
+}
+
+@media (max-width: 900px) {
+  .node {
+    width: 100%;
+  }
 }
 
 .node__head {
@@ -296,14 +272,6 @@ async function save() {
   font-size: var(--step--1);
 }
 
-.node__parent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  max-width: 22rem;
-}
-
 .node__actions {
   display: flex;
   gap: var(--space-3);
@@ -324,6 +292,12 @@ async function save() {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--p-grimoire-rule-color);
+}
+
+.node__section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .node__empty {

@@ -24,14 +24,7 @@ import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import SceneStatus from '../components/narrative/SceneStatus.vue'
 import SceneStepper from '../components/narrative/SceneStepper.vue'
-import {
-  lastUnder,
-  parentsFor,
-  scenesInOrder,
-  titleOf,
-  trailTo,
-  useStructureStore,
-} from '../stores/structure.js'
+import { scenesInOrder, titleOf, trailTo, useStructureStore } from '../stores/structure.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -69,23 +62,11 @@ const STATUSES = [
 ]
 
 /*
- * Which act or sequence the scene sits in is a field here, for the reason
- * `GroupingPage` sets out at length: it is what a game master looks for on this
- * page, and the stale-value risk it carries is the risk every other field on a
- * full-replacement write already carries. Stepping among siblings stays in the
- * outline, where the neighbours are visible.
+ * What the scene says. Where it sits is the three-dots menu's — see
+ * `GroupingPage` for why the two are kept apart.
  */
 const editing = ref(false)
-const draft = ref({ title: '', body: '', status: 'planned', parent: null })
-
-const parents = computed(() => parentsFor(tree.value, 'scene', sceneId.value))
-
-const currentParent = () =>
-  parents.value.find(
-    (option) =>
-      option.act_id === (scene.value.act_id ?? null) &&
-      option.sequence_id === (scene.value.sequence_id ?? null),
-  ) ?? null
+const draft = ref({ title: '', body: '', status: 'planned' })
 const saving = ref(false)
 const failure = ref(null)
 
@@ -93,12 +74,7 @@ function edit() {
   // Every field, because the write is a full replacement: a body left out of the
   // request is cleared rather than kept, and this is the field a game master
   // spent an hour on.
-  draft.value = {
-    title: scene.value.title,
-    body: scene.value.body,
-    status: scene.value.status,
-    parent: currentParent(),
-  }
+  draft.value = { title: scene.value.title, body: scene.value.body, status: scene.value.status }
   failure.value = null
   editing.value = true
 }
@@ -112,27 +88,7 @@ async function save() {
   saving.value = true
 
   try {
-    const { parent, ...fields } = draft.value
-    await structure.saveNode(campaignId.value, 'scene', sceneId.value, fields)
-
-    // Only when it actually changed: a placement always appends, so sending one
-    // for an unchanged parent would move the scene to the end of its own list.
-    const moved =
-      parent &&
-      (parent.act_id !== (scene.value.act_id ?? null) ||
-        parent.sequence_id !== (scene.value.sequence_id ?? null))
-
-    if (moved) {
-      await structure.place(campaignId.value, 'scene', sceneId.value, {
-        act_id: parent.act_id,
-        sequence_id: parent.sequence_id,
-        after: lastUnder(tree.value, 'scene', {
-          actId: parent.act_id,
-          sequenceId: parent.sequence_id,
-          excluding: sceneId.value,
-        }),
-      })
-    }
+    await structure.saveNode(campaignId.value, 'scene', sceneId.value, { ...draft.value })
 
     editing.value = false
   } catch {
@@ -187,17 +143,6 @@ async function save() {
       aria-label="Body"
     />
 
-    <label v-if="editing && parents.length" class="scene__parent">
-      <span class="label-smallcaps">Sits in</span>
-      <Select
-        v-model="draft.parent"
-        class="scene__parent-select"
-        :options="parents"
-        option-label="label"
-        aria-label="Sits in"
-      />
-    </label>
-
     <CampaignMarkdown v-else-if="scene.body" class="prose scene__body" :source="scene.body" />
 
     <p v-else class="scene__unwritten">
@@ -220,11 +165,27 @@ async function save() {
 </template>
 
 <style scoped>
+/*
+ * Two thirds of the pane, like the act and sequence pages, so moving between the
+ * three does not move the column under the reader.
+ *
+ * The prose inside still holds its own measure — `.scene__body` is capped at a
+ * reading width, because prose set to 120 characters is not read, it is skimmed.
+ * The page is two thirds; the paragraph is not.
+ */
 .scene {
   padding: var(--space-5) 0 var(--space-7);
-  /* A reading measure rather than the full width of the content area: a body is
-     prose, and prose set to 120 characters is not read, it is skimmed. */
-  max-width: 46rem;
+  width: 66.6667%;
+}
+
+@media (max-width: 900px) {
+  .scene {
+    width: 100%;
+  }
+}
+
+.scene__body {
+  max-width: 62ch;
 }
 
 .scene__head {
@@ -268,14 +229,6 @@ async function save() {
 .scene__unwritten {
   color: var(--p-text-muted-color);
   font-style: italic;
-}
-
-.scene__parent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  max-width: 22rem;
 }
 
 .scene__actions {
