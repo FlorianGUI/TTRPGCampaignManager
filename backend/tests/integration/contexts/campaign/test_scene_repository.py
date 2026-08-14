@@ -58,7 +58,7 @@ class TestSave:
         assert await repository.save(scene) == scene
 
     async def test_persists_every_field(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
-        scene = _scene_in(access, "The sunken arch", body=READ_ALOUD, status=SceneStatus.PLAYED, position=2048)
+        scene = _scene_in(access, "The sunken arch", body=READ_ALOUD, status=SceneStatus.DONE, position=2048)
         await repository.save(scene)
 
         found = (await repository.find_by_id(scene.id)).unchecked
@@ -66,7 +66,7 @@ class TestSave:
         assert found is not None
         assert found.title == "The sunken arch"
         assert found.body == READ_ALOUD
-        assert found.status is SceneStatus.PLAYED
+        assert found.status is SceneStatus.DONE
         assert found.campaign_id == access.campaign_id
         assert found.position == 2048
 
@@ -91,7 +91,7 @@ class TestSave:
         scene = _scene_in(access, "The parley")
         await repository.save(scene)
 
-        scene.revise("The parley at Stonegate", READ_ALOUD, SceneStatus.PLAYED)
+        scene.revise("The parley at Stonegate", READ_ALOUD, SceneStatus.DONE)
         await repository.save(scene)
 
         assert len(await repository.find_all_in(access)) == 1
@@ -106,7 +106,7 @@ class TestSave:
         scene = _scene_in(access, "The sunken arch", position=4096)
         await repository.save(scene)
 
-        scene.revise("The sunken arch", READ_ALOUD, SceneStatus.PLAYED)
+        scene.revise("The sunken arch", READ_ALOUD, SceneStatus.DONE)
         await repository.save(scene)
 
         found = (await repository.find_by_id(scene.id)).unchecked
@@ -120,7 +120,7 @@ class TestSave:
         await repository.save(scene)
         created = scene.created_at
 
-        scene.revise("The parley at Stonegate", "", SceneStatus.PLAYED)
+        scene.revise("The parley at Stonegate", "", SceneStatus.DONE)
         await repository.save(scene)
 
         found = (await repository.find_by_id(scene.id)).unchecked
@@ -208,11 +208,11 @@ class TestFindSummariesIn:
 
     async def test_carries_everything_the_tree_needs(self, repository: SqlAlchemySceneRepository, access: SceneAccess):
         act_id = ActId(uuid.uuid4())
-        await repository.save(_scene_in(access, "Interlude", position=2048, act_id=act_id, status=SceneStatus.PLAYED))
+        await repository.save(_scene_in(access, "Interlude", position=2048, act_id=act_id, status=SceneStatus.DONE))
 
         summary = (await repository.find_summaries_in(access))[0]
 
-        assert summary.status is SceneStatus.PLAYED
+        assert summary.status is SceneStatus.DONE
         assert summary.act_id == act_id
         assert summary.sequence_id is None
         assert summary.position == 2048

@@ -39,11 +39,11 @@ Feature: Scene Management
     When I list the scenes in my campaign
     Then the scenes should read "Arrival at dusk, The sunken arch, The nesting pair"
 
-  Scenario: Mark a scene as played
+  Scenario: Mark a scene as done
     Given I create a scene named "The parley at Stonegate" in my campaign
-    When I mark the scene as played
+    When I mark the scene as done
     And I retrieve the scene by its ID
-    Then the scene should be played
+    Then the scene should be done
 
   Scenario: Rewriting a scene leaves it where it is in the story
     Given I create a scene named "Arrival at dusk" in my campaign

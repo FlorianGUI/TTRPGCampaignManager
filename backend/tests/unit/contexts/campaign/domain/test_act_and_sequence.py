@@ -194,9 +194,9 @@ class TestSceneMoveUnder:
         assert scene.updated_at > LONG_AGO
 
     def test_moving_does_not_touch_what_the_scene_says(self):
-        scene = self._scene(body="The gate does not swing.", status=SceneStatus.PLAYED)
+        scene = self._scene(body="The gate does not swing.", status=SceneStatus.DONE)
 
         scene.move_under(ActId(uuid.uuid4()), None, POSITION_GAP)
 
         assert scene.body == "The gate does not swing."
-        assert scene.status is SceneStatus.PLAYED
+        assert scene.status is SceneStatus.DONE
