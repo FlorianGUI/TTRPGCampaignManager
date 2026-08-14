@@ -88,8 +88,12 @@ describe('HomeView', () => {
       // A real link rather than a click handler, so middle-click and
       // open-in-new-tab work and the new tab carries the campaign without
       // needing anything in storage.
+      //
+      // It opens on the structure: session notes were the landing page while
+      // they were the only page there was, and #88 gave the campaign a shape to
+      // arrive at instead.
       expect(link.props('to')).toEqual({
-        name: 'campaign-sessions',
+        name: 'campaign-structure',
         params: { campaignId: 'c-1' },
       })
     })
@@ -259,8 +263,10 @@ describe('HomeView', () => {
       // You just made it; being returned to a list to find it again would be a
       // step for its own sake.
       expect(readCurrentCampaign()).toBe('c-1')
+      // The same place picking one goes, so making a campaign and choosing one
+      // arrive together — here, an empty outline offering to write an act.
       expect(push).toHaveBeenCalledWith({
-        name: 'campaign-sessions',
+        name: 'campaign-structure',
         params: { campaignId: 'c-1' },
       })
     })

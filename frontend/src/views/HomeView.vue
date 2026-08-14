@@ -73,9 +73,19 @@ function sigil(name) {
  * A real link, not a button: the id is in the URL, so middle-click and
  * open-in-new-tab do the right thing, and the new tab carries the campaign
  * without needing anything in storage.
+ *
+ * **It opens on the structure**, which is the campaign — its acts, sequences and
+ * scenes. Session notes were the landing route while they were the only page
+ * there was, and #88 gave the campaign a shape to arrive at instead: what a game
+ * master wants on opening a table is where the story stands, not the last
+ * evening's notes. It is also the one page that is real rather than a spike.
+ *
+ * The same route is used after creating a campaign, so making one and picking
+ * one arrive at the same place — a new campaign lands on its own empty outline,
+ * which says what an act is and offers to write one.
  */
 function campaignRoute(campaign) {
-  return { name: 'campaign-sessions', params: { campaignId: campaign.id } }
+  return { name: 'campaign-structure', params: { campaignId: campaign.id } }
 }
 
 function remember(campaign) {
