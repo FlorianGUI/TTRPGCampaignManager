@@ -108,6 +108,17 @@ describe('CampaignTitle', () => {
     expect(wrapper.get('a').attributes('href')).toBe('/campaigns/c-1/structure')
   })
 
+  it('renders as selected after it is clicked', async () => {
+    const router = routerWith()
+    const wrapper = mountTitle({}, router)
+
+    await wrapper.get('.campaign-title').trigger('click')
+    await router.isReady()
+
+    expect(router.currentRoute.value.name).toBe('campaign-structure')
+    expect(wrapper.get('.campaign-title').attributes('aria-current')).toBe('page')
+  })
+
   it('still promises no menu', () => {
     // It navigates. It does not open anything — what you can *do* to a campaign
     // is still the account menu's, which #79 settled and #88 does not touch.

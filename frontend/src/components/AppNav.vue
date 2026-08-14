@@ -7,7 +7,11 @@
  * points can never drift apart.
  */
 
+import { RouterLink } from 'vue-router'
+
 defineProps({
+  // Each carries a `label`, its `items`, an optional `context` accent, and an
+  // optional `to` — a route of the section's own, which makes its head a link.
   sections: { type: Array, required: true },
   active: { type: String, default: null },
 })
@@ -17,7 +21,25 @@ defineEmits(['navigate'])
 
 <template>
   <div v-for="section in sections" :key="section.label" class="nav__section">
-    <p class="label-smallcaps nav__section-label">{{ section.label }}</p>
+    <!--
+      A head is a link where the section has somewhere of its own to go, and a
+      paragraph where it does not — `nav-section` turns the pressable states on
+      for the anchor and leaves the paragraph inert, so nothing here promises a
+      destination that is not there. `Library` and `Characters` are headings
+      today; they become links the day they are given a `to`, with no change to
+      how they look until they do.
+    -->
+    <RouterLink v-if="section.to" v-slot="{ href, navigate, isActive }" :to="section.to" custom>
+      <a
+        class="label-smallcaps nav-section"
+        :href="href"
+        :aria-current="isActive ? 'page' : undefined"
+        @click="navigate"
+        >{{ section.label }}</a
+      >
+    </RouterLink>
+
+    <p v-else class="label-smallcaps nav-section">{{ section.label }}</p>
     <ul class="nav__list">
       <li v-for="item in section.items" :key="item.label">
         <a
@@ -44,11 +66,6 @@ defineEmits(['navigate'])
 <style scoped>
 .nav__section + .nav__section {
   margin-top: var(--space-4);
-}
-
-.nav__section-label {
-  margin: 0 0 var(--space-1);
-  padding: 0 var(--space-2);
 }
 
 .nav__list {
@@ -86,6 +103,11 @@ defineEmits(['navigate'])
 }
 
 .nav__item-icon {
+  /* Campaign markers occupy this same column, so labels line up across the
+     campaign outline and the Library/Characters navigation beneath it. */
+  width: 24px;
+  flex: none;
+  text-align: center;
   font-size: 0.85em;
   color: var(--p-navigation-item-icon-color);
 }

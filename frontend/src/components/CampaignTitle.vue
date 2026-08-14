@@ -15,10 +15,8 @@
  *
  * It also stops being duplicated. The nav's Campaign section used to sit
  * directly beneath this with the word "Campaign" in it, so the sidebar named the
- * campaign and then announced the category on the next line. The name *is* the
- * section head now, and `Library` and `Characters` keep their small-caps labels
- * — those are categories and this is a proper noun, which is a difference worth
- * showing rather than flattening.
+ * campaign and then announced the category on the next line. The name is the
+ * section head now, styled consistently with `Library` and `Characters`.
  *
  * A 15rem column is narrower than a lot of campaign names, so the name
  * ellipsises and a tooltip carries the rest of it. The rest of it and nothing
@@ -128,7 +126,7 @@ const structure = computed(() => ({
     <a
       ref="title"
       v-tooltip.right="tooltip"
-      class="campaign-title"
+      class="label-smallcaps nav-section campaign-title"
       :href="href"
       :aria-current="isActive ? 'page' : undefined"
       @click="navigate"
@@ -139,57 +137,18 @@ const structure = computed(() => ({
 
 <style scoped>
 /*
- * The largest thing in the column, and the only one in the display face, so the
- * eye lands on where it is before it starts reading where it can go.
+ * Everything this looks like is `nav-section` in `base.css` — the box, the
+ * small-caps, the rule under it, and the pressable states #79's note demanded of
+ * anything that is pressable: a pointer, a hover that responds, and a focus
+ * ring. It is a head of the same kind as `Library`, so it is not styled here a
+ * second time; the declarations that used to sit in this block were the utility
+ * restated, and they drifted from it.
  *
- * It reads as pressable now, which #79's note demanded of anything that is: a
- * pointer, a hover that responds, and a focus ring. What it does not get is a
- * chevron or a border — the destination is the campaign's own structure, which
- * is where the name already implied it would take you.
+ * What is left is the one thing only this head needs: a name too long for the
+ * column is truncated rather than wrapped, and `nav-section` already truncates,
+ * so all that remains is the width to truncate against.
  */
 .campaign-title {
-  display: block;
-  overflow: hidden;
-  /* Aligns with the nav items below rather than with the column edge, so the
-     title and the list it heads share a left edge. */
-  margin: 0 0 var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border-left: 2px solid transparent;
-  border-radius: var(--p-border-radius-sm);
-  font-family: var(--grimoire-font-display);
-  font-weight: 700;
-  font-size: var(--step-0);
-  line-height: 1.15;
-  color: var(--p-primary-color);
-  text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.campaign-title:hover {
-  background: var(--p-navigation-item-hover-background);
-}
-
-.campaign-title:focus-visible {
-  outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
-  outline-offset: var(--p-focus-ring-offset);
-}
-
-/*
- * The active state matches a nav item's — border, weight and background — so the
- * head of the list and the list itself say "you are here" the same way, and it
- * survives without colour.
- */
-.campaign-title[aria-current='page'] {
-  border-left-color: var(--p-grimoire-context-campaign);
-  background: var(--p-navigation-item-active-background);
-}
-
-@media (pointer: coarse) {
-  .campaign-title {
-    min-height: 44px;
-    padding-block: var(--space-2);
-  }
+  max-width: 100%;
 }
 </style>

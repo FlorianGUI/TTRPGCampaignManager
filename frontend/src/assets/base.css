@@ -174,6 +174,83 @@
     color: var(--p-text-muted-color);
   }
 
+  /*
+   * The head of a list in the sidebar — `Library`, `Characters`, and the
+   * campaign's own name.
+   *
+   * **The same box a nav item uses**: the same horizontal padding, the same
+   * radius on the corners a hover fills, and the same 2px gutter held on the
+   * left for an active marker. So a head that leads somewhere hovers, takes a
+   * focus ring and marks itself current exactly as the items beneath it do, and
+   * the column reads as one navigation rather than as labels with lists stuck
+   * under them.
+   *
+   * **What keeps it a head is small-caps and a rule.** The type comes from
+   * `label-smallcaps` — display face, uppercase, tracked, a step smaller than an
+   * item — and the hairline underneath is the one thing no item ever carries.
+   * Depth here comes from rules rather than shadow, and a heading sitting on a
+   * rule is what a page in a book does. It survives without colour, which a
+   * difference in weight alone would not.
+   *
+   * It carries no icon, so the items below sit indented beneath it by exactly
+   * their icon column.
+   *
+   * A plain head is a `p` and inert. Give it an `a` and the states below turn on
+   * — which is why they hang off the element rather than off a modifier class:
+   * there is no way to write the pressable look onto something that cannot be
+   * pressed.
+   */
+  .nav-section {
+    display: block;
+    margin: 0 0 var(--space-1);
+    padding: 0.35rem var(--space-2);
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--p-grimoire-rule-color);
+    border-radius: var(--p-border-radius-sm) var(--p-border-radius-sm) 0 0;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  a.nav-section {
+    color: var(--p-text-muted-color);
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background var(--p-transition-duration),
+      color var(--p-transition-duration);
+  }
+
+  a.nav-section:hover {
+    background: var(--p-navigation-item-hover-background);
+    color: var(--p-navigation-item-hover-color);
+  }
+
+  a.nav-section:focus-visible {
+    outline: var(--p-focus-ring-width) var(--p-focus-ring-style) var(--p-focus-ring-color);
+    outline-offset: var(--p-focus-ring-offset);
+  }
+
+  /* Current, said the way an item says it: colour, the left marker, and a fill. */
+  a.nav-section[aria-current='page'] {
+    color: var(--p-primary-color);
+    border-left-color: var(--p-primary-color);
+    background: var(--p-navigation-item-active-background);
+  }
+
+  /*
+   * The same 44px floor `AppNav` holds its items to. Padding rather than a bare
+   * `min-height`: this is a block box, so a floor on its own would leave the
+   * text sitting at the top of it with the rule a finger's width below.
+   */
+  @media (pointer: coarse) {
+    .nav-section {
+      min-height: 44px;
+      padding-block: 0.9rem;
+    }
+  }
+
   /* ---- Ornament ------------------------------------------------------ */
 
   /* Hairline double rule — the book-page divider. */
