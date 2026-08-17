@@ -556,13 +556,13 @@ def place_act_under_act(client: AsyncClient, context: dict):
 
 @when("I place the scene after that sequence through the outline")
 def place_scene_after_sequence(client: AsyncClient, context: dict):
-    """Siblings are per level. That sequences and scenes under one act are not ordered
-    against each other is #101, still open — this endpoint does not quietly decide it."""
+    """The gesture #101 existed for: one parent, one list, whatever kind the rows are."""
     _place(
         client,
         context,
         {
             "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "parent": {"id": context["acts"][0]["id"], "kind": "act"},
             "after": {"id": context["sequence"]["id"], "kind": "sequence"},
         },
     )
@@ -612,3 +612,15 @@ def scene_in_the_answer_is_under_the_act(context: dict):
     scene = context["response"].json()["scenes"][0]
     assert scene["act_id"] == context["acts"][0]["id"]
     assert scene["sequence_id"] is None
+
+
+@then("the scene should sit below the sequence in the act")
+def scene_sits_below_the_sequence(context: dict):
+    """One number line per parent: the scene's position is above the sequence's, so the
+    outline draws it second. Before #101 both sat at POSITION_GAP and a uuid decided."""
+    assert context["response"].status_code == 200, context["response"].json()
+    body = context["response"].json()
+    sequence = next(s for s in body["sequences"] if s["id"] == context["sequence"]["id"])
+    scene = next(s for s in body["scenes"] if s["id"] == context["scene"]["id"])
+    assert scene["act_id"] == sequence["act_id"]
+    assert scene["position"] > sequence["position"]

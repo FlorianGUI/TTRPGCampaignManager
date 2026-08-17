@@ -180,8 +180,8 @@ class TestPlacingOneRow:
     async def test_an_act_moves_among_its_siblings(
         self, structure: StructureService, act_service: ActService, narrative: Narrative
     ):
-        first = await act_service.create(narrative.acts, "Arrival")
-        second = await act_service.create(narrative.acts, "The flood")
+        first = await act_service.create(narrative, "Arrival")
+        second = await act_service.create(narrative, "The flood")
 
         tree = await structure.place(
             narrative,
@@ -198,7 +198,7 @@ class TestPlacingOneRow:
         sequence_service: SequenceService,
         narrative: Narrative,
     ):
-        act = await act_service.create(narrative.acts, "Arrival")
+        act = await act_service.create(narrative, "Arrival")
         sequence = await sequence_service.create(narrative, "The long road")
 
         tree = await structure.place(
@@ -241,7 +241,7 @@ class TestPlacingOneRow:
         narrative: Narrative,
     ):
         """The same field, read as the other parent — a scene may hang off either."""
-        act = await act_service.create(narrative.acts, "Arrival")
+        act = await act_service.create(narrative, "Arrival")
         scene = await scene_service.create(narrative, "The sunken arch", BODY)
 
         tree = await structure.place(
@@ -264,7 +264,7 @@ class TestPlacingOneRow:
         narrative: Narrative,
     ):
         """Why this returns a tree: a move can shift rows nobody dragged."""
-        act = await act_service.create(narrative.acts, "Arrival")
+        act = await act_service.create(narrative, "Arrival")
         scene = await scene_service.create(narrative, "The sunken arch", BODY)
 
         tree = await structure.place(
@@ -283,7 +283,7 @@ class TestPlacingOneRow:
         elsewhere: Narrative,
     ):
         """The body is not trusted: ids are resolved against this campaign's tokens."""
-        theirs = await act_service.create(elsewhere.acts, "Theirs")
+        theirs = await act_service.create(elsewhere, "Theirs")
 
         with pytest.raises(NotAvailable):
             await structure.place(

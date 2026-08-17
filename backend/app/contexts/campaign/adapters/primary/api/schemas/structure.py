@@ -106,12 +106,9 @@ class StructurePlacement(BaseModel):
             allowed = ", ".join(sorted(k.value for k in _PARENTS[self.item.kind])) or "nothing"
             raise ValueError(f"a {self.item.kind.value} hangs off {allowed} or the campaign")
 
-        # Siblings are per level: an act is ordered among acts, a scene among scenes. That
-        # sequences and scenes under one act are *not* ordered against each other is #101,
-        # still open — this endpoint does not quietly decide it.
-        if self.after is not None and self.after.kind is not self.item.kind:
-            raise ValueError(f"a {self.item.kind.value} is placed after another {self.item.kind.value}")
-
+        # No rule about the anchor's kind. #101 made a sibling group everything under one
+        # parent, so a scene may be dropped below the sequence above it — refusing that
+        # here would rebuild in the schema the per-kind number lines that issue removed.
         if self.after is not None and self.after.id == self.item.id:
             raise ValueError("a row cannot be placed after itself")
 
