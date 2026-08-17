@@ -138,7 +138,12 @@ const progressOf = (act) => actProgress(tree.value, act)
  * outline renders them that way: a scene written straight onto an act sits among
  * the sequences beside it, not after all of them.
  */
-const nodesOf = (entries) => entries.map((entry) => entry.node)
+/*
+ * A sequence holds only scenes, but the list still travels as entries: since #101
+ * an anchor names its own kind, and a shape that varies by level would put that
+ * decision in every call site.
+ */
+const sceneEntriesIn = (sequence) => scenesIn(sequence).map((node) => ({ kind: 'scene', node }))
 
 const isEmpty = computed(() => tree.value && !children.value.length)
 
@@ -219,7 +224,7 @@ function toggleAll() {
             :campaign-id="campaignId"
             kind="act"
             :node="child.node"
-            :siblings="nodesOf(children)"
+            :siblings="children"
             :progress="progressOf(child.node)"
             collapsible
             :shut="isShut(child.node.id)"
@@ -240,7 +245,7 @@ function toggleAll() {
                     :campaign-id="campaignId"
                     kind="sequence"
                     :node="under.node"
-                    :siblings="nodesOf(childrenOfAct(child.node))"
+                    :siblings="childrenOfAct(child.node)"
                     collapsible
                     :shut="isShut(under.node.id)"
                     :allowed="['scene']"
@@ -257,7 +262,7 @@ function toggleAll() {
                         :campaign-id="campaignId"
                         kind="scene"
                         :node="scene"
-                        :siblings="scenesIn(under.node)"
+                        :siblings="sceneEntriesIn(under.node)"
                         :renaming="renaming === scene.id"
                         @renamed="renaming = null"
                         @cancel-rename="renaming = null"
@@ -272,7 +277,7 @@ function toggleAll() {
                   :campaign-id="campaignId"
                   kind="scene"
                   :node="under.node"
-                  :siblings="nodesOf(childrenOfAct(child.node))"
+                  :siblings="childrenOfAct(child.node)"
                   skips-level
                   :renaming="renaming === under.node.id"
                   @renamed="renaming = null"
@@ -299,7 +304,7 @@ function toggleAll() {
             :campaign-id="campaignId"
             kind="sequence"
             :node="child.node"
-            :siblings="nodesOf(children)"
+            :siblings="children"
             collapsible
             :shut="isShut(child.node.id)"
             :allowed="['scene']"
@@ -316,7 +321,7 @@ function toggleAll() {
                 :campaign-id="campaignId"
                 kind="scene"
                 :node="scene"
-                :siblings="scenesIn(child.node)"
+                :siblings="sceneEntriesIn(child.node)"
                 :renaming="renaming === scene.id"
                 @renamed="renaming = null"
                 @cancel-rename="renaming = null"
@@ -331,7 +336,7 @@ function toggleAll() {
           :campaign-id="campaignId"
           kind="scene"
           :node="child.node"
-          :siblings="nodesOf(children)"
+          :siblings="children"
           :renaming="renaming === child.node.id"
           @renamed="renaming = null"
           @cancel-rename="renaming = null"

@@ -186,25 +186,38 @@ export const useStructureStore = defineStore('structure', () => {
   /*
    * Where a record sits: its parent, and its place among that parent's children.
    *
-   * One call for both, because they are one gesture — the endpoint takes them
-   * together for the same reason (#80's PR 3). `after` names the sibling this
-   * goes below; `null` is the top of the list, which is a placement rather than
-   * an absent argument.
+   * **One endpoint for every level** (#109). A drag is one gesture whichever kind
+   * of row it grabbed, so the client no longer picks a URL by inspecting what it
+   * just picked up — the kind travels in the body instead.
    *
-   * The tree is refetched afterwards. A placement moves *this* row and possibly
-   * renumbers its siblings, so nothing local can be trusted to still be right —
-   * and unlike a title edit there is no single field to patch.
+   * `parent` and `after` are `{ id, kind }` or `null`. Null parent is the
+   * campaign, which is a real place rather than a fallback; null `after` is the
+   * top of the list, a placement rather than an absent argument. The anchor
+   * carries its own kind because a sibling group is everything under one parent
+   * (#101) — a scene may be dropped below the sequence above it.
+   *
+   * The response *is* the new tree, so nothing is refetched. A placement can move
+   * rows nobody dragged — the gap running out renumbers a whole sibling list —
+   * and the old refetch left a window where the screen showed a stale order it
+   * had guessed at. This replaces the tree with what the server actually did,
+   * which is the half of #111 a status code cannot fix.
    */
-  async function place(campaignId, kind, id, placement) {
-    const saved = await request(`${pathTo(campaignId, kind, id)}/placement`, {
+  async function place(campaignId, kind, id, { parent = null, after = null } = {}) {
+    const tree = await request(`/campaigns/${campaignId}/structure/placement`, {
       method: 'PUT',
-      json: placement,
+      json: { item: { id, kind }, parent, after },
     })
 
-    nodes.value[`${kind}:${id}`] = saved
-    await reload(campaignId)
+    trees.value[campaignId] = tree
+    /*
+     * The detail read of this record is now stale in its `position` and parent
+     * ids. Dropped rather than patched, so the next page that wants it asks —
+     * patching would put the record's shape in a second place.
+     */
+    delete nodes.value[`${kind}:${id}`]
+    delete nodeInflight[`${kind}:${id}`]
 
-    return saved
+    return tree
   }
 
   function treeFor(campaignId) {
@@ -323,16 +336,35 @@ export function titleOf(node, kind) {
 export function lastUnder(tree, kind, { actId = null, sequenceId = null, excluding } = {}) {
   if (!tree) return null
 
+  /*
+   * A sibling group is everything under one parent, whatever kind it is (#101),
+   * so this walks both tables rather than the one matching `kind`. Anchoring on
+   * the last *scene* of an act that also holds sequences would drop the row into
+   * the middle of the list its own siblings are already ordered in.
+   *
+   * A sequence holds only scenes, so that branch asks one kind — not a special
+   * case so much as the tree having nothing else to offer there.
+   */
   const family =
-    kind === 'sequence'
-      ? tree.sequences.filter((s) => s.act_id === actId)
-      : tree.scenes.filter((s) => s.act_id === actId && s.sequence_id === sequenceId)
+    sequenceId !== null
+      ? tree.scenes
+          .filter((s) => s.sequence_id === sequenceId)
+          .map((node) => ({ kind: 'scene', node }))
+      : [
+          ...tree.sequences
+            .filter((s) => s.act_id === actId)
+            .map((node) => ({ kind: 'sequence', node })),
+          ...tree.scenes
+            .filter((s) => s.act_id === actId && s.sequence_id === null)
+            .map((node) => ({ kind: 'scene', node })),
+        ]
 
-  const ordered = [...family]
-    .filter((record) => record.id !== excluding)
-    .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
+  const ordered = family
+    .filter((entry) => entry.node.id !== excluding)
+    .sort((a, b) => a.node.position - b.node.position || a.node.id.localeCompare(b.node.id))
 
-  return ordered.at(-1)?.id ?? null
+  const last = ordered.at(-1)
+  return last ? { id: last.node.id, kind: last.kind } : null
 }
 
 /*
@@ -423,16 +455,23 @@ export function trailTo(tree, kind, node) {
  * destination.
  */
 export function anchorForStep(siblings, id, direction) {
-  const index = siblings.findIndex((sibling) => sibling.id === id)
+  /*
+   * Entries (`{ kind, node }`) rather than bare records, because the anchor has
+   * to name its own kind: since #101 the row above may be a different kind than
+   * the one being moved, and an id alone does not say which it is.
+   */
+  const index = siblings.findIndex((entry) => entry.node.id === id)
   if (index === -1) return undefined
+
+  const at = (position) => ({ id: siblings[position].node.id, kind: siblings[position].kind })
 
   if (direction === 'up') {
     if (index === 0) return undefined
-    return index >= 2 ? siblings[index - 2].id : null
+    return index >= 2 ? at(index - 2) : null
   }
 
   if (index >= siblings.length - 1) return undefined
-  return siblings[index + 1].id
+  return at(index + 1)
 }
 
 /*

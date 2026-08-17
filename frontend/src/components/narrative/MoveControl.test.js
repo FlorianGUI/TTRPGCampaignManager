@@ -41,9 +41,11 @@ const TREE = {
   ],
 }
 
-const SIBLINGS = TREE.scenes
+// Entries, not bare records: since #101 a sibling group spans kinds, so each
+// row has to name its own.
+const SIBLINGS = TREE.scenes.map((node) => ({ kind: 'scene', node }))
 
-async function render({ node = SIBLINGS[2], kind = 'scene', siblings = SIBLINGS } = {}) {
+async function render({ node = SIBLINGS[2].node, kind = 'scene', siblings = SIBLINGS } = {}) {
   request.mockResolvedValue(TREE)
 
   // One pinia, shared: the component reads the tree this loads, and mounting
@@ -72,16 +74,16 @@ describe('stepping one place', () => {
    * The arithmetic is not symmetrical, which is why it is a function with a test
    * rather than an expression in a template.
    */
-  const siblings = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+  const siblings = ['a', 'b', 'c'].map((id) => ({ kind: 'scene', node: { id } }))
 
   it('moving down lands after the neighbour it passed', () => {
-    expect(anchorForStep(siblings, 'a', 'down')).toBe('b')
+    expect(anchorForStep(siblings, 'a', 'down')).toEqual({ id: 'b', kind: 'scene' })
   })
 
   it('moving up lands after the record two above, not the one above', () => {
     // The one directly above is the neighbour being passed; anchoring to it
     // would put the record straight back where it started.
-    expect(anchorForStep(siblings, 'c', 'up')).toBe('a')
+    expect(anchorForStep(siblings, 'c', 'up')).toEqual({ id: 'a', kind: 'scene' })
   })
 
   it('moving up from second means the top of the list', () => {
@@ -150,35 +152,45 @@ describe('the move control', () => {
      * than one that greys out, and the menu would change height under the
      * pointer mid-click.
      */
-    const wrapper = await render({ node: SIBLINGS[0] })
+    const wrapper = await render({ node: SIBLINGS[0].node })
 
     expect(item(wrapper, 'Move up').disabled).toBe(true)
     expect(item(wrapper, 'Move down').disabled).toBe(false)
   })
 
   it('sends the parent it already has, so a step is not a reparent', async () => {
-    const wrapper = await render({ node: SIBLINGS[2] })
+    const wrapper = await render({ node: SIBLINGS[2].node })
 
     request.mockClear()
     request.mockResolvedValue(TREE)
     await item(wrapper, 'Move up').command()
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-3/placement', {
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/placement', {
       method: 'PUT',
-      json: { act_id: null, sequence_id: 'q-1', after: 's-1' },
+      json: {
+        item: { id: 's-3', kind: 'scene' },
+        parent: { id: 'q-1', kind: 'sequence' },
+        after: { id: 's-1', kind: 'scene' },
+      },
     })
   })
 
-  it('asks the tree again, because a placement can renumber siblings too', async () => {
-    const wrapper = await render({ node: SIBLINGS[2] })
+  it('takes the new tree from the answer rather than asking again', async () => {
+    /*
+     * A placement can renumber a whole sibling list, so the old code refetched.
+     * The endpoint now answers with the tree it just wrote (#111), which closes
+     * the window where the screen showed an order it had guessed at.
+     */
+    const wrapper = await render({ node: SIBLINGS[2].node })
 
     request.mockClear()
-    request.mockResolvedValue(TREE)
+    request.mockResolvedValue({ ...TREE, acts: [] })
     await item(wrapper, 'Move up').command()
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(useStructureStore().treeFor('c-1').acts).toEqual([])
   })
 
   it('owns every kind of move, and the deleting', async () => {
@@ -187,7 +199,7 @@ describe('the move control', () => {
      * is where it *says* things. One Save button covering both would have put a
      * rename and a reorganisation behind the same press.
      */
-    const wrapper = await render({ node: SIBLINGS[0] })
+    const wrapper = await render({ node: SIBLINGS[0].node })
 
     expect(
       items(wrapper)
@@ -197,15 +209,22 @@ describe('the move control', () => {
   })
 
   it('offers an act nowhere to be moved into, the campaign being its only parent', async () => {
-    const wrapper = await render({ node: ACT, kind: 'act', siblings: [ACT] })
+    const wrapper = await render({ node: ACT, kind: 'act', siblings: [{ kind: 'act', node: ACT }] })
 
     expect(item(wrapper, 'Move into…')).toBeUndefined()
   })
 
-  it('appends to the destination rather than putting it first', async () => {
-    // Arriving at the top of a list whose order you did not choose is more
-    // surprising than arriving at the end of it.
-    const wrapper = await render({ node: SIBLINGS[0] })
+  it('appends after the destination’s last child, whatever kind it is', async () => {
+    /*
+     * Arriving at the top of a list whose order you did not choose is more
+     * surprising than arriving at the end of it.
+     *
+     * The act holds a sequence, and the anchor is that sequence — a sibling group
+     * is everything under one parent (#101), so appending a scene lands it below
+     * the sequence rather than below the last *scene*, which is what the per-kind
+     * lists used to answer.
+     */
+    const wrapper = await render({ node: SIBLINGS[0].node })
     item(wrapper, 'Move into…').command()
     await flushPromises()
 
@@ -215,9 +234,13 @@ describe('the move control', () => {
     await wrapper.vm.moveInto()
     await flushPromises()
 
-    expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1/placement', {
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/placement', {
       method: 'PUT',
-      json: { act_id: 'a-1', sequence_id: null, after: null },
+      json: {
+        item: { id: 's-1', kind: 'scene' },
+        parent: { id: 'a-1', kind: 'act' },
+        after: { id: 'q-1', kind: 'sequence' },
+      },
     })
   })
 
@@ -227,7 +250,7 @@ describe('the move control', () => {
      * parent. A dialog that overstated the danger would be one people learn to
      * click through, and then it is there for the delete that really is.
      */
-    const wrapper = await render({ node: SIBLINGS[0] })
+    const wrapper = await render({ node: SIBLINGS[0].node })
 
     item(wrapper, 'Delete').command()
     await flushPromises()
@@ -240,7 +263,7 @@ describe('the move control', () => {
   })
 
   it('says where an act’s children go, because they are not deleted with it', async () => {
-    const wrapper = await render({ node: ACT, kind: 'act', siblings: [ACT] })
+    const wrapper = await render({ node: ACT, kind: 'act', siblings: [{ kind: 'act', node: ACT }] })
 
     item(wrapper, 'Delete').command()
     await flushPromises()
@@ -249,7 +272,7 @@ describe('the move control', () => {
   })
 
   it('deletes once confirmed, then asks the tree again', async () => {
-    const wrapper = await render({ node: SIBLINGS[0] })
+    const wrapper = await render({ node: SIBLINGS[0].node })
     item(wrapper, 'Delete').command()
     await flushPromises()
 
@@ -263,7 +286,7 @@ describe('the move control', () => {
   })
 
   it('names the row it moves, so the button is not one of forty called “Move”', async () => {
-    const wrapper = await render({ node: SIBLINGS[0] })
+    const wrapper = await render({ node: SIBLINGS[0].node })
 
     expect(wrapper.get('button').attributes('aria-label')).toBe('Move One')
   })
