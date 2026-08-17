@@ -70,7 +70,7 @@ async function cycle(campaignId, node, status) {
         :campaign-id="campaignId"
         :kind="child.kind"
         :node="child.node"
-        :siblings="children.map((entry) => entry.node)"
+        :siblings="children"
       />
     </li>
   </ul>

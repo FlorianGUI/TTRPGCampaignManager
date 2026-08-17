@@ -35,9 +35,10 @@ const props = defineProps({
   campaignId: { type: String, required: true },
   kind: { type: String, required: true },
   node: { type: Object, required: true },
-  // The records this one sits among, in order. Computed by whoever renders the
-  // row, because only they know which list this is — a scene's siblings are the
-  // scenes of its own parent, not of the campaign.
+  // The rows this one sits among, in order, as `{ kind, node }` entries. Computed
+  // by whoever renders the row, because only they know which list this is. Since
+  // #101 a group spans kinds, so each entry has to name its own — an anchor is an
+  // id *and* a kind.
   siblings: { type: Array, required: true },
 })
 
@@ -67,8 +68,7 @@ async function moveInto() {
 
   try {
     await structure.place(props.campaignId, props.kind, props.node.id, {
-      ...(props.kind !== 'act' && { act_id }),
-      ...(props.kind === 'scene' && { sequence_id }),
+      parent: parentRef(act_id, sequence_id),
       after: lastUnder(structure.treeFor(props.campaignId), props.kind, {
         actId: act_id,
         sequenceId: sequence_id,
@@ -119,6 +119,17 @@ const up = computed(() => anchorForStep(props.siblings, props.node.id, 'up'))
 const down = computed(() => anchorForStep(props.siblings, props.node.id, 'down'))
 
 /*
+ * The one shape the endpoint takes: a parent, or null for the campaign. Kept in
+ * one place because both gestures below build it, and a sequence naming a
+ * sequence is the mistake it exists to make unwritable.
+ */
+function parentRef(actId, sequenceId) {
+  if (sequenceId) return { id: sequenceId, kind: 'sequence' }
+  if (actId) return { id: actId, kind: 'act' }
+  return null
+}
+
+/*
  * A step keeps the parent it already has. Only the anchor changes, so the body
  * carries the current parentage rather than omitting it — omitting a parent is
  * how a record is moved to the campaign, which is not what a step means.
@@ -128,8 +139,7 @@ async function stepTo(after) {
 
   try {
     await structure.place(props.campaignId, props.kind, props.node.id, {
-      ...(props.kind !== 'act' && { act_id: props.node.act_id ?? null }),
-      ...(props.kind === 'scene' && { sequence_id: props.node.sequence_id ?? null }),
+      parent: parentRef(props.node.act_id ?? null, props.node.sequence_id ?? null),
       after,
     })
   } finally {
