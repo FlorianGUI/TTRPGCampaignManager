@@ -31,6 +31,36 @@ def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
 
 
+def _placement(campaign_id: str) -> str:
+    return f"/campaigns/{campaign_id}/structure/placement"
+
+
+def _place(client: AsyncClient, context: dict, body: dict, campaign_id: str | None = None):
+    context["response"] = _run(
+        client.put(
+            _placement(campaign_id or _mine(context)),
+            json=body,
+            headers=_auth_headers(context),
+        )
+    )
+
+
+def _record(context: dict, kind: str, id_key: str = "scene") -> dict:
+    """The record under test, from whichever shape the last call answered with.
+
+    A retrieve answers with the record itself; a placement answers with the whole
+    tree (#109), because a move can shift rows nobody touched. These steps are
+    shared by both kinds of scenario, so they ask for the record rather than
+    assuming the envelope.
+    """
+    body = context["response"].json()
+    if kind not in body:
+        return body
+
+    wanted = context[id_key]["id"]
+    return next(record for record in body[kind] if record["id"] == wanted)
+
+
 def _mine(context: dict) -> str:
     return context["my_campaign"]["id"]
 
@@ -222,34 +252,30 @@ def create_scene_under_a_missing_act(client: AsyncClient, context: dict):
 
 @when("I move the scene under the second act")
 def move_scene_to_second_act(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={"act_id": context["acts"][1]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "parent": {"id": context["acts"][1]["id"], "kind": "act"},
+        },
     )
 
 
 @when("I move the scene to the campaign")
 def move_scene_to_campaign(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={},
-            headers=_auth_headers(context),
-        )
-    )
+    _place(client, context, {"item": {"id": context["scene"]["id"], "kind": "scene"}})
 
 
 @when("I move the scene under that act")
 def move_scene_under_a_foreign_act(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={"act_id": context["act_elsewhere"]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "parent": {"id": context["act_elsewhere"]["id"], "kind": "act"},
+        },
     )
 
 
@@ -297,24 +323,19 @@ def list_sequences(client: AsyncClient, context: dict):
 
 @when("I move the sequence under that act")
 def move_sequence_under_act(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_sequences(_mine(context))}{context['sequence']['id']}/placement",
-            json={"act_id": context["acts"][0]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["sequence"]["id"], "kind": "sequence"},
+            "parent": {"id": context["acts"][0]["id"], "kind": "act"},
+        },
     )
 
 
 @when("I move the sequence to the campaign")
 def move_sequence_to_campaign(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_sequences(_mine(context))}{context['sequence']['id']}/placement",
-            json={},
-            headers=_auth_headers(context),
-        )
-    )
+    _place(client, context, {"item": {"id": context["sequence"]["id"], "kind": "sequence"}})
 
 
 @when("I delete the sequence")
@@ -327,58 +348,49 @@ def delete_sequence(client: AsyncClient, context: dict):
 @when("I drop the second scene at the top")
 def drop_second_scene_at_top(client: AsyncClient, context: dict):
     """No anchor is the head of the list, which is what a drop above everything means."""
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={},
-            headers=_auth_headers(context),
-        )
-    )
+    _place(client, context, {"item": {"id": context["scene"]["id"], "kind": "scene"}})
 
 
 @when("I drop the last scene after the first")
 def drop_last_scene_after_first(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={"after": context["first_scene"]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "after": {"id": context["first_scene"]["id"], "kind": "scene"},
+        },
     )
 
 
 @when("I drop the second act at the top")
 def drop_second_act_at_top(client: AsyncClient, context: dict):
-    context["response"] = _run(
-        client.put(
-            f"{_acts(_mine(context))}{context['acts'][1]['id']}/placement",
-            json={},
-            headers=_auth_headers(context),
-        )
-    )
+    _place(client, context, {"item": {"id": context["acts"][1]["id"], "kind": "act"}})
 
 
 @when("I drop the scene into the second act")
 def drop_scene_into_second_act(client: AsyncClient, context: dict):
     """Parent and place in one call — the drag that crosses acts and lands somewhere."""
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={"act_id": context["acts"][1]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "parent": {"id": context["acts"][1]["id"], "kind": "act"},
+        },
     )
 
 
 @when("I drop the campaigns scene after the one in the act")
 def drop_after_a_stranger(client: AsyncClient, context: dict):
     """A real scene of this campaign, but not a sibling of where this one is going."""
-    context["response"] = _run(
-        client.put(
-            f"{_scenes(_mine(context))}{context['scene']['id']}/placement",
-            json={"after": context["first_scene"]["id"]},
-            headers=_auth_headers(context),
-        )
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "after": {"id": context["first_scene"]["id"], "kind": "scene"},
+        },
     )
 
 
@@ -429,39 +441,39 @@ def acts_should_read(context: dict, titles: str):
 @then("the sequence should be under that act")
 def sequence_under_that_act(context: dict):
     assert context["response"].status_code == 200
-    assert context["response"].json()["act_id"] == context["acts"][0]["id"]
+    assert _record(context, "sequences", "sequence")["act_id"] == context["acts"][0]["id"]
 
 
 @then("the sequence should be under no act")
 def sequence_under_no_act(context: dict):
-    assert context["response"].json()["act_id"] is None
+    assert _record(context, "sequences", "sequence")["act_id"] is None
 
 
 @then("the scene should be under that sequence")
 def scene_under_that_sequence(context: dict):
     assert context["response"].status_code == 200
-    assert context["response"].json()["sequence_id"] == context["sequence"]["id"]
+    assert _record(context, "scenes")["sequence_id"] == context["sequence"]["id"]
 
 
 @then("the scene should be under that act")
 def scene_under_that_act(context: dict):
-    assert context["response"].json()["act_id"] == context["acts"][0]["id"]
+    assert _record(context, "scenes")["act_id"] == context["acts"][0]["id"]
 
 
 @then("the scene should be under the second act")
 def scene_under_second_act(context: dict):
     assert context["response"].status_code == 200
-    assert context["response"].json()["act_id"] == context["acts"][1]["id"]
+    assert _record(context, "scenes")["act_id"] == context["acts"][1]["id"]
 
 
 @then("the scene should be under no act")
 def scene_under_no_act(context: dict):
-    assert context["response"].json()["act_id"] is None
+    assert _record(context, "scenes")["act_id"] is None
 
 
 @then("the scene should be under no sequence")
 def scene_under_no_sequence(context: dict):
-    assert context["response"].json()["sequence_id"] is None
+    assert _record(context, "scenes")["sequence_id"] is None
 
 
 @then("the scene should be first among its siblings")
@@ -507,20 +519,6 @@ def rejected_as_invalid(context: dict):
     """422, not 404: the caller sent a contradiction rather than reached for something
     that is not theirs, and telling them so costs nothing."""
     assert context["response"].status_code == 422
-
-
-def _placement(campaign_id: str) -> str:
-    return f"/campaigns/{campaign_id}/structure/placement"
-
-
-def _place(client: AsyncClient, context: dict, body: dict, campaign_id: str | None = None):
-    context["response"] = _run(
-        client.put(
-            _placement(campaign_id or _mine(context)),
-            json=body,
-            headers=_auth_headers(context),
-        )
-    )
 
 
 @when("I place the second act at the top of the outline")
