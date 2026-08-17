@@ -4,7 +4,7 @@ import { API_URL, request } from './client.js'
 import { useAuthStore } from '../stores/auth.js'
 
 function respond(status, body) {
-  return { ok: status < 400, status, json: async () => body ?? {} }
+  return { ok: status < 400, status, headers: new Headers(), json: async () => body ?? {} }
 }
 
 /*

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiFetch } from '../api/http.js'
+import { ApiError, apiFetch } from '../api/http.js'
 import { forgetCurrentCampaign } from './currentCampaign.js'
 
 /*
@@ -26,6 +26,27 @@ export const useAuthStore = defineStore('auth', () => {
   // render waits on it, or a returning user watches the login page flash before
   // being sent back where they were.
   const ready = ref(false)
+  /*
+   * Whether the last boot got an answer at all — which is a different question
+   * from whether the answer was yes.
+   *
+   * `ready` alone cannot say it: a boot that settles signed-out looks identical
+   * to one that never reached the API, and the guard turns "not signed in" into
+   * a redirect to /login. That is how a deploy window, a wifi handover or a
+   * laptop waking up used to sign people out while their cookie was perfectly
+   * good (#68). False here means nobody has been judged yet.
+   */
+  const reachable = ref(true)
+  /*
+   * Why the session ended, when it ended for a reason worth explaining.
+   *
+   * Only the 429 stop sets it, and the sentence is the server's own — copy about
+   * limits belongs where the limits are, and those sentences are written to be
+   * safe to display (#63). A field rather than a query parameter: the redirect
+   * is client-side so this survives it, and `?reason=` would be a URL anyone
+   * could forge into showing a message that never happened.
+   */
+  const signedOutReason = ref(null)
 
   const isSignedIn = computed(() => user.value !== null)
 
@@ -73,15 +94,74 @@ export const useAuthStore = defineStore('auth', () => {
     return navigator.locks.request(REFRESH_LOCK, run)
   }
 
+  /*
+   * Which failed refreshes are answers about the session, and which are not.
+   *
+   * - 401: the cookie is finished — expired, revoked, replayed or never there.
+   *   All four arrive as one 401 by design and there is nothing to tell apart.
+   * - 429: the emergency stop. Traffic that trips a limit as loose as the
+   *   global one is outside anything a browser on a timer does, so the session
+   *   ends and whoever is behind it starts over (#68).
+   *
+   * Everything else is not an answer. A `fetch` rejection is not even an
+   * `ApiError` — `http.js` only builds one from a response — and a 502 while the
+   * backend restarts is one that arrived from nginx rather than from the API.
+   * Neither is evidence about the session, and "we could not ask" must not cost
+   * anyone theirs.
+   */
+  function endsTheSession(error) {
+    return error instanceof ApiError && (error.status === 401 || error.status === 429)
+  }
+
+  /*
+   * The 429 stop, made real.
+   *
+   * Clearing locally would be a soft stop: the refresh cookie would survive, and
+   * once the window passed a reload would sign the user back in without a
+   * password — nobody would have started over. So the client revokes the session
+   * itself. Logout carries the same cookie and counts against its own bucket, so
+   * it should get through while refresh is throttled.
+   *
+   * If it does not — a 429 of its own, or the network is simply gone — clear
+   * anyway and show the same message. A soft stop beats a client that cannot
+   * leave.
+   *
+   * `apiFetch` rather than `request` from api/client.js, for the reason this
+   * whole store avoids that wrapper: it answers a 401 by refreshing, and a
+   * refresh is what we are in the middle of failing.
+   */
+  async function stopHard(error) {
+    try {
+      await apiFetch('/users/logout', { method: 'POST' })
+    } catch {
+      // Deliberately swallowed: see above.
+    } finally {
+      clear()
+      // After `clear`, which does not touch this — the reason has to outlive the
+      // sign-out it explains, all the way to the login page.
+      signedOutReason.value = {
+        // Only the server's sentence. `detail` is an array on a 422 and can be
+        // null on a body we could not read; neither is something to print at
+        // someone, and inventing a replacement here would be writing copy about
+        // limits in the one place that knows nothing about them.
+        message: typeof error.detail === 'string' ? error.detail : null,
+        retryAfter: error.retryAfter,
+      }
+    }
+  }
+
   async function renewOnce() {
     try {
       const session = await apiFetch('/users/refresh', { method: 'POST' })
       token.value = session.access_token
       return session.access_token
     } catch (error) {
-      // The session is over — expired, revoked, replayed or never there. All
-      // four arrive as one 401 by design, and there is nothing to distinguish.
-      clear()
+      // The 429 has work to do before clearing — see `stopHard`. The other end
+      // of a session only has to be forgotten. Everything else is left alone,
+      // and the caller gets the failure to deal with as its own.
+      if (error instanceof ApiError && error.status === 429) await stopHard(error)
+      else if (endsTheSession(error)) clear()
+
       throw error
     }
   }
@@ -106,6 +186,13 @@ export const useAuthStore = defineStore('auth', () => {
    * in, since the refresh window is absolute and does not slide. Either way the
    * app boots signed out, which is a state it has to handle regardless.
    *
+   * A failure that is not an answer — no network, a 502 from nginx mid-deploy —
+   * must not settle as signed-out, because the guard reads that as a redirect to
+   * /login. This runs on every page load, so treating it as a verdict meant
+   * "open the app at a bad moment and you are signed out", holding a perfectly
+   * good thirty-day cookie. It settles as `reachable = false` instead, and the
+   * app says so rather than pretending to know (#68).
+   *
    * Idempotent, and it returns the same promise to everyone who asks. Two
    * callers want it now — main.js starts it before mount, and the route guard
    * has to wait for it before it can tell a signed-out visitor from one whose
@@ -119,14 +206,45 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         await renew()
         await loadUser()
-      } catch {
-        clear()
+        reachable.value = true
+      } catch (error) {
+        // `renewOnce` has already ended the session in the two cases where that
+        // is the right answer; this is here for a failure further along, and to
+        // be the one place the difference is written down.
+        if (endsTheSession(error)) clear()
+        else reachable.value = false
       } finally {
         ready.value = true
       }
     })()
 
     return booting
+  }
+
+  /*
+   * Ask again, for a client that was told nothing the first time.
+   *
+   * `ready` deliberately stays true: the app is already showing the "cannot
+   * reach the server" panel, and dropping back to the blank pre-boot screen
+   * would take the explanation away at the moment someone acts on it.
+   */
+  function retryBoot() {
+    booting = null
+    return boot()
+  }
+
+  /*
+   * The reason, once.
+   *
+   * Read-and-clear because it explains one arrival at the login page. Left in
+   * place it would put the message up again the next time anyone simply
+   * navigated there, about a session that ended days ago.
+   */
+  function takeSignedOutReason() {
+    const reason = signedOutReason.value
+    signedOutReason.value = null
+
+    return reason
   }
 
   /*
@@ -171,5 +289,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, token, ready, isSignedIn, boot, renew, logIn, register, logOut, clear }
+  return {
+    user,
+    token,
+    ready,
+    reachable,
+    signedOutReason,
+    isSignedIn,
+    boot,
+    retryBoot,
+    renew,
+    logIn,
+    register,
+    logOut,
+    clear,
+    takeSignedOutReason,
+  }
 })

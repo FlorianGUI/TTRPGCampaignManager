@@ -11,12 +11,19 @@
  * second: a splash would flash more often than it would reassure, and rendering
  * the shell first means a signed-out user watches the campaign sidebar draw
  * before being sent to the login page.
+ *
+ * Settled has three answers rather than two, though. If boot never reached the
+ * API there is no verdict — the guard has let the navigation stand instead of
+ * sending anyone to /login (#68) — and what goes here is the reason, not the
+ * app: drawing the shell around pages that cannot load anything would blame the
+ * client for a server that is briefly away.
  */
 import { computed, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import AppShell from './components/AppShell.vue'
 import AuthLayout from './components/AuthLayout.vue'
 import BareLayout from './components/BareLayout.vue'
+import ServerUnreachable from './components/ServerUnreachable.vue'
 import { useAuthStore } from './stores/auth.js'
 import { useCampaignsStore } from './stores/campaigns.js'
 import { sections } from './content/sample.js'
@@ -67,7 +74,11 @@ const layoutProps = computed(() =>
 </script>
 
 <template>
-  <component :is="layout" v-if="auth.ready" v-bind="layoutProps">
-    <RouterView />
-  </component>
+  <template v-if="auth.ready">
+    <ServerUnreachable v-if="!auth.reachable" />
+
+    <component :is="layout" v-else v-bind="layoutProps">
+      <RouterView />
+    </component>
+  </template>
 </template>

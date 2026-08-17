@@ -11,7 +11,7 @@ import { useAuthStore } from '../stores/auth.js'
  */
 
 function respond(status, body) {
-  return { ok: status < 400, status, json: async () => body ?? {} }
+  return { ok: status < 400, status, headers: new Headers(), json: async () => body ?? {} }
 }
 
 function router() {
@@ -95,6 +95,25 @@ describe('the route guard', () => {
 
     expect(r.currentRoute.value.name).toBe('home')
     expect(auth.isSignedIn).toBe(true)
+  })
+
+  it('does not send anyone to the login page over a request that never landed', async () => {
+    /*
+     * The deploy window (#68). `boot()` fails without an answer, and a guard
+     * that read "not signed in" would redirect — signing out everyone who
+     * opened the app during the ten seconds the container was being replaced.
+     * The URL has to survive too: App.vue shows the reason in place of the
+     * page, and a retry then lands where the visitor was going.
+     */
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    const r = router()
+    await r.push('/library?q=owlbear')
+
+    expect(r.currentRoute.value.name).not.toBe('login')
+    expect(r.currentRoute.value.fullPath).toBe('/library?q=owlbear')
   })
 
   it('does not start a second refresh when one is already running', async () => {

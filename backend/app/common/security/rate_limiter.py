@@ -47,6 +47,17 @@ TOO_MANY_REGISTRATIONS = "Too many accounts created from here. Try again later."
 # Says nothing about whether any of those requests matched an account, for the same reason
 # the 204 does not.
 TOO_MANY_RESET_REQUESTS = "Too many password reset requests from here. Try again later."
+# The one sentence here that a signed-in person reads, because a 429 on refresh is the end
+# of their session rather than a form telling them to slow down (#68). It has to say that,
+# and it has to say what to do about it — a message that only complained about volume would
+# leave someone staring at a login page with no idea why they are looking at it.
+#
+# `/users/refresh` answers on the application-wide limit like everything else, so this
+# reaches it through an explicit `@limiter.limit(GLOBAL_RATE_LIMIT, error_message=...)` on
+# the route rather than through a tighter number — see that endpoint's docstring. Without
+# it slowapi falls back to `str(limit.limit)` and the login page would read "100 per
+# 1 minute", which is both unreadable and the limit recited back to whoever just found it.
+TOO_MANY_REFRESHES = "Too many requests from here. This session has been ended — sign in again to continue."
 
 # `key_func` is the address, and that only means anything if the address is the caller's
 # rather than the proxy's. Behind nginx it is not, unless the proxy sends X-Forwarded-For

@@ -27,6 +27,28 @@ const password = ref('')
 const formError = ref(null)
 const submitting = ref(false)
 
+/*
+ * Why they are here, when they did not choose to be.
+ *
+ * Read once, on arrival, and cleared by the store as it is read: this explains
+ * one sign-out, and a message that lingered would greet someone opening the
+ * login page a week later. Nothing to show when the visitor simply navigated
+ * here, which is the ordinary case.
+ *
+ * The sentence is the server's. The one thing added is the wait, because a
+ * person told to try again with no idea when retries immediately — which is the
+ * traffic the limit was objecting to in the first place (#68).
+ */
+const signedOut = auth.takeSignedOutReason()
+
+function waitFor(seconds) {
+  if (seconds < 60) return `${seconds} seconds`
+
+  const minutes = Math.ceil(seconds / 60)
+
+  return minutes === 1 ? 'a minute' : `${minutes} minutes`
+}
+
 function messageFor(error) {
   // 429 carries a sentence the backend wrote to be safe to show — fixed per
   // endpoint, with nothing about the account in it (#63). Showing it beats
@@ -70,6 +92,15 @@ async function submit() {
 <template>
   <form class="auth-form" novalidate @submit.prevent="submit">
     <h1>Sign in</h1>
+
+    <p v-if="signedOut?.message" class="auth-form__notice" role="status">
+      {{ signedOut.message }}
+      <!-- Falsy covers both the header the server did not send and a wait of
+           zero seconds, which is not a wait worth a sentence. -->
+      <template v-if="signedOut.retryAfter">
+        Signing in will work again in {{ waitFor(signedOut.retryAfter) }}.
+      </template>
+    </p>
 
     <p v-if="formError" class="auth-form__error" role="alert">{{ formError }}</p>
 
@@ -150,6 +181,19 @@ async function submit() {
 .auth-form__error {
   margin: 0;
   color: var(--p-grimoire-form-error-color);
+}
+
+/*
+ * Not an error colour: nothing the reader did is wrong, and the form below has
+ * not been submitted yet. A rule down the side is how this design system marks
+ * an aside — depth comes from borders here, never from a shadow.
+ */
+.auth-form__notice {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--p-content-border-color);
+  color: var(--p-text-muted-color);
+  font-size: 0.95rem;
 }
 
 .auth-form__aside {

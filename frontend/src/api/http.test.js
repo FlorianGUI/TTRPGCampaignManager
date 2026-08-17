@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { API_URL, ApiError, apiFetch } from './http.js'
 
-function respond(status, body) {
+function respond(status, body, headers = {}) {
   return {
     ok: status < 400,
     status,
+    headers: new Headers(headers),
     json: async () => {
       if (body === undefined) throw new SyntaxError('Unexpected end of JSON input')
       return body
@@ -111,6 +112,38 @@ describe('apiFetch', () => {
     expect(error.status).toBe(502)
     expect(error.detail).toBeNull()
     expect(error.message).toContain('502')
+  })
+
+  it('carries Retry-After, which is the only header a page can act on', async () => {
+    /* The backend sends it and `cors.py` exposes it across origins for exactly
+     * this; dropping it here made both of those pointless (#68). */
+    const fetch = spyFetch(respond(429, { detail: 'Too many requests.' }, { 'Retry-After': '42' }))
+
+    const error = await apiFetch('/users/refresh', { method: 'POST', fetch }).catch((e) => e)
+
+    expect(error.retryAfter).toBe(42)
+  })
+
+  it('has no wait to report when the response does not say', async () => {
+    const fetch = spyFetch(respond(409, { detail: 'Username already exists' }))
+
+    const error = await apiFetch('/users/register', { method: 'POST', fetch }).catch((e) => e)
+
+    expect(error.retryAfter).toBeNull()
+  })
+
+  it('reports no wait rather than a wrong one when the header is a date', async () => {
+    /*
+     * `Retry-After` may legally be an HTTP-date, and nothing here can act on
+     * one. `Number('Wed, 21 Oct 2015 07:28:00 GMT')` is NaN — the danger is
+     * a parse that quietly produces a number instead.
+     */
+    const headers = { 'Retry-After': 'Wed, 21 Oct 2015 07:28:00 GMT' }
+    const fetch = spyFetch(respond(429, { detail: 'Too many requests.' }, headers))
+
+    const error = await apiFetch('/users/refresh', { method: 'POST', fetch }).catch((e) => e)
+
+    expect(error.retryAfter).toBeNull()
   })
 })
 
