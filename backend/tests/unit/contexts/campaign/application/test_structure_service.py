@@ -1,6 +1,9 @@
+from uuid import UUID
+
 import pytest
 
 from app.common.access import Unsafe
+from app.common.errors import NotAvailable
 from app.common.ids import UserId
 from app.contexts.campaign.application.act_service import ActService
 from app.contexts.campaign.application.scene_service import SceneService
@@ -8,6 +11,7 @@ from app.contexts.campaign.application.sequence_service import SequenceService
 from app.contexts.campaign.application.structure_service import StructureService
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
+from app.contexts.campaign.domain.placement import NarrativeItem, NarrativeKind, Placement
 from app.contexts.campaign.domain.scene import SceneSummary
 from tests.unit.contexts.campaign.application.fakes import (
     FakeActRepository,
@@ -16,6 +20,10 @@ from tests.unit.contexts.campaign.application.fakes import (
 )
 
 BODY = ":::read-aloud\nThe gate does not swing. It sinks —\n:::"
+
+
+def _item(id: UUID, kind: NarrativeKind) -> NarrativeItem:
+    return NarrativeItem(id=id, kind=kind)
 
 
 @pytest.fixture
@@ -36,11 +44,6 @@ def elsewhere(game_master: UserId) -> Narrative:
 
 
 @pytest.fixture
-def structure(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
-    return StructureService(acts, sequences, scenes)
-
-
-@pytest.fixture
 def act_service(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
     return ActService(acts, sequences, scenes)
 
@@ -53,6 +56,20 @@ def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository,
 @pytest.fixture
 def scene_service(scenes: FakeSceneRepository, acts: FakeActRepository, sequences: FakeSequenceRepository):
     return SceneService(scenes, acts, sequences)
+
+
+@pytest.fixture
+def structure(
+    acts: FakeActRepository,
+    sequences: FakeSequenceRepository,
+    scenes: FakeSceneRepository,
+    act_service: ActService,
+    sequence_service: SequenceService,
+    scene_service: SceneService,
+):
+    # The same three services the router builds: `place` dispatches to them rather than
+    # holding a fourth copy of the reorder.
+    return StructureService(acts, sequences, scenes, act_service, sequence_service, scene_service)
 
 
 class TestTheWholeTree:
@@ -154,3 +171,121 @@ class TestNoBodies:
         await structure.of(narrative)
 
         assert (await scene_service.get_for(created.id, narrative)).body == BODY
+
+
+class TestPlacingOneRow:
+    """One gesture over the whole tree, dispatched to whichever level owns the row."""
+
+    async def test_an_act_moves_among_its_siblings(
+        self, structure: StructureService, act_service: ActService, narrative: Narrative
+    ):
+        first = await act_service.create(narrative.acts, "Arrival")
+        second = await act_service.create(narrative.acts, "The flood")
+
+        tree = await structure.place(
+            narrative,
+            Placement(item=_item(second.id, NarrativeKind.ACT), parent=None, after=None),
+        )
+
+        assert [a.title for a in tree.acts] == ["The flood", "Arrival"]
+        assert first.id in {a.id for a in tree.acts}
+
+    async def test_a_sequence_moves_under_an_act(
+        self,
+        structure: StructureService,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        narrative: Narrative,
+    ):
+        act = await act_service.create(narrative.acts, "Arrival")
+        sequence = await sequence_service.create(narrative, "The long road")
+
+        tree = await structure.place(
+            narrative,
+            Placement(
+                item=_item(sequence.id, NarrativeKind.SEQUENCE),
+                parent=_item(act.id, NarrativeKind.ACT),
+                after=None,
+            ),
+        )
+
+        assert [s.act_id for s in tree.sequences] == [act.id]
+
+    async def test_a_scene_moves_under_a_sequence(
+        self,
+        structure: StructureService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
+        narrative: Narrative,
+    ):
+        sequence = await sequence_service.create(narrative, "The long road")
+        scene = await scene_service.create(narrative, "The sunken arch", BODY)
+
+        tree = await structure.place(
+            narrative,
+            Placement(
+                item=_item(scene.id, NarrativeKind.SCENE),
+                parent=_item(sequence.id, NarrativeKind.SEQUENCE),
+                after=None,
+            ),
+        )
+
+        assert [s.sequence_id for s in tree.scenes] == [sequence.id]
+
+    async def test_a_scene_moves_under_an_act(
+        self,
+        structure: StructureService,
+        act_service: ActService,
+        scene_service: SceneService,
+        narrative: Narrative,
+    ):
+        """The same field, read as the other parent — a scene may hang off either."""
+        act = await act_service.create(narrative.acts, "Arrival")
+        scene = await scene_service.create(narrative, "The sunken arch", BODY)
+
+        tree = await structure.place(
+            narrative,
+            Placement(
+                item=_item(scene.id, NarrativeKind.SCENE),
+                parent=_item(act.id, NarrativeKind.ACT),
+                after=None,
+            ),
+        )
+
+        assert [s.act_id for s in tree.scenes] == [act.id]
+        assert [s.sequence_id for s in tree.scenes] == [None]
+
+    async def test_the_whole_tree_comes_back_not_the_moved_row(
+        self,
+        structure: StructureService,
+        act_service: ActService,
+        scene_service: SceneService,
+        narrative: Narrative,
+    ):
+        """Why this returns a tree: a move can shift rows nobody dragged."""
+        act = await act_service.create(narrative.acts, "Arrival")
+        scene = await scene_service.create(narrative, "The sunken arch", BODY)
+
+        tree = await structure.place(
+            narrative,
+            Placement(item=_item(scene.id, NarrativeKind.SCENE), parent=None, after=None),
+        )
+
+        assert [a.id for a in tree.acts] == [act.id]
+        assert [s.id for s in tree.scenes] == [scene.id]
+
+    async def test_another_campaigns_row_is_not_found(
+        self,
+        structure: StructureService,
+        act_service: ActService,
+        narrative: Narrative,
+        elsewhere: Narrative,
+    ):
+        """The body is not trusted: ids are resolved against this campaign's tokens."""
+        theirs = await act_service.create(elsewhere.acts, "Theirs")
+
+        with pytest.raises(NotAvailable):
+            await structure.place(
+                narrative,
+                Placement(item=_item(theirs.id, NarrativeKind.ACT), parent=None, after=None),
+            )

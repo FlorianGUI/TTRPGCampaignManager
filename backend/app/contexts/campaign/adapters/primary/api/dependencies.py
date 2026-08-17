@@ -67,11 +67,16 @@ def get_scene_service(db: AsyncSession = Depends(get_db)) -> SceneService:
 
 
 def get_structure_service(db: AsyncSession = Depends(get_db)) -> StructureService:
-    # All three levels, because the tree is all three. No writes reach this one.
+    # All three levels, because the tree is all three: the repositories for reading it, and
+    # the three services for the one write that reaches this router. `place` dispatches to
+    # them rather than reimplementing a reorder that already exists three times over.
     return StructureService(
         SqlAlchemyActRepository(db),
         SqlAlchemySequenceRepository(db),
         SqlAlchemySceneRepository(db),
+        get_act_service(db),
+        get_sequence_service(db),
+        get_scene_service(db),
     )
 
 

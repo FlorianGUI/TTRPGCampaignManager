@@ -215,3 +215,39 @@ Feature: Narrative Structure
     When I delete my campaign
     And I list the acts in my campaign
     Then I should get a not found error
+
+  Scenario: One endpoint reorders an act and answers with the whole tree
+    Given I create an act named "Act I" in my campaign
+    And I create an act named "Act II" in my campaign
+    When I place the second act at the top of the outline
+    Then the structure should hold 2 acts, 0 sequences and 0 scenes
+    And the acts in the answer should read "Act II, Act I"
+
+  Scenario: One endpoint moves a scene into an act
+    Given I create an act named "Act I — Water Rising" in my campaign
+    And I create a scene named "The muster at Greyfen" in my campaign
+    When I place the scene under that act through the outline
+    Then the scene in the answer should be under that act
+
+  Scenario: An act cannot be placed under another act
+    Given I create an act named "Act I" in my campaign
+    And I create an act named "Act II" in my campaign
+    When I place the second act under the first through the outline
+    Then the request should be rejected as invalid
+
+  Scenario: A scene cannot be ordered against a sequence
+    Given I create an act named "Act I" in my campaign
+    And I create a sequence named "The Causeway" under that act
+    And I create a scene named "Interlude" in my campaign
+    When I place the scene after that sequence through the outline
+    Then the request should be rejected as invalid
+
+  Scenario: A row cannot be placed after itself
+    Given I create an act named "Act I" in my campaign
+    When I place that act after itself through the outline
+    Then the request should be rejected as invalid
+
+  Scenario: Another game masters row cannot be placed through my outline
+    Given another game master has a campaign with an act
+    When I place their act through my outline
+    Then I should get a not found error
