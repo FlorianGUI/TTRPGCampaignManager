@@ -1,16 +1,13 @@
 from app.common.ids import ActId
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.act import Act
 from app.contexts.campaign.domain.narrative_access import ActAccess, Narrative
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
-from app.contexts.campaign.domain.position import (
-    POSITION_GAP,
-    index_after,
-    position_after,
-    position_between,
-    renumbered,
-)
+from app.contexts.campaign.domain.position import POSITION_GAP, position_after
+from app.contexts.campaign.domain.sequence import Sequence
+from app.contexts.campaign.domain.siblings import SiblingId, place_among
 
 
 class ActService:
@@ -26,18 +23,26 @@ class ActService:
         repository: ActRepository,
         sequences: SequenceRepository,
         scenes: SceneRepository,
+        siblings: SiblingGroups,
     ) -> None:
         # The child repositories are here for `delete`, which rehomes rather than
         # cascades — the same reason CampaignService holds what it sweeps.
         self._repository = repository
         self._sequences = sequences
         self._scenes = scenes
+        self._siblings = siblings
 
-    async def create(self, access: ActAccess, title: str, description: str = "") -> Act:
+    async def create(self, narrative: Narrative, title: str, description: str = "") -> Act:
+        """Appended to the campaign's children — all of them, not just the acts.
+
+        The whole group, because a campaign may hold loose scenes and sequences beside its
+        acts. Counting only from the last act is how a new act was handed a position a
+        campaign-level scene already had, and #101 is what that looked like on screen.
+        """
         act = Act(
             title=title,
-            campaign_id=access.campaign_id,
-            position=position_after(await self._repository.last_position_in(access)),
+            campaign_id=narrative.campaign_id,
+            position=position_after(await self._siblings.last_position(narrative, None, None)),
             description=description,
         )
         return await self._repository.save(act)
@@ -53,30 +58,27 @@ class ActService:
         act.revise(title, description)
         return await self._repository.save(act)
 
-    async def place(self, id: ActId, access: ActAccess, after: ActId | None = None) -> Act:
-        """Reorder the campaign's acts.
+    async def place(self, id: ActId, narrative: Narrative, after: SiblingId | None = None) -> Act:
+        """Reorder the campaign's children, of which this act is one.
 
-        The simplest of the three, because an act has no parent to resolve: the campaign is
-        its only possible one, so placing an act is entirely a question of where among its
-        siblings it goes.
+        Still the simplest of the three, because an act has no parent to resolve: the
+        campaign is its only possible one, so this is entirely a question of where among
+        its siblings it goes.
+
+        Its siblings are not only the other acts. A campaign may hold scenes and sequences
+        that skip the levels below, they are drawn in one list with the acts, and so an act
+        can be dropped above or below one of them. `after` may name any of the three.
         """
-        act = access.editable(await self._repository.find_by_id(id))
+        act = narrative.acts.editable(await self._repository.find_by_id(id))
 
-        siblings = [a for a in await self._repository.find_under(access) if a.id != act.id]
-        index = index_after(siblings, after, access.not_available)
+        siblings = [s for s in await self._siblings.under(narrative, None, None) if s.id != act.id]
+        placement = place_among(siblings, act, after, narrative.acts.not_available)
 
-        position = position_between(
-            siblings[index - 1].position if index > 0 else None,
-            siblings[index].position if index < len(siblings) else None,
-        )
-        if position is not None:
-            act.reposition(position)
+        if placement.position is not None:
+            act.reposition(placement.position)
             return await self._repository.save(act)
 
-        ordered = siblings[:index] + [act] + siblings[index:]
-        for record, fresh in zip(ordered, renumbered(len(ordered)), strict=True):
-            record.reposition(fresh)
-            await self._repository.save(record)
+        await self._siblings.renumber(placement.ordered)
         return act
 
     async def delete(self, id: ActId, narrative: Narrative) -> None:
@@ -102,16 +104,20 @@ class ActService:
         # Appended to whatever the campaign already holds, rather than keeping positions
         # that meant something only inside the act — two rehomed scenes numbered 1024 and
         # 2048 would interleave with the campaign's own by accident.
-        next_sequence = position_after(await self._sequences.last_position_under(narrative.sequences, None))
-        for sequence in await self._sequences.find_under(narrative.sequences, act.id):
-            sequence.move_under(None, next_sequence)
-            await self._sequences.save(sequence)
-            next_sequence += POSITION_GAP
+        #
+        # **One counter for both kinds**, walking on from the end of the campaign's whole
+        # group. Two counters were the same mistake as #101 in miniature: a rehomed
+        # sequence and a rehomed scene were each given 1024, and arrived at the campaign
+        # already tied with each other. They come out of the act in the order they were in
+        # inside it, which is the order a game master last put them in.
+        next_position = position_after(await self._siblings.last_position(narrative, None, None))
 
-        next_scene = position_after(await self._scenes.last_position_under(narrative.scenes, None, None))
-        for scene in await self._scenes.find_under(narrative.scenes, act.id, None):
-            scene.move_under(None, None, next_scene)
-            await self._scenes.save(scene)
-            next_scene += POSITION_GAP
+        for child in await self._siblings.beneath(narrative, act.id):
+            if isinstance(child, Sequence):
+                child.move_under(None, next_position)
+            else:
+                child.move_under(None, None, next_position)
+            await self._siblings.save(child)
+            next_position += POSITION_GAP
 
         await self._repository.delete(act.id)

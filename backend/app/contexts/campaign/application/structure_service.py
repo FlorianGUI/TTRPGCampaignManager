@@ -92,29 +92,34 @@ class StructureService:
         `narrative` is threaded through rather than trusted from the body: every id below
         is resolved against this campaign's tokens, so an id belonging to another campaign
         is "not found" here exactly as it is on the routes this replaces.
+
+        **The anchor keeps no kind.** #101 made a sibling group everything under one
+        parent, so `after` is a `SiblingId` — a bare id, deliberately untyped, because the
+        row above may be of a different kind than the one being moved. Casting it back to
+        the item's own kind here would rebuild the per-kind number lines that issue removed.
         """
+        after = placement.after.id if placement.after else None
+        parent = placement.parent
+
         match placement.item.kind:
             case NarrativeKind.ACT:
-                await self._act_service.place(
-                    placement.item.as_act(),
-                    narrative.acts,
-                    placement.after.as_act() if placement.after else None,
-                )
+                # The whole narrative rather than `narrative.acts`: an act is ordered among
+                # the campaign's children, which includes its loose scenes.
+                await self._act_service.place(placement.item.as_act(), narrative, after)
             case NarrativeKind.SEQUENCE:
                 await self._sequence_service.place(
                     placement.item.as_sequence(),
                     narrative,
-                    placement.parent.as_act() if placement.parent else None,
-                    placement.after.as_sequence() if placement.after else None,
+                    parent.as_act() if parent else None,
+                    after,
                 )
             case NarrativeKind.SCENE:
-                parent = placement.parent
                 await self._scene_service.place(
                     placement.item.as_scene(),
                     narrative,
                     parent.as_act() if parent and parent.kind is NarrativeKind.ACT else None,
                     parent.as_sequence() if parent and parent.kind is NarrativeKind.SEQUENCE else None,
-                    placement.after.as_scene() if placement.after else None,
+                    after,
                 )
 
         return await self.of(narrative)

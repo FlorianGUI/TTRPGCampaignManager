@@ -84,7 +84,7 @@ async def place_sequence(
         sequence_id,
         narrative,
         ActId(body.act_id) if body.act_id else None,
-        SequenceId(body.after) if body.after else None,
+        body.after,
     )
     return SequenceResponse(**sequence.__dict__)
 

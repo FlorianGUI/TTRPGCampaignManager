@@ -7,6 +7,7 @@ from app.common.ids import ActId, SequenceId, UserId
 from app.contexts.campaign.application.act_service import ActService
 from app.contexts.campaign.application.scene_service import SceneService
 from app.contexts.campaign.application.sequence_service import SequenceService
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.act import ActNotAvailable
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
@@ -46,43 +47,43 @@ def elsewhere(game_master: UserId) -> Narrative:
 
 @pytest.fixture
 def act_service(acts: FakeActRepository, sequences: FakeSequenceRepository, scenes: FakeSceneRepository):
-    return ActService(acts, sequences, scenes)
+    return ActService(acts, sequences, scenes, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
 def sequence_service(sequences: FakeSequenceRepository, acts: FakeActRepository, scenes: FakeSceneRepository):
-    return SequenceService(sequences, acts, scenes)
+    return SequenceService(sequences, acts, scenes, SiblingGroups(acts, sequences, scenes))
 
 
 @pytest.fixture
 def scene_service(scenes: FakeSceneRepository, acts: FakeActRepository, sequences: FakeSequenceRepository):
-    return SceneService(scenes, acts, sequences)
+    return SceneService(scenes, acts, sequences, SiblingGroups(acts, sequences, scenes))
 
 
 class TestActService:
     async def test_creates_an_act_in_the_campaign_off_the_token(self, act_service: ActService, narrative: Narrative):
-        act = await act_service.create(narrative.acts, "Act I — Water Rising")
+        act = await act_service.create(narrative, "Act I — Water Rising")
 
         assert act.title == "Act I — Water Rising"
         assert act.campaign_id == narrative.campaign_id
         assert act.position == POSITION_GAP
 
     async def test_acts_are_ordered_and_listed(self, act_service: ActService, narrative: Narrative):
-        await act_service.create(narrative.acts, "Act I")
-        await act_service.create(narrative.acts, "Act II")
+        await act_service.create(narrative, "Act I")
+        await act_service.create(narrative, "Act II")
 
         assert [a.title for a in await act_service.list_for(narrative.acts)] == ["Act I", "Act II"]
 
     async def test_an_act_in_another_campaign_is_not_found(
         self, act_service: ActService, narrative: Narrative, elsewhere: Narrative
     ):
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await act_service.get_for(theirs.id, narrative.acts)
 
     async def test_rewrites_and_deletes(self, act_service: ActService, narrative: Narrative):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
 
         await act_service.update(act.id, narrative.acts, "Act I — Water Rising", "The Wardens' trust.")
         assert (await act_service.get_for(act.id, narrative.acts)).title == "Act I — Water Rising"
@@ -100,7 +101,7 @@ class TestSequenceUnderAnAct:
     async def test_a_sequence_may_hang_off_an_act(
         self, sequence_service: SequenceService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
 
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
 
@@ -114,7 +115,7 @@ class TestSequenceUnderAnAct:
         Two under the campaign, then one under an act: the act's first sequence starts at
         the first position rather than continuing the campaign's numbering.
         """
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         await sequence_service.create(narrative, "Loose one")
         await sequence_service.create(narrative, "Loose two")
 
@@ -132,7 +133,7 @@ class TestSequenceUnderAnAct:
         """#80's sharp rule. The act exists and the caller runs both campaigns — and it is
         still refused, because the act is not in the campaign this request was reached
         through."""
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await sequence_service.create(narrative, "The Causeway", act_id=theirs.id)
@@ -145,7 +146,7 @@ class TestSequenceUnderAnAct:
         elsewhere: Narrative,
     ):
         sequence = await sequence_service.create(narrative, "The Causeway")
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await sequence_service.place(sequence.id, narrative, theirs.id)
@@ -153,7 +154,7 @@ class TestSequenceUnderAnAct:
     async def test_moving_to_the_campaign_clears_the_act(
         self, sequence_service: SequenceService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
 
         moved = await sequence_service.place(sequence.id, narrative, None)
@@ -171,7 +172,7 @@ class TestSceneParentage:
     async def test_a_scene_may_hang_off_an_act(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
 
         scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
 
@@ -200,7 +201,7 @@ class TestSceneParentage:
     async def test_positions_count_from_the_parent(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         await scene_service.create(narrative, "Loose one")
         await scene_service.create(narrative, "Loose two")
 
@@ -215,7 +216,7 @@ class TestSceneParentage:
         narrative: Narrative,
         elsewhere: Narrative,
     ):
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await scene_service.create(narrative, "Stolen", act_id=theirs.id)
@@ -241,8 +242,8 @@ class TestSceneMove:
     async def test_moves_a_scene_between_acts(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
-        first = await act_service.create(narrative.acts, "Act I")
-        second = await act_service.create(narrative.acts, "Act II")
+        first = await act_service.create(narrative, "Act I")
+        second = await act_service.create(narrative, "Act II")
         scene = await scene_service.create(narrative, "The muster", act_id=first.id)
 
         moved = await scene_service.place(scene.id, narrative, act_id=second.id)
@@ -256,7 +257,7 @@ class TestSceneMove:
         sequence_service: SequenceService,
         narrative: Narrative,
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         scene = await scene_service.create(narrative, "Arrival at dusk", act_id=act.id)
 
@@ -268,7 +269,7 @@ class TestSceneMove:
     async def test_moving_to_the_campaign_takes_it_out_of_the_act(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         scene = await scene_service.create(narrative, "Interlude", act_id=act.id)
 
         moved = await scene_service.place(scene.id, narrative)
@@ -286,7 +287,7 @@ class TestSceneMove:
         """The difference between reparenting a scene and moving it under another game
         master's act — #80's words for why this rule is the sharp one."""
         scene = await scene_service.create(narrative, "The muster")
-        theirs = await act_service.create(elsewhere.acts, "Act I")
+        theirs = await act_service.create(elsewhere, "Act I")
 
         with pytest.raises(ActNotAvailable):
             await scene_service.place(scene.id, narrative, act_id=theirs.id)
@@ -300,7 +301,7 @@ class TestSceneMove:
         has a top, and expressing it as an absent anchor is what makes "put this first" an
         ordinary placement rather than a second endpoint.
         """
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         already = await scene_service.create(narrative, "Already there", act_id=act.id)
         scene = await scene_service.create(narrative, "The muster")
 
@@ -316,7 +317,7 @@ class TestSceneMove:
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
         """Appending is not a special case — it is a placement after the last row."""
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         already = await scene_service.create(narrative, "Already there", act_id=act.id)
         scene = await scene_service.create(narrative, "The muster")
 
@@ -338,7 +339,7 @@ class TestTheCampaignSweepsTheWholeTree:
         campaign = await campaigns.create("The Drowning of Greyfen", game_master)
         narrative = await campaigns.narrative_at(campaign.id, game_master)
 
-        act = await act_service.create(narrative.acts, "Act I")
+        act = await act_service.create(narrative, "Act I")
         sequence = await sequence_service.create(narrative, "The Causeway", act_id=act.id)
         await scene_service.create(narrative, "Arrival at dusk", sequence_id=sequence.id)
 

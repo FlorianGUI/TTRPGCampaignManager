@@ -235,12 +235,12 @@ Feature: Narrative Structure
     When I place the second act under the first through the outline
     Then the request should be rejected as invalid
 
-  Scenario: A scene cannot be ordered against a sequence
+  Scenario: A scene is ordered against a sequence under the same act
     Given I create an act named "Act I" in my campaign
     And I create a sequence named "The Causeway" under that act
-    And I create a scene named "Interlude" in my campaign
+    And I create a scene named "Interlude" under that act
     When I place the scene after that sequence through the outline
-    Then the request should be rejected as invalid
+    Then the scene should sit below the sequence in the act
 
   Scenario: A row cannot be placed after itself
     Given I create an act named "Act I" in my campaign

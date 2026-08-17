@@ -5,6 +5,7 @@ import pytest
 from app.common.access import Unsafe
 from app.common.ids import SceneId, UserId
 from app.contexts.campaign.application.scene_service import SceneService
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.position import POSITION_GAP
@@ -40,7 +41,7 @@ def other_access(game_master: UserId) -> Narrative:
 
 @pytest.fixture
 def service(scenes: FakeSceneRepository, acts: FakeActRepository, sequences: FakeSequenceRepository):
-    return SceneService(scenes, acts, sequences)
+    return SceneService(scenes, acts, sequences, SiblingGroups(acts, sequences, scenes))
 
 
 class TestCreate:

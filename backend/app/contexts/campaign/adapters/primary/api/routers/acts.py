@@ -33,7 +33,7 @@ async def create_act(
     narrative: Narrative = Depends(get_narrative),
     service: ActService = Depends(get_act_service),
 ):
-    act = await service.create(narrative.acts, body.title, body.description)
+    act = await service.create(narrative, body.title, body.description)
     return ActResponse(**act.__dict__)
 
 
@@ -74,7 +74,7 @@ async def place_act(
     service: ActService = Depends(get_act_service),
 ):
     """Reorder the campaign's acts. One row written, unless the gap has run out."""
-    act = await service.place(act_id, narrative.acts, ActId(body.after) if body.after else None)
+    act = await service.place(act_id, narrative, body.after)
     return ActResponse(**act.__dict__)
 
 

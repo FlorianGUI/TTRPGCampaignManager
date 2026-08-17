@@ -13,6 +13,7 @@ from app.contexts.campaign.application.campaign_service import CampaignService
 from app.contexts.campaign.application.character_service import CharacterService
 from app.contexts.campaign.application.scene_service import SceneService
 from app.contexts.campaign.application.sequence_service import SequenceService
+from app.contexts.campaign.application.siblings import SiblingGroups
 from app.contexts.campaign.application.structure_service import StructureService
 from app.contexts.campaign.domain.character_access import CharacterAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
@@ -38,12 +39,27 @@ def get_character_service(db: AsyncSession = Depends(get_db)) -> CharacterServic
     return CharacterService(SqlAlchemyCharacterRepository(db))
 
 
+def _sibling_groups(db: AsyncSession) -> SiblingGroups:
+    """One parent's children across all three tables — see `application/siblings.py`.
+
+    Every service that places a record needs this, because a sibling group is not one
+    table. Built per request like the repositories it wraps, and holding the same session
+    as the service it is handed to, so a placement and its renumber are one transaction.
+    """
+    return SiblingGroups(
+        SqlAlchemyActRepository(db),
+        SqlAlchemySequenceRepository(db),
+        SqlAlchemySceneRepository(db),
+    )
+
+
 def get_act_service(db: AsyncSession = Depends(get_db)) -> ActService:
     # The child repositories come along because deleting an act rehomes what was in it.
     return ActService(
         SqlAlchemyActRepository(db),
         SqlAlchemySequenceRepository(db),
         SqlAlchemySceneRepository(db),
+        _sibling_groups(db),
     )
 
 
@@ -54,6 +70,7 @@ def get_sequence_service(db: AsyncSession = Depends(get_db)) -> SequenceService:
         SqlAlchemySequenceRepository(db),
         SqlAlchemyActRepository(db),
         SqlAlchemySceneRepository(db),
+        _sibling_groups(db),
     )
 
 
@@ -63,6 +80,7 @@ def get_scene_service(db: AsyncSession = Depends(get_db)) -> SceneService:
         SqlAlchemySceneRepository(db),
         SqlAlchemyActRepository(db),
         SqlAlchemySequenceRepository(db),
+        _sibling_groups(db),
     )
 
 
