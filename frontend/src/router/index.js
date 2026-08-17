@@ -45,6 +45,15 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
 
     if (auth.isSignedIn) return true
 
+    /*
+     * Boot never got an answer, so there is no verdict to act on. Let the
+     * navigation stand — App.vue says the server cannot be reached in place of
+     * the page, and the URL is still the one the visitor asked for, so a
+     * successful retry lands them there rather than at the login page they
+     * would have been sent to for a deploy that took ten seconds (#68).
+     */
+    if (!auth.reachable) return true
+
     return { name: 'login', query: { redirect: to.fullPath }, replace: true }
   })
 

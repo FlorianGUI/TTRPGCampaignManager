@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security.auth import get_current_user
 from app.common.security.rate_limiter import (
     FORGOT_PASSWORD_RATE_LIMIT,
+    GLOBAL_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
     REGISTER_RATE_LIMIT,
     TOO_MANY_LOGIN_ATTEMPTS,
+    TOO_MANY_REFRESHES,
     TOO_MANY_REGISTRATIONS,
     TOO_MANY_RESET_REQUESTS,
     limiter,
@@ -196,9 +198,14 @@ async def login(
 @router.post(
     "/refresh",
     response_model=Token,
-    responses={401: {"description": "The refresh cookie is missing, expired, revoked, or has already been spent"}},
+    responses={
+        401: {"description": "The refresh cookie is missing, expired, revoked, or has already been spent"},
+        **too_many_requests_responses(TOO_MANY_REFRESHES),
+    },
 )
+@limiter.limit(GLOBAL_RATE_LIMIT, error_message=TOO_MANY_REFRESHES)
 async def refresh(
+    request: Request,
     response: Response,
     refresh: str | None = Cookie(default=None, alias=REFRESH_COOKIE_NAME),
     service: UserService = Depends(get_user_service),
@@ -216,20 +223,38 @@ async def refresh(
     to log in again. That is intended rather than a rough edge to soften: the alternative
     is leaving a leaked token working.
 
-    Rate limiting is deliberately still the application-wide `GLOBAL_RATE_LIMIT`, and the
-    tighter numbers #61 put on login and register must not be extended here. There is no
-    guessing attack to slow down — the token is 256 bits of randomness, so this has none of
-    the shape of credential stuffing — which leaves volume, and volume is what the global
-    limit is for. The traffic is the wrong shape for a tight limit besides: login is a
-    human typing a password a few times, this is a browser on a fifteen-minute timer, once
-    per open tab plus once per page load.
+    Rate limiting is deliberately still the application-wide `GLOBAL_RATE_LIMIT` — the
+    number, spelled out here rather than inherited — and the tighter ones #61 put on login
+    and register must not be extended here. There is no guessing attack to slow down: the
+    token is 256 bits of randomness, so this has none of the shape of credential stuffing,
+    which leaves volume, and volume is what the global limit is for. The traffic is the
+    wrong shape for a tight limit besides: login is a human typing a password a few times,
+    this is a browser on a fifteen-minute timer, once per open tab plus once per page load.
 
-    The client contract, which matters because this endpoint has two ways to fail and only
-    one of them means anything: **a 429 here is not a dead session.** A 401 means the
-    cookie is finished and the right response is to sign the user out and send them to
-    /login. A 429 means the client asked too often, and signing someone out for being busy
-    is a worse failure than the one the limit prevents — back off for `Retry-After` and try
-    the same cookie again, which will still be good.
+    The decorator is written out for the message and not for the number. On the inherited
+    default slowapi has no `error_message` to reach for and answers `{"detail": "100 per
+    1 minute"}`, which is not a sentence to put in front of anyone and is the limit recited
+    back at whoever just found it. A route limit takes the middleware out of the picture
+    entirely (`_should_exempt`), so this is the one limit that applies, at the same number.
+
+    The client contract, which matters because this endpoint has two ways to fail and they
+    mean opposite things:
+
+    - A **401** is a finished cookie — expired, revoked, or already spent. The session is
+      over; sign the user out and send them to /login.
+    - A **429** also ends the session, deliberately (#68). It is an emergency stop: traffic
+      that trips a limit this loose is outside anything a browser on a timer does, so the
+      client revokes the session through POST /users/logout and makes the user start over.
+      `Retry-After` says how long before signing in will work, and `TOO_MANY_REFRESHES` is
+      written to be shown on the login page as it stands.
+    - Anything else — a 5xx, or a request that never arrived — is **not** an answer about
+      the session and must not end one. "We could not ask" is not "the answer was no", and
+      a deploy or a wifi handover is not grounds for signing anyone out.
+
+    The stop is address-shaped, and that cost was weighed rather than missed: the limiter
+    keys on the caller's address, so people sharing an egress IP can be stopped by a
+    neighbour's traffic. The reasoning is in #68 — it is not a defence against guessing,
+    which is what `TestRefreshIsNotTightened` exists to keep true.
     """
     if refresh is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_CANNOT_RENEW)

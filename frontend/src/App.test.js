@@ -6,6 +6,7 @@ import App from './App.vue'
 import AppShell from './components/AppShell.vue'
 import AuthLayout from './components/AuthLayout.vue'
 import BareLayout from './components/BareLayout.vue'
+import ServerUnreachable from './components/ServerUnreachable.vue'
 import { useAuthStore } from './stores/auth.js'
 
 /*
@@ -69,6 +70,39 @@ describe('App', () => {
 
     expect(auth.isSignedIn).toBe(false)
     expect((await mountApp()).findComponent(AppShell).exists()).toBe(true)
+  })
+
+  /*
+   * Boot settles three ways, not two (#68). "Signed out" and "we never got an
+   * answer" look identical from `ready` alone, and the second one is what a
+   * deploy window or a wifi handover produces — with the session still good.
+   */
+  describe('when boot could not reach the API', () => {
+    it('says so, in place of the app', async () => {
+      const auth = useAuthStore()
+      auth.ready = true
+      auth.reachable = false
+
+      const app = await mountApp()
+
+      expect(app.findComponent(ServerUnreachable).exists()).toBe(true)
+      // Not the shell around pages that can load nothing: that reads as the app
+      // being broken rather than the server being briefly away.
+      expect(app.findComponent(AppShell).exists()).toBe(false)
+    })
+
+    it('goes back to the app once the answer arrives', async () => {
+      const auth = useAuthStore()
+      auth.ready = true
+      auth.reachable = false
+      const app = await mountApp()
+
+      auth.reachable = true
+      await app.vm.$nextTick()
+
+      expect(app.findComponent(AppShell).exists()).toBe(true)
+      expect(app.findComponent(ServerUnreachable).exists()).toBe(false)
+    })
   })
 
   describe('choosing the chrome', () => {

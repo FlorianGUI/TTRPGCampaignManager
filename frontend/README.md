@@ -220,7 +220,7 @@ being one person's:
 
 | where             | why it is not covered by the others                                   |
 | ----------------- | --------------------------------------------------------------------- |
-| `auth.clear()`    | logout, and every failed refresh — a session ending                   |
+| `auth.clear()`    | logout, and a refresh the server _answered_ — a session ending        |
 | `auth.logIn()`    | an expired session never calls logout; that person meets a login form |
 | `SsoCallbackView` | a provider sign-in arrives through `boot()`, which must _not_ forget  |
 | the campaign chip | leaving would otherwise bounce straight back in                       |
@@ -511,9 +511,39 @@ are easy to undo by accident:
   the user out. `stores/auth.js` holds one in-flight promise per tab and takes a
   Web Lock across them; both are covered by tests, and neither is optional.
 
+**A failed refresh is not the same as a refused one (#68).** `renewOnce` branches
+on what came back, because three very different things used to end a session
+identically:
+
+| failure                         | session  | why                                                                           |
+| ------------------------------- | -------- | ----------------------------------------------------------------------------- |
+| `401`                           | ends     | The cookie is finished — expired, revoked or replayed. Nothing to tell apart. |
+| `429`                           | ends     | The emergency stop. Revoked through `POST /users/logout` first, then cleared. |
+| network error (`fetch` rejects) | **kept** | It never reached the server. "We could not ask" is not "the answer was no".   |
+| `5xx`                           | **kept** | The same situation with a status on it — nginx while the backend restarts.    |
+
+The middle two are the ones to be careful with:
+
+- **A network failure must never clear the store.** It does not even arrive as an
+  `ApiError` — `http.js` only builds one from a response — so a `TypeError` from
+  `fetch` sails through any `catch` that is not looking for it. `boot()` runs on
+  every page load, so getting this wrong means _open the app during a deploy and
+  you are signed out_, holding a perfectly good thirty-day cookie.
+- **The 429 stop is deliberate, and the client pulls the trigger.** Clearing
+  locally alone would leave the refresh cookie alive, so a reload once the window
+  passed would sign the user back in without a password. The store calls
+  `POST /users/logout` — straight to `apiFetch`, for the same reason everything
+  else here does — and clears anyway if that call fails too. The server's own
+  sentence and its `Retry-After` travel to the login page in
+  `auth.signedOutReason`, which `LoginView` reads once.
+
 The first render waits on `auth.ready`, which the boot refresh flips when it
-settles either way. Rendering earlier means a returning user sees a signed-out
-app for a moment before it corrects itself.
+settles. Rendering earlier means a returning user sees a signed-out app for a
+moment before it corrects itself. **It settles three ways, not two**: `reachable`
+is false when boot never got an answer, and then the guard lets the navigation
+stand — URL and all — while `App.vue` renders `ServerUnreachable` in place of the
+app. Redirecting to `/login` there would be the app claiming to know something it
+does not.
 
 ## Testing
 

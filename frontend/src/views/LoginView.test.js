@@ -107,6 +107,49 @@ describe('LoginView', () => {
     expect(view.find('[role="alert"]').text()).toContain(detail)
   })
 
+  /*
+   * The other way onto this page: thrown here rather than having come here. The
+   * store carries the reason across the redirect and the page reads it once
+   * (#68) — a message nobody is given is a user retrying immediately, which is
+   * the traffic the limit was objecting to.
+   */
+  describe('arriving after being signed out', () => {
+    it('shows the reason the server gave, and how long to wait', async () => {
+      const auth = useAuthStore()
+      auth.signedOutReason = {
+        message: 'Too many requests from here. This session has been ended.',
+        retryAfter: 90,
+      }
+
+      const notice = mountView().find('[role="status"]').text()
+
+      expect(notice).toContain('Too many requests from here. This session has been ended.')
+      expect(notice).toContain('2 minutes')
+    })
+
+    it('says only the sentence when the server sent no wait', async () => {
+      const auth = useAuthStore()
+      auth.signedOutReason = { message: 'Too many requests from here.', retryAfter: null }
+
+      const notice = mountView().find('[role="status"]')
+
+      expect(notice.text()).toBe('Too many requests from here.')
+    })
+
+    it('shows nothing to somebody who simply navigated here', async () => {
+      expect(mountView().find('[role="status"]').exists()).toBe(false)
+    })
+
+    it('takes the reason rather than reading it, so it explains one arrival', async () => {
+      const auth = useAuthStore()
+      auth.signedOutReason = { message: 'Too many requests from here.', retryAfter: null }
+
+      mountView()
+
+      expect(auth.signedOutReason).toBeNull()
+    })
+  })
+
   it('stays usable after a failure, so a typo is not a dead end', async () => {
     const logIn = vi
       .spyOn(useAuthStore(), 'logIn')

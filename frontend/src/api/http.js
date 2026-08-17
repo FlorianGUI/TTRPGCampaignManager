@@ -39,7 +39,7 @@ function resolveApiUrl() {
 export const API_URL = resolveApiUrl()
 
 export class ApiError extends Error {
-  constructor(status, detail) {
+  constructor(status, detail, retryAfter = null) {
     super(typeof detail === 'string' ? detail : `Request failed with status ${status}`)
     this.name = 'ApiError'
     this.status = status
@@ -48,6 +48,12 @@ export class ApiError extends Error {
     // everything we currently need, and inventing a shape here would be
     // inventing one the backend does not promise.
     this.detail = detail
+    // Seconds to wait, on a 429 and nowhere else. The only header this carries,
+    // because it is the only one a page can act on: a limit message with no
+    // number is a user retrying immediately, which is the traffic the limit was
+    // objecting to. It cost a line in `cors.py` to expose it across origins —
+    // dropping it here made that pointless (#68).
+    this.retryAfter = retryAfter
   }
 }
 
@@ -58,6 +64,21 @@ async function detailOf(response) {
     // An error page, an empty body, a proxy in a bad mood.
     return null
   }
+}
+
+/*
+ * `Retry-After` in seconds, or null.
+ *
+ * Only the delta-seconds form, which is what slowapi sends. The header's other
+ * legal form is an HTTP-date, and a date is worth parsing when something can act
+ * on it — nothing here can, so an unreadable value is treated as the absent one
+ * rather than turned into a wrong number.
+ */
+function retryAfterOf(response) {
+  const raw = response.headers.get('Retry-After')
+  const seconds = Number(raw)
+
+  return raw !== null && Number.isInteger(seconds) && seconds >= 0 ? seconds : null
 }
 
 /**
@@ -101,7 +122,10 @@ export async function apiFetch(
     credentials: 'include',
   })
 
-  if (!response.ok) throw new ApiError(response.status, await detailOf(response))
+  if (!response.ok) {
+    throw new ApiError(response.status, await detailOf(response), retryAfterOf(response))
+  }
+
   if (response.status === 204) return null
 
   return response.json()

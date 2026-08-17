@@ -6,7 +6,9 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.common.security.rate_limiter import (
+    GLOBAL_RATE_LIMIT,
     TOO_MANY_LOGIN_ATTEMPTS,
+    TOO_MANY_REFRESHES,
     TOO_MANY_REGISTRATIONS,
     limiter,
 )
@@ -113,13 +115,39 @@ class TestRefreshIsNotTightened:
 
         Eleven refreshes is past the login limit and nowhere near the global one, which is
         roughly what a few tabs open for a couple of hours look like. Each 401 is only the
-        absent cookie — what matters is that none of them is a 429, because the frontend
-        signs a user out on a 401 from here and a limit would make that happen for being
-        busy rather than for being signed out.
+        absent cookie — what matters is that none of them is a 429, and that matters more
+        since #68 rather than less: the frontend now ends the session on a 429 here, so
+        every request this limit refuses is somebody signed out. The route carries the
+        global number written out; if anyone ever swaps it for a tighter one, this fails.
         """
         for _ in range(11):
             response = await client.post("/users/refresh")
             assert response.status_code == 401
+
+
+class TestRefreshRateLimit:
+    """The global number, but not the global message.
+
+    A 429 here is the one rate-limit answer a signed-in person reads, because it ends their
+    session and they meet it on the login page they are then sent to (#68). Left on the
+    inherited default slowapi has no sentence to give and answers `{"detail": "100 per 1
+    minute"}` — unreadable, and the limit recited back to whoever just probed for it. This
+    is what stops that quietly returning.
+    """
+
+    async def test_past_the_global_limit_it_answers_in_a_sentence(self, client: AsyncClient):
+        # Every one of these is the plain "no cookie" 401 — the limiter counts attempts,
+        # not sessions, so nothing here needs to be signed in to reach the limit.
+        for _ in range(int(GLOBAL_RATE_LIMIT.split("/")[0])):
+            assert (await client.post("/users/refresh")).status_code == 401
+
+        response = await client.post("/users/refresh")
+
+        assert response.status_code == 429
+        assert response.json() == {"detail": TOO_MANY_REFRESHES}
+        # The frontend tells the user how long to wait with this, and CORS exposes it for
+        # exactly that (`cors.py`). A message with no number is a user retrying at once.
+        assert "retry-after" in response.headers
 
 
 class TestForgotPasswordRateLimit:
