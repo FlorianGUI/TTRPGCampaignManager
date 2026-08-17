@@ -1,7 +1,11 @@
 from dataclasses import dataclass
 
+from app.contexts.campaign.application.act_service import ActService
+from app.contexts.campaign.application.scene_service import SceneService
+from app.contexts.campaign.application.sequence_service import SequenceService
 from app.contexts.campaign.domain.act import Act
 from app.contexts.campaign.domain.narrative_access import Narrative
+from app.contexts.campaign.domain.placement import NarrativeKind, Placement
 from app.contexts.campaign.domain.ports.act_repository import ActRepository
 from app.contexts.campaign.domain.ports.scene_repository import SceneRepository
 from app.contexts.campaign.domain.ports.sequence_repository import SequenceRepository
@@ -50,10 +54,18 @@ class StructureService:
         acts: ActRepository,
         sequences: SequenceRepository,
         scenes: SceneRepository,
+        act_service: ActService,
+        sequence_service: SequenceService,
+        scene_service: SceneService,
     ) -> None:
         self._acts = acts
         self._sequences = sequences
         self._scenes = scenes
+        # The three services, because `place` is one gesture over a tree whose rules live
+        # one level down. Nothing here reimplements them.
+        self._act_service = act_service
+        self._sequence_service = sequence_service
+        self._scene_service = scene_service
 
     async def of(self, narrative: Narrative) -> Structure:
         return Structure(
@@ -61,3 +73,48 @@ class StructureService:
             sequences=await self._sequences.find_all_in(narrative.sequences),
             scenes=await self._scenes.find_summaries_in(narrative.scenes),
         )
+
+    async def place(self, narrative: Narrative, placement: Placement) -> Structure:
+        """Move one row of the outline, and answer with the whole tree.
+
+        **The rules are not here.** Each level already knows how to place its own kind —
+        resolve the parent, find the sibling list, take the midpoint, renumber when the gap
+        runs out — and all three were written and tested under #80. This dispatches on the
+        kind the client sent and hands the work to whichever service owns it, so a fourth
+        level would add a branch rather than a second copy of the algorithm.
+
+        What it adds is the answer. The three per-level routes return the row they moved,
+        which leaves the client to guess what happened to everything around it — and a
+        renumber moves every sibling. Returning the tree makes the outline's next render
+        the server's truth rather than an optimistic guess, which is the half of #111 that
+        a status code alone cannot fix.
+
+        `narrative` is threaded through rather than trusted from the body: every id below
+        is resolved against this campaign's tokens, so an id belonging to another campaign
+        is "not found" here exactly as it is on the routes this replaces.
+        """
+        match placement.item.kind:
+            case NarrativeKind.ACT:
+                await self._act_service.place(
+                    placement.item.as_act(),
+                    narrative.acts,
+                    placement.after.as_act() if placement.after else None,
+                )
+            case NarrativeKind.SEQUENCE:
+                await self._sequence_service.place(
+                    placement.item.as_sequence(),
+                    narrative,
+                    placement.parent.as_act() if placement.parent else None,
+                    placement.after.as_sequence() if placement.after else None,
+                )
+            case NarrativeKind.SCENE:
+                parent = placement.parent
+                await self._scene_service.place(
+                    placement.item.as_scene(),
+                    narrative,
+                    parent.as_act() if parent and parent.kind is NarrativeKind.ACT else None,
+                    parent.as_sequence() if parent and parent.kind is NarrativeKind.SEQUENCE else None,
+                    placement.after.as_scene() if placement.after else None,
+                )
+
+        return await self.of(narrative)

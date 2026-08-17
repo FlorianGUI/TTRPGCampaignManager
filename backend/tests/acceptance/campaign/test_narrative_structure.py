@@ -507,3 +507,108 @@ def rejected_as_invalid(context: dict):
     """422, not 404: the caller sent a contradiction rather than reached for something
     that is not theirs, and telling them so costs nothing."""
     assert context["response"].status_code == 422
+
+
+def _placement(campaign_id: str) -> str:
+    return f"/campaigns/{campaign_id}/structure/placement"
+
+
+def _place(client: AsyncClient, context: dict, body: dict, campaign_id: str | None = None):
+    context["response"] = _run(
+        client.put(
+            _placement(campaign_id or _mine(context)),
+            json=body,
+            headers=_auth_headers(context),
+        )
+    )
+
+
+@when("I place the second act at the top of the outline")
+def place_second_act_at_top(client: AsyncClient, context: dict):
+    """The same gesture as the acts route, through the one endpoint that serves every level."""
+    _place(client, context, {"item": {"id": context["acts"][1]["id"], "kind": "act"}})
+
+
+@when("I place the scene under that act through the outline")
+def place_scene_under_act(client: AsyncClient, context: dict):
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "parent": {"id": context["acts"][0]["id"], "kind": "act"},
+        },
+    )
+
+
+@when("I place the second act under the first through the outline")
+def place_act_under_act(client: AsyncClient, context: dict):
+    """An act hangs off the campaign and nothing else — the tree has no meaning for this."""
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["acts"][1]["id"], "kind": "act"},
+            "parent": {"id": context["acts"][0]["id"], "kind": "act"},
+        },
+    )
+
+
+@when("I place the scene after that sequence through the outline")
+def place_scene_after_sequence(client: AsyncClient, context: dict):
+    """Siblings are per level. That sequences and scenes under one act are not ordered
+    against each other is #101, still open — this endpoint does not quietly decide it."""
+    _place(
+        client,
+        context,
+        {
+            "item": {"id": context["scene"]["id"], "kind": "scene"},
+            "after": {"id": context["sequence"]["id"], "kind": "sequence"},
+        },
+    )
+
+
+@when("I place that act after itself through the outline")
+def place_act_after_itself(client: AsyncClient, context: dict):
+    act = context["acts"][0]
+    _place(
+        client,
+        context,
+        {"item": {"id": act["id"], "kind": "act"}, "after": {"id": act["id"], "kind": "act"}},
+    )
+
+
+@given("another game master has a campaign with an act")
+def another_game_master_has_an_act(client: AsyncClient, context: dict, register_user):
+    token = register_user()
+    campaign = _run(client.post("/campaigns/", json={"name": "Fen Wardens"}, headers=_headers(token)))
+    assert campaign.status_code == 201
+    act = _run(client.post(_acts(campaign.json()["id"]), json={"title": "Theirs"}, headers=_headers(token)))
+    assert act.status_code == 201
+    context["their_act"] = act.json()
+
+
+@when("I place their act through my outline")
+def place_their_act(client: AsyncClient, context: dict):
+    """A well-formed body naming a row of someone else's campaign. The ids in the body are
+    resolved against my tokens, so this is "not found" and does not say whose it was."""
+    _place(client, context, {"item": {"id": context["their_act"]["id"], "kind": "act"}})
+
+
+@then(parsers.parse("the structure should hold {acts:d} acts, {sequences:d} sequences and {scenes:d} scenes"))
+def structure_should_hold_plural(context: dict, acts: int, sequences: int, scenes: int):
+    body = context["response"].json()
+    assert (len(body["acts"]), len(body["sequences"]), len(body["scenes"])) == (acts, sequences, scenes)
+
+
+@then(parsers.parse('the acts in the answer should read "{titles}"'))
+def acts_in_the_answer_should_read(context: dict, titles: str):
+    """Read off the placement's own response — the point of answering with the tree."""
+    assert [a["title"] for a in context["response"].json()["acts"]] == titles.split(", ")
+
+
+@then("the scene in the answer should be under that act")
+def scene_in_the_answer_is_under_the_act(context: dict):
+    scene = context["response"].json()["scenes"][0]
+    assert scene["act_id"] == context["acts"][0]["id"]
+    assert scene["sequence_id"] is None
