@@ -26,17 +26,6 @@ class SequenceUpdate(BaseModel):
     description: CampaignMarkdown = ""
 
 
-class SequencePlacement(BaseModel):
-    """Where the sequence sits: which act, and where among its siblings.
-
-    Both in one body because both are one gesture. `act_id` null is the campaign — a
-    parent, not the absence of one — and `after` null is first among whatever it lands in.
-    """
-
-    act_id: UUID | None = None
-    after: UUID | None = None
-
-
 class SequenceResponse(BaseModel):
     id: UUID
     title: str

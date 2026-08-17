@@ -53,17 +53,6 @@ class SceneUpdate(BaseModel):
     status: SceneStatus = SceneStatus.PLANNED
 
 
-class ScenePlacement(OneParent):
-    """Where the scene sits: which parent, and where among its siblings.
-
-    One body for one gesture — a drag can cross acts and land mid-list at once, and two
-    requests would leave a visible wrong order between them if the second failed. Both
-    parent ids null is the campaign; `after` null is first.
-    """
-
-    after: UUID | None = None
-
-
 class SceneResponse(BaseModel):
     id: UUID
     title: str

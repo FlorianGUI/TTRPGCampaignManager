@@ -6,7 +6,6 @@ from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_act_service, get_narrative
 from app.contexts.campaign.adapters.primary.api.schemas.act import (
     ActCreate,
-    ActPlacement,
     ActResponse,
     ActUpdate,
 )
@@ -63,18 +62,6 @@ async def update_act(
     service: ActService = Depends(get_act_service),
 ):
     act = await service.update(act_id, narrative.acts, body.title, body.description)
-    return ActResponse(**act.__dict__)
-
-
-@router.put("/{act_id}/placement", response_model=ActResponse, responses=NOT_FOUND)
-async def place_act(
-    act_id: ActId,
-    body: ActPlacement,
-    narrative: Narrative = Depends(get_narrative),
-    service: ActService = Depends(get_act_service),
-):
-    """Reorder the campaign's acts. One row written, unless the gap has run out."""
-    act = await service.place(act_id, narrative, body.after)
     return ActResponse(**act.__dict__)
 
 

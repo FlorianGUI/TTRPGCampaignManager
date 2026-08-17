@@ -6,7 +6,6 @@ from app.common.security.auth import get_current_user
 from app.contexts.campaign.adapters.primary.api.dependencies import get_narrative, get_sequence_service
 from app.contexts.campaign.adapters.primary.api.schemas.sequence import (
     SequenceCreate,
-    SequencePlacement,
     SequenceResponse,
     SequenceUpdate,
 )
@@ -64,28 +63,6 @@ async def update_sequence(
     service: SequenceService = Depends(get_sequence_service),
 ):
     sequence = await service.update(sequence_id, narrative, body.title, body.description)
-    return SequenceResponse(**sequence.__dict__)
-
-
-@router.put("/{sequence_id}/placement", response_model=SequenceResponse, responses=NOT_FOUND)
-async def place_sequence(
-    sequence_id: SequenceId,
-    body: SequencePlacement,
-    narrative: Narrative = Depends(get_narrative),
-    service: SequenceService = Depends(get_sequence_service),
-):
-    """Where it sits, in one call: its act, and its place among that act's sequences.
-
-    Kept apart from the update for the reason that route gives — a rename must never move
-    anything by carrying a stale id. `{"act_id": null}` puts the sequence on the campaign,
-    and `after` names the sibling it was dropped below.
-    """
-    sequence = await service.place(
-        sequence_id,
-        narrative,
-        ActId(body.act_id) if body.act_id else None,
-        body.after,
-    )
     return SequenceResponse(**sequence.__dict__)
 
 
