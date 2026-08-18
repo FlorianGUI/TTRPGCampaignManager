@@ -501,15 +501,27 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 }
 
 /*
+ * The same treatment a description gets under an act's or a sequence's name in
+ * the outline below — see `.row__description` in `OutlineRow.vue`. It is the
+ * same thing said in the same place, one level up, so it reads the same way:
+ * italic, muted, a step down from the text it introduces.
+ *
+ * **`display: block` is load-bearing.** `mode="inline"` renders a `<span>` root
+ * (see `renderTree`), and on an inline box a vertical margin and a `max-width`
+ * are silently ignored — so without this the lede has neither the space under
+ * the name nor a measure, and flows as text rather than sitting under it.
+ *
  * Its own margin rather than the row's gap: the distance between a title and
  * the controls beside it is not the distance between a title and the line
  * introducing it, and they do not have to be the same number.
  */
 .structure__description {
-  margin: var(--space-2) 0 0;
+  display: block;
+  margin: var(--space-1) 0 0;
   max-width: 60ch;
   color: var(--p-text-muted-color);
   font-size: var(--step--1);
+  font-style: italic;
 }
 
 .structure__loading {
