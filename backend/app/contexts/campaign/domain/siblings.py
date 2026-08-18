@@ -24,6 +24,7 @@ from collections.abc import Sequence as Listing
 from dataclasses import dataclass
 from uuid import UUID
 
+from app.common.errors import NotAvailable
 from app.contexts.campaign.domain.act import Act
 from app.contexts.campaign.domain.position import index_after, position_between
 from app.contexts.campaign.domain.scene import Scene
@@ -39,6 +40,25 @@ would only have moved the problem to the boundary, where a router would have had
 label for an id whose kind it does not know, and picking `SceneId(...)` for a sequence is
 precisely the fiction that made this look correct before.
 """
+
+
+class AnchorNotAvailable(NotAvailable):
+    """The row a placement was to follow is not in the group it named.
+
+    Its own exception, because the alternative was answering with the *moved* record's
+    404 — a scene dropped after an id that does not resolve was told "Scene not found",
+    about a scene it had just been asked to move and which was plainly there. That is the
+    wrong sentence and it sends whoever reads it looking in the wrong place (#110).
+
+    Still one answer for every way an anchor can fail to resolve: an id from another
+    parent, from another campaign, or one deleted while the outline sat open all raise
+    this and say the same thing. The 404-not-403 reasoning in #12 applies to the anchor
+    exactly as it does to everything else — which of the three it was is not a caller's to
+    learn.
+    """
+
+    detail = "The record it was to follow was not found"
+
 
 type Sibling = Act | Sequence | Scene
 """One member of a group: exactly one of the three things a parent can hold.
@@ -85,7 +105,6 @@ def place_among(
     siblings: Listing[Sibling],
     record: Sibling,
     after: SiblingId | None,
-    missing: type[Exception],
 ) -> Placement:
     """Drop `record` into its group, below `after`.
 
@@ -94,15 +113,20 @@ def place_among(
     be dropped "after itself" and compute a midpoint against its own position.
 
     `after` may name a sibling **of any kind**, which is the whole of #101's fix. An
-    anchor that is not in this group still raises, and still says only that it was not
-    found — an id from another act, another campaign, or one deleted while the page was
-    open all answer alike.
+    anchor that is not in this group raises `AnchorNotAvailable`, and still says only that
+    it was not found — an id from another act, another campaign, or one deleted while the
+    page was open all answer alike.
+
+    The caller no longer supplies that exception. It used to pass its own, which meant a
+    scene refused for an unresolvable anchor was told "Scene not found" about the scene it
+    had just asked to move (#110). What is missing is the anchor, and only this module is
+    in a position to know that.
 
     The arithmetic was written out three times, once per level, and was identical each
     time. It is here now so that a fix to it is a fix everywhere, which is #80's "the
     tree's rules live in one place rather than in three services".
     """
-    index = index_after(siblings, after, missing)
+    index = index_after(siblings, after, AnchorNotAvailable)
 
     position = position_between(
         siblings[index - 1].position if index > 0 else None,

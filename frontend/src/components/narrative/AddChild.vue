@@ -26,6 +26,7 @@ import { ref } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useStructureStore } from '../../stores/structure.js'
+import { useWriteFailure } from '../../composables/useWriteFailure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -41,6 +42,7 @@ const props = defineProps({
 const emit = defineEmits(['created'])
 
 const structure = useStructureStore()
+const { failed } = useWriteFailure()
 
 const choosing = ref(false)
 const saving = ref(false)
@@ -73,6 +75,10 @@ async function add(kind) {
 
     choosing.value = false
     emit('created', { kind, node })
+  } catch {
+    // Without this the plus spun and stopped and no row appeared, which reads as
+    // a button that does nothing rather than as a request that was refused.
+    failed()
   } finally {
     saving.value = false
   }

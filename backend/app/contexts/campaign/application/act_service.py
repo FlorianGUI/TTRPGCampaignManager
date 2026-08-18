@@ -72,7 +72,7 @@ class ActService:
         act = narrative.acts.editable(await self._repository.find_by_id(id))
 
         siblings = [s for s in await self._siblings.under(narrative, None, None) if s.id != act.id]
-        placement = place_among(siblings, act, after, narrative.acts.not_available)
+        placement = place_among(siblings, act, after)
 
         if placement.position is not None:
             act.reposition(placement.position)

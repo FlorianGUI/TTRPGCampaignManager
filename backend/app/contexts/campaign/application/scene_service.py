@@ -138,7 +138,7 @@ class SceneService:
         # neighbours it is being placed between. Leaving it in would let a scene be dropped
         # "after itself" and compute a midpoint against its own position.
         siblings = [s for s in await self._siblings.under(narrative, act, sequence) if s.id != scene.id]
-        placement = place_among(siblings, scene, after, narrative.scenes.not_available)
+        placement = place_among(siblings, scene, after)
 
         if placement.position is not None:
             scene.move_under(act, sequence, placement.position)

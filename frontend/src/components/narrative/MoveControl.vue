@@ -30,6 +30,7 @@ import {
   titleOf,
   useStructureStore,
 } from '../../stores/structure.js'
+import { useWriteFailure } from '../../composables/useWriteFailure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -43,6 +44,14 @@ const props = defineProps({
 })
 
 const structure = useStructureStore()
+
+/*
+ * Every write below is a menu command with no form behind it, so a refusal has
+ * nowhere of its own to appear. `finally` was tidying the spinner and letting
+ * the rejection past it, which left a row that did not move and said nothing
+ * (#111). The three `catch`es below are all that was missing.
+ */
+const { failed } = useWriteFailure()
 
 const menu = ref(null)
 const moving = ref(false)
@@ -75,8 +84,13 @@ async function moveInto() {
         excluding: props.node.id,
       }),
     })
+    // Inside the `try`, so a refused move leaves the dialog open with the
+    // destination still chosen — the gesture is one press from being retried
+    // rather than one that has to be found and made again.
     picking.value = false
     chosen.value = null
+  } catch {
+    failed()
   } finally {
     moving.value = false
   }
@@ -110,6 +124,10 @@ async function remove() {
   try {
     await structure.deleteNode(props.campaignId, props.kind, props.node.id)
     confirming.value = false
+  } catch {
+    // The confirmation stays open, which is the honest thing for it to do: the
+    // record is still there, so a dialog that closed would be saying otherwise.
+    failed()
   } finally {
     removing.value = false
   }
@@ -142,6 +160,11 @@ async function stepTo(after) {
       parent: parentRef(props.node.act_id ?? null, props.node.sequence_id ?? null),
       after,
     })
+  } catch {
+    // Nothing to undo: `place` writes the tree from the response, so a refused
+    // step never moved the row on screen in the first place. What was missing
+    // was only saying so.
+    failed()
   } finally {
     moving.value = false
   }

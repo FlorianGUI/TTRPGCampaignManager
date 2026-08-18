@@ -175,6 +175,7 @@ Feature: Narrative Structure
     And I create a scene named "Session zero" in my campaign
     When I drop the campaigns scene after the one in the act
     Then I should get a not found error
+    And the refusal should name the anchor rather than the scene being moved
 
   Scenario: Removing an act hands its scenes to the campaign
     Given I create an act named "Act I — Water Rising" in my campaign

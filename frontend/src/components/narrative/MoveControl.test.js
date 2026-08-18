@@ -2,10 +2,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import { PrimeVueToastSymbol } from 'primevue/usetoast'
 import MoveControl from './MoveControl.vue'
 import { anchorForStep, parentsFor, useStructureStore } from '../../stores/structure.js'
 
 const request = vi.hoisted(() => vi.fn())
+
+/*
+ * The toast, provided rather than served. `useWriteFailure` asks for it by
+ * PrimeVue's own injection key, so handing over a fake satisfies the component
+ * and lets these assert that a refused write said something — the real service
+ * renders through a `<Toast />` that lives in App.vue, out of reach from here.
+ * What it puts on screen is `useWriteFailure`'s own test.
+ */
+const toast = { add: vi.fn() }
 
 vi.mock('../../api/client.js', () => ({ request }))
 
@@ -56,7 +66,7 @@ async function render({ node = SIBLINGS[2].node, kind = 'scene', siblings = SIBL
 
   const wrapper = mount(MoveControl, {
     props: { campaignId: 'c-1', kind, node, siblings },
-    global: { plugins: [PrimeVue, pinia] },
+    global: { plugins: [PrimeVue, pinia], provide: { [PrimeVueToastSymbol]: toast } },
   })
   await flushPromises()
   return wrapper
@@ -283,6 +293,71 @@ describe('the move control', () => {
 
     expect(request).toHaveBeenCalledWith('/campaigns/c-1/scenes/s-1', { method: 'DELETE' })
     expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/')
+  })
+
+  /*
+   * The silence #111 is about. Every one of these was `try`/`finally` with no
+   * `catch`: the spinner stopped, the row stayed where it was, and the only
+   * trace was an uncaught `ApiError` in a console nobody has open.
+   */
+  describe('when the API refuses', () => {
+    it('says so when a step is refused', async () => {
+      const wrapper = await render({ node: SIBLINGS[2].node })
+
+      toast.add.mockClear()
+      request.mockRejectedValue(new Error('nope'))
+      await item(wrapper, 'Move up').command()
+      await flushPromises()
+
+      expect(toast.add).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves the tree exactly as it was, having never moved the row', async () => {
+      /* Nothing to roll back: `place` writes the tree from the response, so a
+       * refused step never moved anything on screen to begin with. */
+      const wrapper = await render({ node: SIBLINGS[2].node })
+      const before = useStructureStore().treeFor('c-1')
+
+      request.mockRejectedValue(new Error('nope'))
+      await item(wrapper, 'Move up').command()
+      await flushPromises()
+
+      expect(useStructureStore().treeFor('c-1')).toEqual(before)
+    })
+
+    it('keeps the move dialog open, with the destination still chosen', async () => {
+      // One press from being retried, rather than a gesture that has to be
+      // found and made again from the top.
+      const wrapper = await render({ node: SIBLINGS[0].node })
+      item(wrapper, 'Move into…').command()
+      await flushPromises()
+      wrapper.vm.chosen = { label: 'Act I', act_id: 'a-1', sequence_id: null }
+
+      toast.add.mockClear()
+      request.mockRejectedValue(new Error('nope'))
+      await wrapper.vm.moveInto()
+      await flushPromises()
+
+      expect(toast.add).toHaveBeenCalledTimes(1)
+      expect(wrapper.vm.picking).toBe(true)
+      expect(wrapper.vm.chosen).not.toBeNull()
+    })
+
+    it('keeps the confirmation open when a delete is refused', async () => {
+      // The record is still there, so a dialog that closed would be saying
+      // otherwise.
+      const wrapper = await render({ node: SIBLINGS[0].node })
+      item(wrapper, 'Delete').command()
+      await flushPromises()
+
+      toast.add.mockClear()
+      request.mockRejectedValue(new Error('nope'))
+      await wrapper.vm.remove()
+      await flushPromises()
+
+      expect(toast.add).toHaveBeenCalledTimes(1)
+      expect(wrapper.vm.confirming).toBe(true)
+    })
   })
 
   it('names the row it moves, so the button is not one of forty called “Move”', async () => {

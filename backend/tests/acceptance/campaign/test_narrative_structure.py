@@ -4,6 +4,8 @@ import uuid
 from httpx import AsyncClient
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from app.contexts.campaign.domain.siblings import AnchorNotAvailable
+
 scenarios("features/narrative_structure.feature")
 
 
@@ -622,3 +624,15 @@ def scene_sits_below_the_sequence(context: dict):
     scene = next(s for s in body["scenes"] if s["id"] == context["scene"]["id"])
     assert scene["act_id"] == sequence["act_id"]
     assert scene["position"] > sequence["position"]
+
+
+@then("the refusal should name the anchor rather than the scene being moved")
+def the_refusal_names_the_anchor(context: dict):
+    """The scene being moved is right there and was found; the anchor is what was not.
+
+    Answering with "Scene not found" was the wrong sentence about the wrong record, and it
+    sent whoever read it looking for a scene that had never gone anywhere (#110). It still
+    says nothing about *why* the anchor did not resolve — another parent, another campaign,
+    or deleted while the page was open all answer alike.
+    """
+    assert context["response"].json() == {"detail": AnchorNotAvailable.detail}
