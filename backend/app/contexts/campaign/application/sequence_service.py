@@ -96,7 +96,7 @@ class SequenceService:
         parent = await self._place_under(narrative, act_id)
 
         siblings = [s for s in await self._siblings.under(narrative, parent, None) if s.id != sequence.id]
-        placement = place_among(siblings, sequence, after, narrative.sequences.not_available)
+        placement = place_among(siblings, sequence, after)
 
         if placement.position is not None:
             sequence.move_under(parent, placement.position)

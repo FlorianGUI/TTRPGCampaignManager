@@ -21,6 +21,10 @@ import AddChild from '../components/narrative/AddChild.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import NodeContents from '../components/narrative/NodeContents.vue'
 import { actProgress, titleOf, trailTo, useStructureStore } from '../stores/structure.js'
+// The sentence only — see the note in `SceneView`. The controls this page hosts
+// (`AddChild`, and the move menu inside `NodeContents`) speak through the toast
+// instead, because a menu command has no form to report to.
+import { COULD_NOT_SAVE } from '../composables/useWriteFailure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -117,7 +121,7 @@ async function save() {
 
     editing.value = false
   } catch {
-    failure.value = 'That could not be saved.'
+    failure.value = COULD_NOT_SAVE
   } finally {
     saving.value = false
   }

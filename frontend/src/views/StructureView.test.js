@@ -3,10 +3,14 @@ import { h } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import { PrimeVueToastSymbol } from 'primevue/usetoast'
 import StructureView from './StructureView.vue'
 import { COLLAPSED_STORAGE_KEY } from '../stores/collapsedNarrative.js'
 
 const request = vi.hoisted(() => vi.fn())
+
+/* A fake in place of the real service — see the note in `MoveControl.test.js`. */
+const toast = { add: vi.fn() }
 
 vi.mock('../api/client.js', () => ({ request }))
 vi.mock('vue-router', () => ({
@@ -51,7 +55,9 @@ const EMPTY = { acts: [], sequences: [], scenes: [] }
 
 async function render(tree) {
   request.mockResolvedValue(tree)
-  const wrapper = mount(StructureView, { global: { plugins: [PrimeVue, createPinia()] } })
+  const wrapper = mount(StructureView, {
+    global: { plugins: [PrimeVue, createPinia()], provide: { [PrimeVueToastSymbol]: toast } },
+  })
   await flushPromises()
   return wrapper
 }
@@ -221,6 +227,25 @@ describe('the structure page', () => {
       expect(offers(wrapper).some((o) => o.parent === 'Arrival at dusk')).toBe(false)
     })
 
+    it('says so when the plus is refused, rather than spinning and stopping', async () => {
+      /*
+       * A sequence's plus writes a scene with no dialog in the way, so a refused
+       * add used to be a button that visibly did nothing at all (#111).
+       */
+      const wrapper = await render({
+        acts: [act('a-1', 'Act I', 1024)],
+        sequences: [sequence('q-1', 'The Causeway', 1024, 'a-1')],
+        scenes: [],
+      })
+
+      toast.add.mockClear()
+      request.mockRejectedValue(new Error('nope'))
+      await wrapper.findAllComponents({ name: 'AddChild' }).at(-1).find('button').trigger('click')
+      await flushPromises()
+
+      expect(toast.add).toHaveBeenCalledTimes(1)
+    })
+
     it('names an unnamed record rather than showing a blank row', async () => {
       /*
        * Adding is one click, so a record can exist before it has a title — and a
@@ -237,13 +262,96 @@ describe('the structure page', () => {
     })
   })
 
+  /*
+   * The move #110 was opened for, driven through the page rather than through
+   * `anchorForStep`: an act holding one scene and one sequence, stepping the
+   * scene past the sequence. It is the case the per-kind number lines could not
+   * express — the anchor is a *sequence*, which used to answer 404 with "Scene
+   * not found" and leave the row where it was, in silence.
+   */
+  it('steps a scene past the sequence beside it, and redraws in the new order', async () => {
+    const INTERLUDE = scene('s-1', 'Interlude', 1024, { act_id: 'a-1' })
+    const CAUSEWAY = sequence('q-1', 'The Causeway', 2048, 'a-1')
+    const before = { acts: [act('a-1', 'Act I', 1024)], sequences: [CAUSEWAY], scenes: [INTERLUDE] }
+
+    const wrapper = await render(before)
+    expect(outline(wrapper)).toEqual(['Act I', 'Interlude', 'The Causeway'])
+
+    const moves = wrapper.findAllComponents({ name: 'MoveControl' })
+    const scenesMenu = moves
+      .find((move) => move.props('node').id === 's-1')
+      .findComponent({ name: 'Menu' })
+    const down = scenesMenu.props('model').find((entry) => entry.label === 'Move down')
+
+    // Offered rather than greyed out: the row below is of another kind, and the
+    // arrow means "the next thing here", which is what the outline draws.
+    expect(down.disabled).toBe(false)
+
+    request.mockClear()
+    request.mockResolvedValue({ ...before, scenes: [{ ...INTERLUDE, position: 3072 }] })
+    await down.command()
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/placement', {
+      method: 'PUT',
+      json: {
+        item: { id: 's-1', kind: 'scene' },
+        parent: { id: 'a-1', kind: 'act' },
+        // The whole of it: an anchor of a different kind than the row moving.
+        after: { id: 'q-1', kind: 'sequence' },
+      },
+    })
+    expect(outline(wrapper)).toEqual(['Act I', 'The Causeway', 'Interlude'])
+  })
+
+  it('says so when marking a scene off is refused', async () => {
+    /*
+     * The status dot is drawn from the tree and holds no state of its own, so a
+     * refused cycle leaves it exactly where it was — which is indistinguishable
+     * from a click that missed until something says otherwise (#111).
+     */
+    const wrapper = await render({
+      acts: [],
+      sequences: [],
+      scenes: [scene('s-1', 'Session zero', 1024)],
+    })
+
+    toast.add.mockClear()
+    request.mockRejectedValue(new Error('nope'))
+    await wrapper.get('.status__dot').trigger('click')
+    await flushPromises()
+
+    expect(toast.add).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('Session zero')
+  })
+
+  it('still shows the load failure as a page message, not as a toast', async () => {
+    /*
+     * The two are different situations and keep different answers: a first load
+     * that failed leaves nothing to look at and offers a retry in place of the
+     * outline, while a refused write happens over a tree that is still true
+     * (#111). This is the half that must not have been swept up in the change.
+     */
+    request.mockRejectedValue(new Error('nope'))
+    const wrapper = mount(StructureView, {
+      global: { plugins: [PrimeVue, createPinia()], provide: { [PrimeVueToastSymbol]: toast } },
+    })
+    toast.add.mockClear()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('could not be loaded')
+    expect(toast.add).not.toHaveBeenCalled()
+  })
+
   it('offers a retry rather than an empty campaign when the request fails', async () => {
     /*
      * A campaign nobody has written in and one that could not be asked about
      * look identical as empty trees, and they want opposite screens.
      */
     request.mockRejectedValue(new Error('nope'))
-    const wrapper = mount(StructureView, { global: { plugins: [PrimeVue, createPinia()] } })
+    const wrapper = mount(StructureView, {
+      global: { plugins: [PrimeVue, createPinia()], provide: { [PrimeVueToastSymbol]: toast } },
+    })
     await flushPromises()
 
     expect(wrapper.text()).toContain('could not be loaded')

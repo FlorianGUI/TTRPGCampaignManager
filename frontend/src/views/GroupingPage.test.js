@@ -3,9 +3,13 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PrimeVue from 'primevue/config'
+import { PrimeVueToastSymbol } from 'primevue/usetoast'
 import GroupingPage from './GroupingPage.vue'
 
 const request = vi.hoisted(() => vi.fn())
+
+/* A fake in place of the real service — see the note in `MoveControl.test.js`. */
+const toast = { add: vi.fn() }
 
 vi.mock('../api/client.js', () => ({ request }))
 
@@ -90,7 +94,10 @@ async function render({ kind = 'act', id = 'a-1', ...rest } = {}) {
   answering(rest)
   const wrapper = mount(GroupingPage, {
     props: { campaignId: 'c-1', kind, id },
-    global: { plugins: [PrimeVue, createPinia(), routerFor()] },
+    global: {
+      plugins: [PrimeVue, createPinia(), routerFor()],
+      provide: { [PrimeVueToastSymbol]: toast },
+    },
   })
   await flushPromises()
   return wrapper

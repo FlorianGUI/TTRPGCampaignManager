@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import Tooltip from 'primevue/tooltip'
+import ToastService from 'primevue/toastservice'
 import 'primeicons/primeicons.css'
 import './assets/base.css'
 import App from './App.vue'
@@ -37,6 +38,13 @@ app.use(PrimeVue, {
  * the campaign name in the sidebar is the first thing that does.
  */
 app.directive('tooltip', Tooltip)
+
+/*
+ * What `useWriteFailure` speaks through. A service rather than a component here:
+ * it is the queue, and the one `<Toast />` that renders it lives in App.vue —
+ * installing this without that would be a queue nobody reads (#111).
+ */
+app.use(ToastService)
 
 installTheme()
 

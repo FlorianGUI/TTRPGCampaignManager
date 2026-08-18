@@ -12,11 +12,25 @@ from app.contexts.campaign.adapters.primary.api.schemas.structure import (
 )
 from app.contexts.campaign.application.structure_service import Structure, StructureService
 from app.contexts.campaign.domain.narrative_access import Narrative
+from app.contexts.campaign.domain.siblings import AnchorNotAvailable
 
 # The one read beyond the per-entity routes, and the only one #88 asks for. Campaign-gated
 # like everything else in this context: an unreachable campaign answers "Campaign not
 # found" before any of the three queries runs.
 NO_CAMPAIGN = not_available_responses("Campaign not found")
+
+# Placing something can miss in two ways, and the schema says both. The row being moved may
+# not resolve — one of the three per-kind sentences, since the body names its kind — or the
+# anchor may not be in the group it was given. They are told apart on purpose (#110): a
+# refusal that says "Scene not found" about the scene the caller just asked to move sends
+# whoever reads it looking in the wrong place.
+NO_ROW_OR_ANCHOR = not_available_responses(
+    "Campaign not found",
+    "Act not found",
+    "Sequence not found",
+    "Scene not found",
+    AnchorNotAvailable.detail,
+)
 
 router = APIRouter(
     prefix="/campaigns/{campaign_id}/structure",
@@ -50,7 +64,7 @@ async def get_structure(
     return _response(await service.of(narrative))
 
 
-@router.put("/placement", response_model=StructureResponse, responses=NO_CAMPAIGN)
+@router.put("/placement", response_model=StructureResponse, responses=NO_ROW_OR_ANCHOR)
 async def place_item(
     body: StructurePlacement,
     narrative: Narrative = Depends(get_narrative),
@@ -67,5 +81,11 @@ async def place_item(
     when a write fails; the other half of being honest is that a *successful* move can shift
     rows nobody dragged — the gap running out renumbers a whole sibling list — and a client
     holding one row cannot know that happened.
+
+    **Its two 404s say different things**, which is the rest of #110. The row being moved
+    not resolving is "Scene not found" and its siblings; an anchor that is not in the group
+    is `AnchorNotAvailable`, because answering the second with the first told a caller that
+    the scene it had just asked to move did not exist. Both are still one sentence for
+    every reason an id can fail to resolve.
     """
     return _response(await service.place(narrative, body.to_domain()))

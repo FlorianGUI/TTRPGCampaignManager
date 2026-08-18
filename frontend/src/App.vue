@@ -20,6 +20,7 @@
  */
 import { computed, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
+import Toast from 'primevue/toast'
 import AppShell from './components/AppShell.vue'
 import AuthLayout from './components/AuthLayout.vue'
 import BareLayout from './components/BareLayout.vue'
@@ -74,6 +75,15 @@ const layoutProps = computed(() =>
 </script>
 
 <template>
+  <!--
+    The one place messages from `useWriteFailure` land, and outside the `ready`
+    gate: it renders nothing until something is queued, and a toast that existed
+    only once the session had settled would be a toast the boot itself could not
+    use. It teleports to the body, so where it sits in this template decides
+    nothing about where it appears (#111).
+  -->
+  <Toast />
+
   <template v-if="auth.ready">
     <ServerUnreachable v-if="!auth.reachable" />
 

@@ -63,6 +63,8 @@ frontend/
       campaigns.js                 # the campaigns you own, and the three writes
       sources.js                   # the sources you own, read-only
       currentCampaign.js           # the remembered campaign — storage, not a store
+    composables/
+      useWriteFailure.js           # what the app says when a write is refused
     design-system/
       preset.js                    # composes the three layers into the preset
       tokens/
@@ -490,6 +492,42 @@ Three things follow, and all three are load-bearing:
   Without that a browser can keep pointing at yesterday's API host.
 - **The script tag is deliberately not a module.** It has to have run before the
   app's first import; `type="module"` defers it and it would not have.
+
+### When a write is refused
+
+**Reads and writes fail differently, and the app answers them differently.** The
+distinction is worth stating because getting it wrong is how the outline came to
+swallow every write failure silently (#111).
+
+| what failed                                                    | who holds it                 | what is shown                                        |
+| -------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| a read (`ensureLoaded`, `ensureNode`)                          | `structure.error`            | a `Message` in place of the page, with **Try again** |
+| a write from a **form** (`SceneView`, `GroupingPage`)          | the page's own `failure` ref | a `Message` beside the fields                        |
+| a write from a **control** (move, add, rename, delete, status) | nobody — it is transient     | a toast, via `useWriteFailure()`                     |
+
+The third row is the one that did not exist. Those writes come from a `⋮` menu
+and a plus rather than from a form, so a rejection had nowhere to go: every one
+of them was `try`/`finally` with no `catch`, the spinner stopped, the row stayed
+where it was, and the only trace was an uncaught `ApiError` in a console no game
+master has open.
+
+- **`useWriteFailure()` is the one mechanism**, and `COULD_NOT_SAVE` is the one
+  sentence. The two forms keep their own `failure` ref — they have somewhere to
+  put a message, and that ref also carries `"Give it a title."`, which is not a
+  write failure — but they import the sentence rather than writing a fourth.
+- **`failed()` takes no argument, deliberately.** The API's own detail is written
+  for whoever wrote the request, so there is no door for it to come through
+  (#102 settled that reasoning for signup).
+- **The toast is sticky.** It carries a close button and no `life`: a message
+  that fades is the easiest one to miss, and this one says the screen is not what
+  was asked for.
+- **`<Toast />` is rendered once, in `App.vue`**, outside the `auth.ready` gate,
+  and `ToastService` is installed in `main.js`. It is the app's only toast — if a
+  second kind of message ever wants one, decide then whether it is the same voice.
+- **Nothing needs rolling back.** `place` writes the tree from the response and
+  the other writes refetch, so a refused write never changed the screen; the
+  status dot is drawn from the tree and holds no state of its own. What was
+  missing was only saying so.
 
 ### Sessions
 

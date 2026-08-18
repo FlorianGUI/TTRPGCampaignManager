@@ -18,6 +18,7 @@ import AddChild from './AddChild.vue'
 import MoveControl from './MoveControl.vue'
 import SceneStatus from './SceneStatus.vue'
 import { titleOf, useStructureStore } from '../../stores/structure.js'
+import { useWriteFailure } from '../../composables/useWriteFailure.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -42,6 +43,7 @@ const props = defineProps({
 const emit = defineEmits(['toggle', 'created', 'renamed', 'cancel-rename'])
 
 const structure = useStructureStore()
+const { failed } = useWriteFailure()
 
 const name = computed(() => titleOf(props.node, props.kind))
 
@@ -76,15 +78,24 @@ watch(
  * progress dot above catches up in the same round trip.
  */
 async function cycle(status) {
-  const scene =
-    (await structure.ensureNode(props.campaignId, 'scene', props.node.id)) ??
-    structure.nodeFor('scene', props.node.id)
+  try {
+    const scene =
+      (await structure.ensureNode(props.campaignId, 'scene', props.node.id)) ??
+      structure.nodeFor('scene', props.node.id)
 
-  await structure.saveNode(props.campaignId, 'scene', props.node.id, {
-    title: props.node.title,
-    body: scene?.body ?? '',
-    status,
-  })
+    await structure.saveNode(props.campaignId, 'scene', props.node.id, {
+      title: props.node.title,
+      body: scene?.body ?? '',
+      status,
+    })
+  } catch {
+    /*
+     * Nothing to put back. `SceneStatus` is drawn from `node.status` off the
+     * tree and holds no state of its own, so the dot never changed — it simply
+     * did not move, which is indistinguishable from a click that missed (#111).
+     */
+    failed()
+  }
 }
 
 async function commit() {
@@ -92,10 +103,20 @@ async function commit() {
 
   const title = draft.value.trim()
   if (title && title !== props.node.title) {
-    await structure.saveNode(props.campaignId, props.kind, props.node.id, {
-      title,
-      ...(props.kind === 'scene' ? { body: '', status: 'planned' } : { description: '' }),
-    })
+    try {
+      await structure.saveNode(props.campaignId, props.kind, props.node.id, {
+        title,
+        ...(props.kind === 'scene' ? { body: '', status: 'planned' } : { description: '' }),
+      })
+    } catch {
+      /*
+       * The row goes back to the title the tree still holds, which for a row
+       * added moments ago is no title at all. That is the truth of it: the name
+       * was not written, and leaving the typed one on screen would be the outline
+       * showing something the campaign does not contain.
+       */
+      failed()
+    }
   }
 
   emit('renamed')

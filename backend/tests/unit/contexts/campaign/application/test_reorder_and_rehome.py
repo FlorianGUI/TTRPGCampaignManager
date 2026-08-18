@@ -12,7 +12,7 @@ from app.contexts.campaign.domain.act import ActNotAvailable
 from app.contexts.campaign.domain.campaign import Campaign, CampaignAccess
 from app.contexts.campaign.domain.narrative_access import Narrative
 from app.contexts.campaign.domain.position import POSITION_GAP
-from app.contexts.campaign.domain.scene import SceneNotAvailable
+from app.contexts.campaign.domain.siblings import AnchorNotAvailable
 from tests.unit.contexts.campaign.application.fakes import (
     FakeActRepository,
     FakeSceneRepository,
@@ -108,18 +108,25 @@ class TestReorderingWithinOneParent:
     async def test_an_anchor_from_another_parent_is_refused(
         self, scene_service: SceneService, act_service: ActService, narrative: Narrative
     ):
-        """A real scene of this campaign, but not a sibling of where this one is going."""
+        """A real scene of this campaign, but not a sibling of where this one is going.
+
+        `AnchorNotAvailable` rather than `SceneNotAvailable`, since #110: the scene being
+        moved was found — it is the anchor that is not in the group, and answering with the
+        moved record's 404 said the opposite.
+        """
         act = await act_service.create(narrative, "Act I")
         in_the_act = await scene_service.create(narrative, "Arrival at dusk", act_id=act.id)
         loose = await scene_service.create(narrative, "Session zero")
 
-        with pytest.raises(SceneNotAvailable):
+        with pytest.raises(AnchorNotAvailable):
             await scene_service.place(loose.id, narrative, after=in_the_act.id)
 
     async def test_an_anchor_that_never_existed_is_refused(self, scene_service: SceneService, narrative: Narrative):
         scene = await scene_service.create(narrative, "Session zero")
 
-        with pytest.raises(SceneNotAvailable):
+        # The same answer as an anchor from another parent, deliberately: which of the two
+        # it was is not something a caller gets to learn.
+        with pytest.raises(AnchorNotAvailable):
             await scene_service.place(scene.id, narrative, after=SceneId(uuid.uuid4()))
 
 
@@ -269,7 +276,7 @@ class TestOneParentIsOneList:
         elsewhere = await sequence_service.create(narrative, "The Causeway", act_id=second.id)
         scene = await scene_service.create(narrative, "Interlude", act_id=first.id)
 
-        with pytest.raises(SceneNotAvailable):
+        with pytest.raises(AnchorNotAvailable):
             await scene_service.place(scene.id, narrative, act_id=first.id, after=elsewhere.id)
 
     async def test_a_renumber_spans_both_kinds(

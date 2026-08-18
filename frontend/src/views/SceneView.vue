@@ -25,6 +25,11 @@ import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import SceneStatus from '../components/narrative/SceneStatus.vue'
 import SceneStepper from '../components/narrative/SceneStepper.vue'
 import { scenesInOrder, titleOf, trailTo, useStructureStore } from '../stores/structure.js'
+// The sentence, not the mechanism: this is a form and has somewhere of its own
+// to put a message, beside the field that was being saved. What it borrows is
+// the wording, so the app has one answer to a refused write rather than four
+// (#111) — see `useWriteFailure` for why the outline needs the other half.
+import { COULD_NOT_SAVE } from '../composables/useWriteFailure.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -78,7 +83,7 @@ async function cycle(status) {
       status,
     })
   } catch {
-    failure.value = 'That could not be saved.'
+    failure.value = COULD_NOT_SAVE
   }
 }
 
@@ -104,7 +109,7 @@ async function save() {
 
     editing.value = false
   } catch {
-    failure.value = 'That could not be saved.'
+    failure.value = COULD_NOT_SAVE
   } finally {
     saving.value = false
   }
