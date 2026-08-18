@@ -8,3 +8,7 @@ __pycache__/
 dist/
 .coverage
 htmlcov/
+# Installed dependencies. Never tracked — a symlink or a directory here is a
+# machine's own layout, and one committed by accident breaks `npm ci` for
+# everyone who clones (it happened: see the commit that removed it).
+node_modules/

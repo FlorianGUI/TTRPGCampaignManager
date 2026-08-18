@@ -500,31 +500,42 @@ describe('the structure page', () => {
       )
     })
 
-    it('renders the description in the dialect rather than printing its markup', async () => {
-      // Inline, so a chip is a chip. A row in the outline below reduces the same
-      // field to its words (#132) because a list cell has no room for one.
-      const wrapper = await render(EMPTY, campaign)
-
-      expect(wrapper.findComponent({ name: 'EntityTag' }).exists()).toBe(true)
-      expect(wrapper.find('.structure__description').text()).not.toContain(':npc[')
-    })
-
-    it('sits under the name as a block, the way an act’s does in a row below', async () => {
+    it('says what the description says, without what it is written in', async () => {
       /*
-       * `mode="inline"` renders a `<span>` root, and on an inline box a vertical
-       * margin and a `max-width` are ignored — the lede then has neither space
-       * under the name nor a measure, and flows as text beside it rather than
-       * sitting under it. The class carries `display: block` for that reason, so
-       * this asserts the element it lands on is the one being blockified.
+       * The same reduction `OutlineRow` makes for an act's, one level down
+       * (#132): `:npc[Fen Warden]` is characters an author typed, not ones a
+       * reader should meet. Reducing rather than rendering the dialect also
+       * keeps a heading or a read-aloud box out of a page header.
        */
       const wrapper = await render(EMPTY, campaign)
       const lede = wrapper.find('.structure__description')
 
-      expect(lede.element.tagName).toBe('SPAN')
-      // Outside the row that holds the title and the controls, so it inherits
-      // none of that row's alignment — see the note in the template.
+      expect(lede.text()).toContain('Fen Warden')
+      expect(lede.text()).not.toContain(':npc[')
+      expect(wrapper.findComponent({ name: 'EntityTag' }).exists()).toBe(false)
+    })
+
+    it('sits under the name, outside the row that holds the controls', async () => {
+      // The lede was a third item in that flex row once, and inherited its
+      // alignment and its gap — see the note in the template.
+      const wrapper = await render(EMPTY, campaign)
+
       expect(wrapper.find('.structure__head-row .structure__description').exists()).toBe(false)
       expect(wrapper.find('.structure__head > .structure__description').exists()).toBe(true)
+    })
+
+    it('leaves no empty line where the description reduces to nothing', async () => {
+      /*
+       * Reduction can empty a field that is not itself empty — whitespace is the
+       * case that reaches it, since the API takes a bare string and a description
+       * of three spaces is a description as far as the record is concerned.
+       * Guarding on the raw text would put a blank italic line under the name
+       * with nothing in it and nothing to explain it, so the guard is on the
+       * words rather than on the field.
+       */
+      const wrapper = await render(EMPTY, { ...campaign, description: '   ' })
+
+      expect(wrapper.find('.structure__description').exists()).toBe(false)
     })
 
     it('leaves no empty line where a campaign has no description', async () => {
