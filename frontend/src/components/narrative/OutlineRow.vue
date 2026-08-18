@@ -18,6 +18,7 @@ import AddChild from './AddChild.vue'
 import MoveControl from './MoveControl.vue'
 import SceneStatus from './SceneStatus.vue'
 import { titleOf, useStructureStore } from '../../stores/structure.js'
+import { toPlainText } from '../../markdown/toPlainText.js'
 import { useWriteFailure } from '../../composables/useWriteFailure.js'
 
 const props = defineProps({
@@ -46,6 +47,24 @@ const structure = useStructureStore()
 const { failed } = useWriteFailure()
 
 const name = computed(() => titleOf(props.node, props.kind))
+
+/*
+ * What the description says, without what it is written in. A row is a list
+ * cell, and the third projection exists for exactly this: `**bold**` and
+ * `:npc[Fen Warden]` are characters an author typed, never ones a reader should
+ * meet (#132). The act's own page renders the same field properly, one click
+ * away, which is where there is room for it.
+ *
+ * Reduced rather than rendered inline, which is the other way to stop printing
+ * syntax. A markdown link in here would come out indistinguishable from the
+ * title's link beside it — `.row__main a` strips both of colour and underline
+ * so a row reads as text — and two destinations with one appearance is worse
+ * than no emphasis. Reduction cannot introduce a second target.
+ *
+ * An empty result drops the paragraph, so a description that is only markup
+ * leaves no blank line behind.
+ */
+const summary = computed(() => toPlainText(props.node.description))
 
 const draft = ref('')
 const field = ref(null)
@@ -208,7 +227,7 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
         </span>
       </div>
 
-      <p v-if="node.description" class="row__description">{{ node.description }}</p>
+      <p v-if="summary" class="row__description">{{ summary }}</p>
     </div>
   </div>
 </template>
