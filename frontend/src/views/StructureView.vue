@@ -26,6 +26,7 @@ import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
+import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import AddChild from '../components/narrative/AddChild.vue'
 import OutlineRow from '../components/narrative/OutlineRow.vue'
 import { actProgress, useStructureStore } from '../stores/structure.js'
@@ -243,6 +244,29 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
              which is what puts the plus above the plus on every act. -->
         <span class="structure__meta" aria-hidden="true" />
       </div>
+
+      <!--
+        The campaign's description, under its name — the same thing an act's page
+        does with its own, on the page that is the campaign's own.
+
+        Inside the header rather than after it, so the rule that closes the
+        header stays under the whole heading block instead of running between a
+        name and the line that introduces it. It takes the full width and so
+        wraps onto its own row, which leaves the title and the controls sitting
+        exactly where they were.
+
+        `inline`, not `block`: this is a lede beside a control cluster, and the
+        block projection would let a heading or a read-aloud box open inside a
+        page header. Inline still renders the dialect's chips and dice, which is
+        what a row in the outline below cannot do (#132) and what there is room
+        for here.
+      -->
+      <CampaignMarkdown
+        v-if="campaign?.description"
+        class="structure__description"
+        mode="inline"
+        :source="campaign.description"
+      />
     </header>
 
     <ProgressSpinner
@@ -458,6 +482,14 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 .structure__head h1 {
   margin: var(--space-1) 0 0;
   font-size: var(--step-3);
+}
+
+/* Full width, so it takes a row of its own under the name and the controls. */
+.structure__description {
+  width: 100%;
+  max-width: 60ch;
+  color: var(--p-text-muted-color);
+  font-size: var(--step--1);
 }
 
 .structure__loading {

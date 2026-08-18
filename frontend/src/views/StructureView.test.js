@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import { PrimeVueToastSymbol } from 'primevue/usetoast'
 import StructureView from './StructureView.vue'
+import { useCampaignsStore } from '../stores/campaigns.js'
 import { COLLAPSED_STORAGE_KEY } from '../stores/collapsedNarrative.js'
 
 const request = vi.hoisted(() => vi.fn())
@@ -53,10 +54,21 @@ const scene = (id, title, position, extra = {}) => ({
 
 const EMPTY = { acts: [], sequences: [], scenes: [] }
 
-async function render(tree) {
+/*
+ * `campaign` is the row from the campaigns store, seeded here rather than
+ * fetched: the store is loaded by the shell around this page, and every
+ * assertion below is about what the page does with it. Absent by default, which
+ * is what it is until that request lands.
+ */
+async function render(tree, campaign = null) {
   request.mockResolvedValue(tree)
+
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  if (campaign) useCampaignsStore().items = [campaign]
+
   const wrapper = mount(StructureView, {
-    global: { plugins: [PrimeVue, createPinia()], provide: { [PrimeVueToastSymbol]: toast } },
+    global: { plugins: [PrimeVue, pinia], provide: { [PrimeVueToastSymbol]: toast } },
   })
   await flushPromises()
   return wrapper
@@ -463,5 +475,45 @@ describe('the structure page', () => {
 
     expect(wrapper.text()).toContain('could not be loaded')
     expect(wrapper.find('.structure__empty').exists()).toBe(false)
+  })
+
+  describe('the campaign at the head of it', () => {
+    const campaign = {
+      id: 'c-1',
+      name: 'The Drowned Chapel',
+      description: 'A coast that keeps what it takes, and :npc[Fen Warden] who counts it.',
+    }
+
+    it('says what the campaign is, under its name', async () => {
+      /*
+       * The same thing an act's page does with its own description, on the page
+       * that is the campaign's. It is the one screen where the campaign is the
+       * subject rather than the frame, so it is the one place the description
+       * has somewhere to be — the chrome deliberately has none (see
+       * `CampaignTitle`).
+       */
+      const wrapper = await render(EMPTY, campaign)
+
+      expect(wrapper.find('h1').text()).toBe('The Drowned Chapel')
+      expect(wrapper.find('.structure__description').text()).toContain(
+        'A coast that keeps what it takes',
+      )
+    })
+
+    it('renders the description in the dialect rather than printing its markup', async () => {
+      // Inline, so a chip is a chip. A row in the outline below reduces the same
+      // field to its words (#132) because a list cell has no room for one.
+      const wrapper = await render(EMPTY, campaign)
+
+      expect(wrapper.findComponent({ name: 'EntityTag' }).exists()).toBe(true)
+      expect(wrapper.find('.structure__description').text()).not.toContain(':npc[')
+    })
+
+    it('leaves no empty line where a campaign has no description', async () => {
+      const wrapper = await render(EMPTY, { ...campaign, description: '' })
+
+      expect(wrapper.find('.structure__description').exists()).toBe(false)
+      expect(wrapper.find('h1').text()).toBe('The Drowned Chapel')
+    })
   })
 })
