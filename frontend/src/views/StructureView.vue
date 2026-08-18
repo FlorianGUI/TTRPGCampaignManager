@@ -26,7 +26,6 @@ import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
-import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
 import AddChild from '../components/narrative/AddChild.vue'
 import OutlineRow from '../components/narrative/OutlineRow.vue'
 import { actProgress, useStructureStore } from '../stores/structure.js'
@@ -35,6 +34,7 @@ import { readCollapsed, rememberCollapsed } from '../stores/collapsedNarrative.j
 import { vDragToPlace } from '../directives/dragToPlace.js'
 import { useWriteFailure } from '../composables/useWriteFailure.js'
 import { t } from '../i18n/index.js'
+import { toPlainText } from '../markdown/toPlainText.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -152,6 +152,16 @@ const progressOf = (act) => actProgress(tree.value, act)
  */
 const sceneEntriesIn = (sequence) => scenesIn(sequence).map((node) => ({ kind: 'scene', node }))
 
+/*
+ * What the campaign's description says, without what it is written in — the
+ * same reduction `OutlineRow` makes for an act's, one level down (#132).
+ *
+ * Guarded on the result rather than on the field. A description that is only
+ * markup reduces to nothing, and `v-if` on the raw text would leave an empty
+ * italic line under the name with no way to tell what put it there.
+ */
+const summary = computed(() => toPlainText(campaign.value?.description))
+
 const isEmpty = computed(() => tree.value && !children.value.length)
 
 const everything = computed(() =>
@@ -264,18 +274,13 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
         header stays under the whole heading block instead of running between a
         name and the line that introduces it.
 
-        `inline`, not `block`: this is a lede under a heading, and the
-        block projection would let a heading or a read-aloud box open inside a
-        page header. Inline still renders the dialect's chips and dice, which is
-        what a row in the outline below cannot do (#132) and what there is room
-        for here.
+        Reduced to its words, exactly as `OutlineRow` reduces an act's one level
+        down — same projection, same treatment, so the campaign's description
+        and its acts' read as the same kind of thing rather than as two. It also
+        keeps a heading or a read-aloud box from opening inside a page header,
+        which is what rendering the dialect here would allow.
       -->
-      <CampaignMarkdown
-        v-if="campaign?.description"
-        class="structure__description"
-        mode="inline"
-        :source="campaign.description"
-      />
+      <p v-if="summary" class="structure__description">{{ summary }}</p>
     </header>
 
     <ProgressSpinner
@@ -518,7 +523,6 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 .structure__description {
   display: block;
   margin: var(--space-1) 0 0;
-  max-width: 60ch;
   color: var(--p-text-muted-color);
   font-size: var(--step--1);
   font-style: italic;
