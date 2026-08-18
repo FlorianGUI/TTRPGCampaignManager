@@ -38,11 +38,21 @@ const submitting = ref(false)
  * one goes missing entirely. They are here because a field with no message is
  * the failure this issue is about, and because password rules are the kind of
  * thing that arrives later.
+ *
+ * Those two share one sentence, and it names no field. It does not need to: the
+ * message renders under the label and `FormField` ties it there with
+ * `aria-describedby`, so the placement says which field it is — which is the
+ * whole point of this issue. Naming it in the words as well would be saying it
+ * twice, and would be two sentences to keep in step for a case that says the
+ * same thing either way. `email` keeps its own because it says something more
+ * than "no": that the address itself is the problem.
  */
+const NOT_ACCEPTED = 'That was not accepted. Try a different one.'
+
 const FIELD_SAYS = {
-  username: 'That username was not accepted. Try a different one.',
+  username: NOT_ACCEPTED,
   email: 'That does not look like an email address we can use. Try another.',
-  password: 'That password was not accepted. Try a different one.',
+  password: NOT_ACCEPTED,
 }
 
 /*

@@ -157,8 +157,16 @@ describe('SignupView', () => {
       const view = mountView()
       await submitWith(view)
 
-      expect(view.find('#signup-username-error').exists()).toBe(true)
-      expect(view.find('#signup-password-error').exists()).toBe(true)
+      const username = view.find('#signup-username-error')
+      const password = view.find('#signup-password-error')
+
+      expect(username.exists()).toBe(true)
+      // Word for word the same, deliberately: the message sits under the label
+      // and is tied to the field by `aria-describedby`, so the placement already
+      // says which one it is. Naming it in the sentence too would be saying it
+      // twice, and would be two strings to keep in step for no difference.
+      expect(password.text()).toBe(username.text())
+      expect(username.text()).not.toContain('username')
     })
 
     it('falls back to the form when it names a field that is not here', async () => {
