@@ -275,6 +275,16 @@ async function save() {
   margin-top: var(--space-4);
 }
 
+/*
+ * Filled rather than measured, for the reason `SceneView` sets out at length:
+ * the two-thirds page column is what keeps the line length down, so `.prose`'s
+ * own `max-width: var(--measure)` would clamp an already-narrow column a second
+ * time and leave a third of it blank. Declined here as `SpikeView` declines it.
+ */
+.node__prose {
+  max-width: none;
+}
+
 .node__field {
   width: 100%;
   font-family: var(--grimoire-font-mono);

@@ -186,9 +186,12 @@ async function save() {
  * Two thirds of the pane, like the act and sequence pages, so moving between the
  * three does not move the column under the reader.
  *
- * The prose inside still holds its own measure — `.scene__body` is capped at a
- * reading width, because prose set to 120 characters is not read, it is skimmed.
- * The page is two thirds; the paragraph is not.
+ * That column is the whole of the measure. The prose inside fills it rather than
+ * clamping again within it: two caps meant the same component came out 529px
+ * here and 580px on an act, so the paragraph moved under the reader between two
+ * pages whose panes are both exactly 1046px (#133) — and the narrower of the two
+ * left a third of an already-narrow column blank. Two thirds of the pane is what
+ * holds the line length down. The paragraph does not restate it.
  */
 .scene {
   padding: var(--space-5) 0 var(--space-7);
@@ -201,8 +204,13 @@ async function save() {
   }
 }
 
+/*
+ * Filled rather than measured — see the note above. `.prose` carries
+ * `max-width: var(--measure)` in with it, and this is where it is declined, the
+ * same way `SpikeView` declines it for its narrative column.
+ */
 .scene__body {
-  max-width: 62ch;
+  max-width: none;
 }
 
 .scene__head {
