@@ -216,34 +216,44 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 <template>
   <article class="structure">
     <header class="structure__head">
-      <h1>{{ campaign?.name ?? t('structure.heading') }}</h1>
+      <!--
+        The name and the controls are one row, and the description is under it
+        rather than beside it. All three were siblings in a single flex row, so
+        the description inherited the whole of that row's layout — `align-items:
+        flex-end`, `space-between`, and `gap` counted as a *row* gap, which set a
+        lede a full step below the name it introduces and moved it again
+        whenever the controls wrapped at a narrow width.
+      -->
+      <div class="structure__head-row">
+        <h1>{{ campaign?.name ?? t('structure.heading') }}</h1>
 
-      <!-- The campaign's own controls, laid out like a row's: whatever else is
-           here, then the plus, then the column a row keeps its status and move
-           menu in. So the campaign's plus sits above every act's plus. -->
-      <div class="structure__actions">
-        <Button
-          v-if="everything.length"
-          class="structure__collapse"
-          size="small"
-          severity="secondary"
-          outlined
-          :label="allShut ? t('structure.expandAll') : t('structure.collapseAll')"
-          @click="toggleAll"
-        />
+        <!-- The campaign's own controls, laid out like a row's: whatever else is
+             here, then the plus, then the column a row keeps its status and move
+             menu in. So the campaign's plus sits above every act's plus. -->
+        <div class="structure__actions">
+          <Button
+            v-if="everything.length"
+            class="structure__collapse"
+            size="small"
+            severity="secondary"
+            outlined
+            :label="allShut ? t('structure.expandAll') : t('structure.collapseAll')"
+            @click="toggleAll"
+          />
 
-        <AddChild
-          v-if="tree"
-          :campaign-id="campaignId"
-          :allowed="['act', 'scene']"
-          :parent-name="campaign?.name ?? t('structure.theCampaign')"
-          @created="added"
-        />
+          <AddChild
+            v-if="tree"
+            :campaign-id="campaignId"
+            :allowed="['act', 'scene']"
+            :parent-name="campaign?.name ?? t('structure.theCampaign')"
+            @created="added"
+          />
 
-        <!-- A campaign has no status of its own and cannot be moved, so its
-             copy of the row's trailing column is empty — but it is still there,
-             which is what puts the plus above the plus on every act. -->
-        <span class="structure__meta" aria-hidden="true" />
+          <!-- A campaign has no status of its own and cannot be moved, so its
+               copy of the row's trailing column is empty — but it is still
+               there, which is what puts the plus above the plus on every act. -->
+          <span class="structure__meta" aria-hidden="true" />
+        </div>
       </div>
 
       <!--
@@ -252,11 +262,9 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 
         Inside the header rather than after it, so the rule that closes the
         header stays under the whole heading block instead of running between a
-        name and the line that introduces it. It takes the full width and so
-        wraps onto its own row, which leaves the title and the controls sitting
-        exactly where they were.
+        name and the line that introduces it.
 
-        `inline`, not `block`: this is a lede beside a control cluster, and the
+        `inline`, not `block`: this is a lede under a heading, and the
         block projection would let a heading or a read-aloud box open inside a
         page header. Inline still renders the dialect's chips and dice, which is
         what a row in the outline below cannot do (#132) and what there is room
@@ -473,24 +481,32 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
   padding: var(--space-5) 0 var(--space-7);
 }
 
+/* The block, and the rule that closes it. The row inside does the aligning. */
 .structure__head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--p-grimoire-rule-color);
+}
+
+.structure__head-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--p-grimoire-rule-color);
 }
 
-.structure__head h1 {
+.structure__head-row h1 {
   margin: var(--space-1) 0 0;
   font-size: var(--step-3);
 }
 
-/* Full width, so it takes a row of its own under the name and the controls. */
+/*
+ * Its own margin rather than the row's gap: the distance between a title and
+ * the controls beside it is not the distance between a title and the line
+ * introducing it, and they do not have to be the same number.
+ */
 .structure__description {
-  width: 100%;
+  margin: var(--space-2) 0 0;
   max-width: 60ch;
   color: var(--p-text-muted-color);
   font-size: var(--step--1);
