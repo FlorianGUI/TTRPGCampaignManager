@@ -65,6 +65,8 @@ frontend/
       currentCampaign.js           # the remembered campaign — storage, not a store
     composables/
       useWriteFailure.js           # what the app says when a write is refused
+    directives/
+      dragToPlace.js               # dragging a row of the outline, over the ⋮ menu
     design-system/
       preset.js                    # composes the three layers into the preset
       tokens/
@@ -492,6 +494,50 @@ Three things follow, and all three are load-bearing:
   Without that a browser can keep pointing at yesterday's API host.
 - **The script tag is deliberately not a module.** It has to have run before the
   app's first import; `type="module"` defers it and it would not have.
+
+### Moving a row: two gestures, one call
+
+The outline can be rearranged with the `⋮` menu or by dragging (#109), and the
+relationship between them is not negotiable.
+
+**The menu is the one that must always work.** WCAG 2.2's **2.5.7 Dragging
+Movements** asks that anything achievable by dragging also be achievable with a
+single pointer and no drag — the menu is what makes that true, and it is also the
+only path a keyboard or a screen reader has. A change that breaks it is a
+regression however good the drag feels. Its tests are the canary and should stay
+untouched.
+
+**Both end in the same `structure.place` call.** Two gestures building their own
+request bodies would drift, and the way that shows up is an omitted parent —
+which the API reads as "put this on the campaign", not as "reorder".
+
+`directives/dragToPlace.js` is the whole of the drag, and three things in it are
+load-bearing:
+
+- **The DOM is handed back before the API is asked.** SortableJS moves real
+  nodes; Vue believes its own vnode tree. `onEnd` puts the element back exactly
+  where it started, then calls `place`, and the response redraws — without that,
+  the next patch runs against a shape Vue never made and `insertBefore` throws.
+- **Each list describes itself on itself** (`data-parent-id`, `data-parent-kind`,
+  `data-accepts`; rows carry `data-id` / `data-kind`). A drop can land in a
+  different list than it started in, so the answer has to be readable off the
+  target rather than held in the closure of whichever list the drag began in.
+  It also makes the placement a pure function over a document, which is the one
+  part of a drag that can honestly be unit tested.
+- **`forceFallback: true`.** Native HTML5 dragging is desktop-only — on touch
+  SortableJS falls back anyway — so leaving it on means two gestures to reason
+  about and only one of them ever seen on a phone. It also stops the row's link
+  being dragged as a URL instead.
+
+What may hold what is enforced in `group.put` while dragging, so an illegal drop
+is refused **visibly** — the placeholder never appears in a list that will not
+have the row — rather than being accepted and undone. A cycle is impossible as a
+consequence of that rather than as a rule of its own: no list inside an act
+accepts an act.
+
+**The gesture cannot be tested in jsdom**, which lays nothing out. The split is
+the one #109 asks for: the placement arithmetic and the wiring are unit tested,
+and the gesture is checked by hand — see the PR for what was walked through.
 
 ### When a write is refused
 

@@ -304,6 +304,83 @@ describe('the structure page', () => {
     expect(outline(wrapper)).toEqual(['Act I', 'The Causeway', 'Interlude'])
   })
 
+  /*
+   * The drag, at the only point jsdom can reach it: what the page does once a
+   * drop has been worked out. The gesture is `dragToPlace`'s business and is
+   * hand-checked — see the note in its tests.
+   */
+  describe('dropping a row', () => {
+    const TREE = {
+      acts: [act('a-1', 'Act I', 1024)],
+      sequences: [sequence('q-1', 'The Causeway', 1024, 'a-1')],
+      scenes: [scene('s-1', 'Interlude', 2048, { act_id: 'a-1' })],
+    }
+
+    it('makes the same call the ⋮ menu makes', async () => {
+      /*
+       * The rule the whole slice rests on: one path to the API. Two gestures
+       * building their own bodies would drift, and the way that shows up is an
+       * omitted parent — which means "put this on the campaign", not "reorder".
+       */
+      const wrapper = await render(TREE)
+
+      request.mockClear()
+      request.mockResolvedValue(TREE)
+      await wrapper.vm.dropped({
+        item: { id: 's-1', kind: 'scene' },
+        parent: { id: 'a-1', kind: 'act' },
+        after: { id: 'q-1', kind: 'sequence' },
+      })
+
+      expect(request).toHaveBeenCalledWith('/campaigns/c-1/structure/placement', {
+        method: 'PUT',
+        json: {
+          item: { id: 's-1', kind: 'scene' },
+          parent: { id: 'a-1', kind: 'act' },
+          after: { id: 'q-1', kind: 'sequence' },
+        },
+      })
+    })
+
+    it('says so when the drop is refused', async () => {
+      // The row is already back where it started — the directive hands the DOM
+      // over before asking — so without this it springs home and says nothing.
+      const wrapper = await render(TREE)
+
+      toast.add.mockClear()
+      request.mockRejectedValue(new Error('nope'))
+      await wrapper.vm.dropped({
+        item: { id: 's-1', kind: 'scene' },
+        parent: null,
+        after: null,
+      })
+
+      expect(toast.add).toHaveBeenCalledTimes(1)
+    })
+
+    it('springs a shut act open when a row is held over it', async () => {
+      const wrapper = await render(TREE)
+      await wrapper.get('.chevron').trigger('click')
+      expect(outline(wrapper)).toEqual(['Act I'])
+
+      wrapper.vm.springOpen('a-1')
+      await wrapper.vm.$nextTick()
+
+      expect(outline(wrapper)).toEqual(['Act I', 'The Causeway', 'Interlude'])
+    })
+
+    it('never shuts one that is already open', async () => {
+      // It is `springOpen`, not `toggle`: a pointer resting over an act that is
+      // open must not close it under the row being dragged into it.
+      const wrapper = await render(TREE)
+
+      wrapper.vm.springOpen('a-1')
+      await wrapper.vm.$nextTick()
+
+      expect(outline(wrapper)).toEqual(['Act I', 'The Causeway', 'Interlude'])
+    })
+  })
+
   it('says so when marking a scene off is refused', async () => {
     /*
      * The status dot is drawn from the tree and holds no state of its own, so a

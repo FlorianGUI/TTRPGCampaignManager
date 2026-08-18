@@ -174,9 +174,19 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
             @keyup.esc="$emit('cancel-rename')"
             @blur="commit"
           />
-          <RouterLink v-else :to="to" :class="{ 'row__title--unnamed': !node.title?.trim() }">{{
-            name
-          }}</RouterLink>
+          <!--
+            `draggable="false"` because the row itself is the drag surface
+            (#109) and an anchor is natively draggable: without this the browser
+            starts dragging the *link* — a URL, with its own ghost image — and
+            the row never moves.
+          -->
+          <RouterLink
+            v-else
+            :to="to"
+            draggable="false"
+            :class="{ 'row__title--unnamed': !node.title?.trim() }"
+            >{{ name }}</RouterLink
+          >
         </component>
 
         <!-- Where a new record lands is read before it is added. -->

@@ -14,9 +14,12 @@
  * Nothing is less valid than anything else — a campaign of scenes and no acts is
  * a working campaign.
  *
- * Read-only, deliberately. This is #88's first PR and it proves the tree renders
- * before anything can rearrange it; editing, reordering and the node pages are
- * the two that follow.
+ * **Two ways to move a row, and one path to the API.** The ⋮ menu is the one
+ * that must always work — it is what a keyboard and a screen reader use, and
+ * WCAG 2.2's 2.5.7 asks that everything a drag can do be doable without one.
+ * Dragging is laid over it (#109) and ends in the same `place` call, because two
+ * gestures building their own request bodies would eventually disagree about
+ * what a move means.
  */
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -28,6 +31,8 @@ import OutlineRow from '../components/narrative/OutlineRow.vue'
 import { actProgress, useStructureStore } from '../stores/structure.js'
 import { useCampaignsStore } from '../stores/campaigns.js'
 import { readCollapsed, rememberCollapsed } from '../stores/collapsedNarrative.js'
+import { vDragToPlace } from '../directives/dragToPlace.js'
+import { useWriteFailure } from '../composables/useWriteFailure.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -160,6 +165,50 @@ function toggleAll() {
   collapsed.value = next
   rememberCollapsed(campaignId.value, next)
 }
+
+/*
+ * Dropping a row: the same call the ⋮ menu makes, and deliberately the only
+ * path to the API either of them has (#109). Two ways of moving something that
+ * built their own request bodies would eventually disagree about what a move
+ * means — an omitted parent is "put this on the campaign", which is not what a
+ * reorder ever intends.
+ *
+ * The failure is the one from #111. A refused drop has nowhere of its own to
+ * report to: the row is already back where it started, because the directive
+ * hands the DOM back before asking, so without this it would spring home and
+ * say nothing.
+ */
+const { failed } = useWriteFailure()
+
+async function dropped({ item, parent, after }) {
+  try {
+    await structure.place(campaignId.value, item.kind, item.id, { parent, after })
+  } catch {
+    failed()
+  }
+}
+
+/*
+ * A shut row held under a dragged one opens, rather than being dropped into
+ * blind. Not `toggle`: springing open must never *close* something, and a
+ * pointer resting over an act that is already open should do nothing at all.
+ */
+function springOpen(id) {
+  if (!collapsed.value.has(id)) return
+
+  toggle(id)
+}
+
+/* What each list is, and what it may hold — the tree's shape, written once per
+ * level and read back off the DOM when something is dropped. */
+const CAMPAIGN_LIST = { parent: null, accepts: ['act', 'sequence', 'scene'] }
+
+const listFor = (kind, node) => ({
+  parent: { id: node.id, kind },
+  accepts: kind === 'act' ? ['sequence', 'scene'] : ['scene'],
+})
+
+const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen })
 </script>
 
 <template>
@@ -216,8 +265,28 @@ function toggleAll() {
       scene straight onto the campaign and add the shape later.
     </p>
 
-    <ol v-else-if="tree" class="outline">
-      <li v-for="child in children" :key="child.node.id" class="outline__group">
+    <!--
+      Three lists, one per level, each sortable and all in one group so a row can
+      be dragged out of its parent into another. What may land where is the
+      list's own business — see `dragToPlace`, which reads it back off these
+      elements when something is dropped.
+
+      The rows carry `data-shut` and `data-accepts` as well, because a collapsed
+      act has no children list to ask: those two are what let it spring open
+      under a row held over it.
+    -->
+    <ol v-else-if="tree" v-drag-to-place="dragging(CAMPAIGN_LIST)" class="outline">
+      <li
+        v-for="child in children"
+        :key="child.node.id"
+        class="outline__group"
+        :data-id="child.node.id"
+        :data-kind="child.kind"
+        :data-shut="isShut(child.node.id) || undefined"
+        :data-accepts="
+          child.kind === 'scene' ? undefined : listFor(child.kind, child.node).accepts.join(' ')
+        "
+      >
         <!-- ── An act ─────────────────────────────────────────────── -->
         <template v-if="child.kind === 'act'">
           <OutlineRow
@@ -237,8 +306,15 @@ function toggleAll() {
           />
 
           <template v-if="!isShut(child.node.id)">
-            <ol class="outline__children">
-              <li v-for="under in childrenOfAct(child.node)" :key="under.node.id">
+            <ol v-drag-to-place="dragging(listFor('act', child.node))" class="outline__children">
+              <li
+                v-for="under in childrenOfAct(child.node)"
+                :key="under.node.id"
+                :data-id="under.node.id"
+                :data-kind="under.kind"
+                :data-shut="isShut(under.node.id) || undefined"
+                :data-accepts="under.kind === 'sequence' ? 'scene' : undefined"
+              >
                 <!-- A sequence inside the act -->
                 <template v-if="under.kind === 'sequence'">
                   <OutlineRow
@@ -256,8 +332,17 @@ function toggleAll() {
                     @cancel-rename="renaming = null"
                   />
 
-                  <ol v-if="!isShut(under.node.id)" class="outline__children">
-                    <li v-for="scene in scenesIn(under.node)" :key="scene.id">
+                  <ol
+                    v-if="!isShut(under.node.id)"
+                    v-drag-to-place="dragging(listFor('sequence', under.node))"
+                    class="outline__children"
+                  >
+                    <li
+                      v-for="scene in scenesIn(under.node)"
+                      :key="scene.id"
+                      :data-id="scene.id"
+                      data-kind="scene"
+                    >
                       <OutlineRow
                         :campaign-id="campaignId"
                         kind="scene"
@@ -315,8 +400,17 @@ function toggleAll() {
             @cancel-rename="renaming = null"
           />
 
-          <ol v-if="!isShut(child.node.id)" class="outline__children">
-            <li v-for="scene in scenesIn(child.node)" :key="scene.id">
+          <ol
+            v-if="!isShut(child.node.id)"
+            v-drag-to-place="dragging(listFor('sequence', child.node))"
+            class="outline__children"
+          >
+            <li
+              v-for="scene in scenesIn(child.node)"
+              :key="scene.id"
+              :data-id="scene.id"
+              data-kind="scene"
+            >
               <OutlineRow
                 :campaign-id="campaignId"
                 kind="scene"
@@ -409,6 +503,49 @@ function toggleAll() {
 
 .outline__group + .outline__group {
   border-top: 1px solid var(--p-grimoire-rule-color);
+}
+
+/*
+ * The three states SortableJS marks while a row is being dragged (#109).
+ *
+ * `.sortable-ghost` is the gap the row will drop into — the one thing that has
+ * to be unmistakable, because it is the answer to "where is this going". A tinted
+ * slot rather than an outline, so it reads as a space rather than as a row.
+ *
+ * `.sortable-drag` is the copy following the pointer, and it is the one place in
+ * this app where something genuinely floats: the overlay shadow is exactly what
+ * the README reserves for that, rather than an elevation scale the design system
+ * does not have.
+ */
+.outline .sortable-ghost > * {
+  opacity: 0.25;
+}
+
+.outline .sortable-ghost {
+  background: var(--p-content-hover-background);
+  border-radius: var(--p-border-radius-sm);
+}
+
+.outline .sortable-drag {
+  background: var(--p-content-background);
+  border-radius: var(--p-border-radius-sm);
+  box-shadow: var(--p-overlay-popover-shadow);
+  cursor: grabbing;
+}
+
+/*
+ * The row does not advertise a grab handle it does not have: the whole row is
+ * the surface, and the cursor is what says so. Only while a pointer is over a
+ * row that can move — the chevron, the plus and the menu keep their own.
+ */
+.outline__group,
+.outline__children > li {
+  cursor: grab;
+}
+
+.outline__group :is(button, input, a),
+.outline__children :is(button, input, a) {
+  cursor: revert;
 }
 
 /*
