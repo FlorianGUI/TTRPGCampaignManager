@@ -199,7 +199,12 @@ async function save() {
         />
       </div>
 
-      <NodeContents v-if="children.length" :campaign-id="campaignId" :children="children" />
+      <NodeContents
+        v-if="children.length"
+        :campaign-id="campaignId"
+        :parent="{ id, kind }"
+        :children="children"
+      />
       <p v-else class="node__empty">
         Nothing in it yet.
         <template v-if="kind === 'act'">
