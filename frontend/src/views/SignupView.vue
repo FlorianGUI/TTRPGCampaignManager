@@ -20,13 +20,61 @@ const router = useRouter()
 const username = ref('')
 const email = ref('')
 const password = ref('')
-const usernameError = ref(null)
+const fieldErrors = ref({})
 const formError = ref(null)
 const submitting = ref(false)
 
+/*
+ * Our words for a field the API refused, keyed by the name it used.
+ *
+ * The message in a 422 is pydantic's — "value is not a valid email address: The
+ * part after the @-sign is a special-use or reserved name" — written for whoever
+ * wrote the request rather than for whoever is filling in the form. That does
+ * not get shown. `loc` is the half worth keeping: it is a field name, not prose,
+ * and *which field* is most of what the person needs to know (#102).
+ *
+ * Only `email` can realistically appear from this form — `username` and
+ * `password` are bare `str` in `UserCreate`, so the API objects to them only if
+ * one goes missing entirely. They are here because a field with no message is
+ * the failure this issue is about, and because password rules are the kind of
+ * thing that arrives later.
+ *
+ * Those two share one sentence, and it names no field. It does not need to: the
+ * message renders under the label and `FormField` ties it there with
+ * `aria-describedby`, so the placement says which field it is — which is the
+ * whole point of this issue. Naming it in the words as well would be saying it
+ * twice, and would be two sentences to keep in step for a case that says the
+ * same thing either way. `email` keeps its own because it says something more
+ * than "no": that the address itself is the problem.
+ */
+const NOT_ACCEPTED = 'That was not accepted. Try a different one.'
+
+const FIELD_SAYS = {
+  username: NOT_ACCEPTED,
+  email: 'That does not look like an email address we can use. Try another.',
+  password: NOT_ACCEPTED,
+}
+
+/*
+ * FastAPI's 422 body is an array of `{loc, msg}`, with `loc` ending in the field
+ * it objected to. `CampaignForm.vue` reads it the same way; the two are not
+ * shared yet on purpose — two copies is not a pattern, and extracting on the
+ * second is how the wrong shape gets frozen. The third one is when to move it.
+ */
+function fieldsRefusedIn(error) {
+  if (!Array.isArray(error.detail)) return {}
+
+  return Object.fromEntries(
+    error.detail
+      .map((problem) => String(problem?.loc?.at(-1) ?? ''))
+      .filter((field) => field in FIELD_SAYS)
+      .map((field) => [field, FIELD_SAYS[field]]),
+  )
+}
+
 function place(error) {
   if (error?.status === 409) {
-    usernameError.value = 'That username is taken. Try another.'
+    fieldErrors.value = { username: 'That username is taken. Try another.' }
     return
   }
 
@@ -36,11 +84,15 @@ function place(error) {
     return
   }
 
-  // 422 is a shape the API validated and we did not — a malformed email, most
-  // likely. `detail` is an array of field problems here rather than a sentence,
-  // so it is not something to print at someone.
   if (error?.status === 422) {
-    formError.value = 'Check the details above — something there was not accepted.'
+    fieldErrors.value = fieldsRefusedIn(error)
+
+    // Anything the fields cannot hold: a 422 naming something this form does not
+    // render, or a body in a shape we did not expect. It has to land somewhere —
+    // an error placed nowhere leaves the form looking like it did nothing at all.
+    if (!Object.keys(fieldErrors.value).length) {
+      formError.value = 'Something in there was not accepted.'
+    }
     return
   }
 
@@ -49,7 +101,7 @@ function place(error) {
 
 async function submit() {
   submitting.value = true
-  usernameError.value = null
+  fieldErrors.value = {}
   formError.value = null
 
   try {
@@ -74,10 +126,17 @@ async function submit() {
       v-model="username"
       label="Username"
       autocomplete="username"
-      :error="usernameError"
+      :error="fieldErrors.username"
     />
 
-    <FormField id="signup-email" v-model="email" label="Email" type="email" autocomplete="email" />
+    <FormField
+      id="signup-email"
+      v-model="email"
+      label="Email"
+      type="email"
+      autocomplete="email"
+      :error="fieldErrors.email"
+    />
 
     <FormField
       id="signup-password"
@@ -85,6 +144,7 @@ async function submit() {
       label="Password"
       type="password"
       autocomplete="new-password"
+      :error="fieldErrors.password"
     />
 
     <Button type="submit" label="Create account" :loading="submitting" fluid />
