@@ -18,6 +18,7 @@ import Button from 'primevue/button'
 import { useAuthStore } from '../stores/auth.js'
 import { forgetCurrentCampaign } from '../stores/currentCampaign.js'
 import { takeDestination } from '../api/sso.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -33,64 +34,40 @@ const router = useRouter()
  * every sentence here. That matters because the value arrives in a URL and a URL
  * is whatever someone typed: interpolating it raw would put attacker-chosen text
  * into our own error copy.
+ *
+ * Not in the catalogue: these are the providers' own names, and a name is the
+ * same word in every language.
  */
 const PROVIDERS = { discord: 'Discord', google: 'Google' }
 
 /*
  * The API's codes, plus `no-session` for the case it cannot report: the callback
- * said it signed us in and the cookie did not survive the trip. Written out
- * here rather than assembled from the code, because these are sentences a person
- * reads at the moment something went wrong, and each one has a different next
- * step — which is the only reason the backend sends a code instead of prose.
+ * said it signed us in and the cookie did not survive the trip. Each one has its
+ * own pair of sentences in the catalogue, because each has a different next step
+ * — which is the only reason the backend sends a code instead of prose.
  *
- * `{provider}` is filled in below. A placeholder rather than a template literal
- * because these are the strings a translation file would eventually hold, and a
- * translator needs the whole sentence, not a fragment either side of a join.
+ * The list is here rather than inferred from the catalogue's keys, and that is
+ * the guard: the code arrives in a URL, so it is whatever somebody typed, and
+ * only a code we already know becomes half of a key. Anything else is `failed`.
+ *
+ * `{provider}` is filled by `t`. A placeholder rather than a template literal
+ * because a translator needs the whole sentence, not a fragment either side of
+ * a join — and in French the name lands in a different place in some of them.
  */
-const MESSAGES = {
-  cancelled: {
-    title: 'Sign-in cancelled',
-    detail: 'You did not authorise the app at {provider}, so nothing has changed here.',
-  },
-  'provider-unavailable': {
-    title: '{provider} did not answer',
-    detail:
-      'We could not reach {provider} just now. Nothing is wrong with your account — try again shortly.',
-  },
-  'no-email': {
-    title: 'Your {provider} account has no email address',
-    detail:
-      'An account here needs one, for password resets and confirmations. Add an address to {provider} and try again, or sign in with a password instead.',
-  },
-  'unverified-email': {
-    title: '{provider} has not confirmed your address',
-    detail:
-      'We only accept an address the provider has confirmed, so that nobody can reach an account by typing someone else’s address into a profile. Confirm it with {provider}, then come back.',
-  },
-  'email-in-use': {
-    title: 'That address already belongs to an account here',
-    detail:
-      'The account has not confirmed the address yet, so we cannot safely link it to {provider}. Sign in with your password, confirm your address, and {provider} will link to it after that.',
-  },
-  'no-session': {
-    title: 'The sign-in did not stick',
-    detail:
-      '{provider} signed you in, but the session did not reach this tab. Try signing in again.',
-  },
-}
+const CODES = [
+  'cancelled',
+  'provider-unavailable',
+  'no-email',
+  'unverified-email',
+  'email-in-use',
+  'no-session',
+]
 
-const FALLBACK = {
-  title: 'Something went wrong',
-  detail: 'We could not finish signing you in with {provider}. Try again shortly.',
-}
+function say(code, provider) {
+  const key = CODES.includes(code) ? code : 'failed'
+  const values = { provider: PROVIDERS[provider] ?? t('sso.provider') }
 
-function fill(message, provider) {
-  const name = PROVIDERS[provider] ?? 'the provider'
-
-  return {
-    title: message.title.replaceAll('{provider}', name),
-    detail: message.detail.replaceAll('{provider}', name),
-  }
+  return { title: t(`sso.${key}.title`, values), detail: t(`sso.${key}.detail`, values) }
 }
 
 const failure = ref(null)
@@ -105,7 +82,7 @@ onMounted(async () => {
   window.history.replaceState({}, '', window.location.pathname)
 
   if (error) {
-    failure.value = fill(MESSAGES[error] ?? FALLBACK, provider)
+    failure.value = say(error, provider)
     return
   }
 
@@ -119,7 +96,7 @@ onMounted(async () => {
   await auth.boot()
 
   if (!auth.isSignedIn) {
-    failure.value = fill(MESSAGES['no-session'], provider)
+    failure.value = say('no-session', provider)
     return
   }
 
@@ -151,10 +128,10 @@ onMounted(async () => {
     <template v-if="failure">
       <h1>{{ failure.title }}</h1>
       <p role="alert">{{ failure.detail }}</p>
-      <Button as="router-link" :to="{ name: 'login' }" label="Back to sign in" fluid />
+      <Button as="router-link" :to="{ name: 'login' }" :label="t('sso.backToSignIn')" fluid />
     </template>
 
-    <p v-else class="sso__working">Finishing your sign-in…</p>
+    <p v-else class="sso__working">{{ t('sso.working') }}</p>
   </div>
 </template>
 

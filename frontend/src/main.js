@@ -7,9 +7,21 @@ import 'primeicons/primeicons.css'
 import './assets/base.css'
 import App from './App.vue'
 import { createAppRouter } from './router/index.js'
+import { primevueLocale } from './i18n/primevue.js'
+import { resolveLocale, setLocale } from './i18n/index.js'
 import Grimoire from './design-system/preset.js'
 import { installTheme } from './stores/theme.js'
 import { useAuthStore } from './stores/auth.js'
+
+/*
+ * The language, decided before anything renders.
+ *
+ * First, and outside the app: `t` is a plain function reading module state, so
+ * a component rendered before this line would render English and never be told
+ * otherwise — there is no reactivity behind it, deliberately (#87). It also sets
+ * `<html lang>`, which `index.html` can only guess at.
+ */
+const locale = setLocale(resolveLocale())
 
 const app = createApp(App)
 
@@ -19,6 +31,9 @@ app.use(createPinia())
 app.use(createAppRouter())
 
 app.use(PrimeVue, {
+  // PrimeVue's own copy, in the same language as ours. It merges over the
+  // library's English defaults rather than replacing them — see i18n/primevue.js.
+  locale: primevueLocale(locale),
   theme: {
     preset: Grimoire,
     options: {

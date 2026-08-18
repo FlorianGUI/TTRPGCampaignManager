@@ -9,6 +9,7 @@
  */
 
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+import { t } from '../i18n/index.js'
 
 /*
  * The Campaign section is gone from here: what a campaign holds is real now
@@ -32,35 +33,44 @@ import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
  * location or an agenda yet. A number nobody has counted is worse than no
  * number: it reads as data.
  */
-export const sections = [
-  {
-    label: 'Resources',
-    context: 'resources',
-    items: [
-      { label: 'PCs', icon: 'pi-users' },
-      { label: 'NPCs', icon: ENTITY_KINDS.npc.icon },
-      { label: 'Locations', icon: ENTITY_KINDS.location.icon },
-      { label: 'Factions', icon: ENTITY_KINDS.faction.icon },
-    ],
-  },
-  {
-    label: 'Organization',
-    context: 'organization',
-    items: [
-      /*
-       * These two pick their own, and are the exception to the rule above.
-       *
-       * The calendar goes to the agenda, which is the thing with dates in it —
-       * what is coming, and when. Sessions are what has already been played, so
-       * they take the list. `ENTITY_KINDS.session` keeps the calendar for the
-       * chip a `:session[…]` renders as in prose, where it names one evening
-       * rather than the record of all of them.
-       */
-      { label: 'Sessions', icon: 'pi-list' },
-      { label: 'Agenda', icon: 'pi-calendar' },
-    ],
-  },
-]
+/*
+ * A function rather than a constant, because the copy in it is translated and
+ * the locale is not known at import time: modules evaluate before `main.js`
+ * resolves the language, so an array built at the top level would be built in
+ * English and stay that way. Called from a computed in `App.vue`, which runs
+ * after the app is up.
+ */
+export function sections() {
+  return [
+    {
+      label: t('nav.resources'),
+      context: 'resources',
+      items: [
+        { label: t('nav.pcs'), icon: 'pi-users' },
+        { label: t('nav.npcs'), icon: ENTITY_KINDS.npc.icon },
+        { label: t('nav.locations'), icon: ENTITY_KINDS.location.icon },
+        { label: t('nav.factions'), icon: ENTITY_KINDS.faction.icon },
+      ],
+    },
+    {
+      label: t('nav.organization'),
+      context: 'organization',
+      items: [
+        /*
+         * These two pick their own, and are the exception to the rule above.
+         *
+         * The calendar goes to the agenda, which is the thing with dates in it —
+         * what is coming, and when. Sessions are what has already been played, so
+         * they take the list. `ENTITY_KINDS.session` keeps the calendar for the
+         * chip a `:session[…]` renders as in prose, where it names one evening
+         * rather than the record of all of them.
+         */
+        { label: t('nav.sessions'), icon: 'pi-list' },
+        { label: t('nav.agenda'), icon: 'pi-calendar' },
+      ],
+    },
+  ]
+}
 
 export const owlbear = {
   name: 'Owlbear',

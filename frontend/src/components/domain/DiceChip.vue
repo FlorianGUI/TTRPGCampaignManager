@@ -3,6 +3,8 @@
  * Dice notation, optionally with a rolled result.
  * Monospace so stat lines align down a column.
  */
+import { t } from '../../i18n/index.js'
+
 defineProps({
   notation: { type: String, required: true },
   result: { type: Number, default: null },
@@ -18,7 +20,9 @@ defineProps({
       <span class="dice__arrow" aria-hidden="true">→</span>
       <span class="dice__result">{{ result }}</span>
     </template>
-    <span v-if="outcome" class="dice__outcome">{{ outcome === 'crit' ? 'crit' : 'fumble' }}</span>
+    <span v-if="outcome" class="dice__outcome">{{
+      outcome === 'crit' ? t('dice.crit') : t('dice.fumble')
+    }}</span>
   </span>
 </template>
 

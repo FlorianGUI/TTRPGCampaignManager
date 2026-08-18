@@ -7,6 +7,7 @@ import CampaignTitle from './CampaignTitle.vue'
 import CampaignNav from './narrative/CampaignNav.vue'
 import ChromeActions from './ChromeActions.vue'
 import VerificationNotice from './VerificationNotice.vue'
+import { t } from '../i18n/index.js'
 
 /*
  * Dark leather chrome (top bar + sidebar) framing a parchment reading surface.
@@ -66,14 +67,14 @@ if (typeof window !== 'undefined' && window.matchMedia) {
           text
           rounded
           icon="pi pi-bars"
-          aria-label="Open navigation"
+          :aria-label="t('shell.openNav')"
           :aria-expanded="navOpen"
           @click="navOpen = true"
         />
 
         <div class="shell__brand">
           <i class="pi pi-book" aria-hidden="true" />
-          <span>Campaign Manager</span>
+          <span>{{ t('app.name') }}</span>
         </div>
 
         <!--
@@ -100,7 +101,7 @@ if (typeof window !== 'undefined' && window.matchMedia) {
     <VerificationNotice />
 
     <div class="shell__body">
-      <nav class="shell__sidebar texture-grain" aria-label="Campaign">
+      <nav class="shell__sidebar texture-grain" :aria-label="t('shell.campaignNav')">
         <!--
           The campaign's name, then what it holds, then the rest of the app. The
           name heads its own list rather than sitting above a section labelled
@@ -119,8 +120,8 @@ if (typeof window !== 'undefined' && window.matchMedia) {
     <Drawer
       v-model:visible="navOpen"
       class="shell__drawer"
-      header="Campaign"
-      :pt="{ root: { 'aria-label': 'Campaign' } }"
+      :header="t('shell.campaignNav')"
+      :pt="{ root: { 'aria-label': t('shell.campaignNav') } }"
     >
       <!--
         The name travels with the nav rather than staying behind in a bar that no

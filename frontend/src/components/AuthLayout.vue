@@ -11,6 +11,7 @@
  * parchment surface itself, the same way it does everywhere else (see the
  * elevation note in frontend/README.md).
  */
+import { t } from '../i18n/index.js'
 </script>
 
 <template>
@@ -18,7 +19,7 @@
     <main class="auth__panel">
       <div class="auth__brand">
         <i class="pi pi-book" aria-hidden="true" />
-        <span>Campaign Manager</span>
+        <span>{{ t('app.name') }}</span>
       </div>
 
       <hr class="rule-double" />

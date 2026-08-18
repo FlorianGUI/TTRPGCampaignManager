@@ -29,7 +29,8 @@ import { scenesInOrder, titleOf, trailTo, useStructureStore } from '../stores/st
 // to put a message, beside the field that was being saved. What it borrows is
 // the wording, so the app has one answer to a refused write rather than four
 // (#111) — see `useWriteFailure` for why the outline needs the other half.
-import { COULD_NOT_SAVE } from '../composables/useWriteFailure.js'
+import { couldNotSave } from '../composables/useWriteFailure.js'
+import { t } from '../i18n/index.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -60,11 +61,13 @@ const order = computed(() => (tree.value ? scenesInOrder(tree.value) : []))
 
 /* ── editing ─────────────────────────────────────────────────────────────── */
 
-const STATUSES = [
-  { label: 'Planned', value: 'planned' },
-  { label: 'Done', value: 'done' },
-  { label: 'Skipped', value: 'skipped' },
-]
+/* Built in a computed rather than at module level: the locale is resolved after
+   this module is imported, so a constant here would be English for good. */
+const STATUSES = computed(() => [
+  { label: t('scene.status.option.planned'), value: 'planned' },
+  { label: t('scene.status.option.done'), value: 'done' },
+  { label: t('scene.status.option.skipped'), value: 'skipped' },
+])
 
 /*
  * What the scene says. Where it sits is the three-dots menu's — see
@@ -83,7 +86,7 @@ async function cycle(status) {
       status,
     })
   } catch {
-    failure.value = COULD_NOT_SAVE
+    failure.value = couldNotSave()
   }
 }
 
@@ -98,7 +101,7 @@ function edit() {
 
 async function save() {
   if (!draft.value.title.trim()) {
-    failure.value = 'Give it a title.'
+    failure.value = t('node.needsTitle')
     return
   }
 
@@ -109,7 +112,7 @@ async function save() {
 
     editing.value = false
   } catch {
-    failure.value = COULD_NOT_SAVE
+    failure.value = couldNotSave()
   } finally {
     saving.value = false
   }
@@ -121,7 +124,7 @@ async function save() {
     <NarrativeTrail :campaign-id="campaignId" :trail="trail" />
 
     <header class="scene__head">
-      <p class="label-smallcaps">Scene</p>
+      <p class="label-smallcaps">{{ t('kind.scene') }}</p>
 
       <template v-if="!editing">
         <h1>{{ titleOf(scene, 'scene') }}</h1>
@@ -130,14 +133,14 @@ async function save() {
           size="small"
           severity="secondary"
           outlined
-          label="Edit"
+          :label="t('node.edit')"
           icon="pi pi-pencil"
           @click="edit"
         />
       </template>
 
       <template v-else>
-        <InputText v-model="draft.title" class="scene__title-field" aria-label="Title" />
+        <InputText v-model="draft.title" class="scene__title-field" :aria-label="t('node.title')" />
         <Select
           v-model="draft.status"
           :options="STATUSES"
@@ -157,28 +160,26 @@ async function save() {
       v-model="draft.body"
       class="scene__field"
       rows="18"
-      aria-label="Body"
+      :aria-label="t('scene.body')"
     />
 
     <CampaignMarkdown v-else-if="scene.body" class="prose scene__body" :source="scene.body" />
 
-    <p v-else class="scene__unwritten">
-      Nothing written yet. This is the normal state of most of a campaign.
-    </p>
+    <p v-else class="scene__unwritten">{{ t('scene.unwritten') }}</p>
 
     <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
 
     <div v-if="editing" class="scene__actions">
-      <Button label="Save" :loading="saving" @click="save" />
-      <Button label="Cancel" text severity="secondary" @click="editing = false" />
+      <Button :label="t('node.save')" :loading="saving" @click="save" />
+      <Button :label="t('node.cancel')" text severity="secondary" @click="editing = false" />
     </div>
 
     <SceneStepper v-if="!editing" :campaign-id="campaignId" :scenes="order" :current-id="sceneId" />
   </article>
 
-  <Message v-else-if="structure.error" severity="error" :closable="false"
-    >That is not here.</Message
-  >
+  <Message v-else-if="structure.error" severity="error" :closable="false">{{
+    t('node.missing')
+  }}</Message>
 </template>
 
 <style scoped>

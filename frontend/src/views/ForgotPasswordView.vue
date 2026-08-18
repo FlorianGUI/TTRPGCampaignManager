@@ -18,6 +18,7 @@ import { ref } from 'vue'
 import Button from 'primevue/button'
 import FormField from '../components/FormField.vue'
 import { apiFetch } from '../api/http.js'
+import { t } from '../i18n/index.js'
 
 const identifier = ref('')
 const submitting = ref(false)
@@ -37,8 +38,7 @@ async function submit() {
   } catch (error) {
     // 429 has the limiter's own sentence, which is safe to show and says nothing
     // about whether anything matched. Anything else is a plain retry.
-    formError.value =
-      error?.status === 429 ? error.detail : 'Something went wrong. Try again shortly.'
+    formError.value = error?.status === 429 ? error.detail : t('forgot.error.generic')
   } finally {
     submitting.value = false
   }
@@ -47,7 +47,7 @@ async function submit() {
 
 <template>
   <div class="auth-form">
-    <h1>Reset your password</h1>
+    <h1>{{ t('forgot.title') }}</h1>
 
     <template v-if="sent">
       <!--
@@ -55,11 +55,8 @@ async function submit() {
         back, or confirming that an account was found, would hand out exactly what
         the endpoint refuses to.
       -->
-      <p>
-        If that matches an account, a message is on its way. The link works once and expires in an
-        hour.
-      </p>
-      <RouterLink :to="{ name: 'login' }">Back to sign in</RouterLink>
+      <p>{{ t('forgot.sent') }}</p>
+      <RouterLink :to="{ name: 'login' }">{{ t('forgot.backToSignIn') }}</RouterLink>
     </template>
 
     <form v-else class="auth-form__fields" novalidate @submit.prevent="submit">
@@ -68,15 +65,16 @@ async function submit() {
       <FormField
         id="forgot-identifier"
         v-model="identifier"
-        label="Email address or username"
+        :label="t('forgot.identifier')"
         autocomplete="username"
       />
 
-      <Button type="submit" label="Send a reset link" :loading="submitting" fluid />
+      <Button type="submit" :label="t('forgot.submit')" :loading="submitting" fluid />
 
       <p class="auth-form__aside">
-        Remembered it?
-        <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>.
+        {{ t('forgot.remembered') }}
+        <RouterLink :to="{ name: 'login' }">{{ t('forgot.signIn') }}</RouterLink
+        >.
       </p>
     </form>
   </div>

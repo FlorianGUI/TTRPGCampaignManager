@@ -1,24 +1,22 @@
 <script setup>
 import Button from 'primevue/button'
+import { t } from '../i18n/index.js'
 </script>
 
 <template>
   <article class="notfound">
     <p class="label-smallcaps">404</p>
-    <h1>That page isn't in this volume</h1>
+    <h1>{{ t('notFound.title') }}</h1>
 
     <div class="prose">
-      <p>
-        The link may be mistyped, or it may point at something not written yet. Nothing has been
-        lost.
-      </p>
+      <p>{{ t('notFound.detail') }}</p>
     </div>
 
     <p>
       <!-- `custom` + navigate: render PrimeVue's Button rather than an anchor,
            without losing router navigation. -->
       <RouterLink v-slot="{ navigate }" :to="{ name: 'home' }" custom>
-        <Button label="Back to session notes" icon="pi pi-arrow-left" @click="navigate" />
+        <Button :label="t('notFound.back')" icon="pi pi-arrow-left" @click="navigate" />
       </RouterLink>
     </p>
   </article>

@@ -21,6 +21,7 @@ import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import Textarea from 'primevue/textarea'
 import FormField from './FormField.vue'
+import { t } from '../i18n/index.js'
 
 const props = defineProps({
   // The row being edited, or null when this is a new campaign.
@@ -85,8 +86,8 @@ watch(
  * be a valid string" under a text box explains nothing to a game master.
  */
 const FIELD_SAYS = {
-  name: 'That name was not accepted. Try a different one.',
-  description: 'That description was not accepted. Try a shorter one.',
+  name: 'campaignForm.error.name',
+  description: 'campaignForm.error.description',
 }
 
 const apiErrors = computed(() => {
@@ -96,12 +97,12 @@ const apiErrors = computed(() => {
     props.error.detail
       .map((problem) => String(problem?.loc?.at(-1) ?? ''))
       .filter((field) => field in FIELD_SAYS)
-      .map((field) => [field, FIELD_SAYS[field]]),
+      .map((field) => [field, t(FIELD_SAYS[field])]),
   )
 })
 
 const nameError = computed(() =>
-  missingName.value ? 'Give the campaign a name.' : (apiErrors.value.name ?? null),
+  missingName.value ? t('campaignForm.error.missingName') : (apiErrors.value.name ?? null),
 )
 
 const descriptionError = computed(() => apiErrors.value.description ?? null)
@@ -116,12 +117,12 @@ const formError = computed(() => {
   if (!props.error) return null
 
   if (props.error.status === 422) {
-    return Object.keys(apiErrors.value).length ? null : 'Something in there was not accepted.'
+    return Object.keys(apiErrors.value).length ? null : t('campaignForm.error.something')
   }
 
-  if (props.error.status === 404) return 'That campaign is no longer there.'
+  if (props.error.status === 404) return t('campaignForm.error.gone')
 
-  return 'Something went wrong saving the campaign. Try again.'
+  return t('campaignForm.error.generic')
 })
 
 function submit() {
@@ -139,13 +140,15 @@ function submit() {
     <FormField
       id="campaign-name"
       v-model="name"
-      label="Name"
+      :label="t('campaignForm.name')"
       :maxlength="NAME_MAX_LENGTH"
       :error="nameError"
     />
 
     <div class="field">
-      <label for="campaign-description">Description <span>(optional)</span></label>
+      <label for="campaign-description"
+        >{{ t('campaignForm.description') }} <span>{{ t('campaignForm.optional') }}</span></label
+      >
       <Textarea
         id="campaign-description"
         v-model="description"
@@ -165,9 +168,7 @@ function submit() {
         deciding whether to join it. Promising a place it appears would be a
         promise the app does not yet keep.
       -->
-      <p class="campaign-form__hint">
-        A line introducing the table, for the people you invite to it. It can change at any time.
-      </p>
+      <p class="campaign-form__hint">{{ t('campaignForm.hint') }}</p>
     </div>
 
     <p v-if="formError" class="field__error" role="alert">{{ formError }}</p>

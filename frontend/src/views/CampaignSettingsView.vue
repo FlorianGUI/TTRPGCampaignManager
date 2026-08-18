@@ -19,6 +19,7 @@ import InputText from 'primevue/inputtext'
 import CampaignForm from '../components/CampaignForm.vue'
 import { useCampaignsStore } from '../stores/campaigns.js'
 import { forgetCurrentCampaign, readCurrentCampaign } from '../stores/currentCampaign.js'
+import { t } from '../i18n/index.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -98,9 +99,7 @@ async function remove() {
     router.replace({ name: 'home' })
   } catch (error) {
     deleteFailure.value =
-      error?.status === 404
-        ? 'That campaign is already gone.'
-        : 'Something went wrong deleting the campaign. Try again.'
+      error?.status === 404 ? t('settings.delete.error.gone') : t('settings.delete.error.generic')
   } finally {
     deleting.value = false
   }
@@ -115,30 +114,28 @@ async function remove() {
       connection and the other is a campaign someone has lost.
     -->
     <p v-if="!campaigns.loaded && !campaigns.error" class="settings__waiting">
-      Fetching this campaign…
+      {{ t('settings.waiting') }}
     </p>
 
     <template v-else-if="!campaigns.loaded">
-      <h1>We could not reach this campaign</h1>
-      <p role="alert">The app is signed in, so this is the connection rather than your account.</p>
-      <Button label="Try again" @click="campaigns.reload()" />
+      <h1>{{ t('settings.unreachable.title') }}</h1>
+      <p role="alert">{{ t('settings.unreachable.detail') }}</p>
+      <Button :label="t('settings.retry')" @click="campaigns.reload()" />
     </template>
 
     <template v-else-if="!campaign">
-      <h1>That campaign is not here</h1>
-      <p>
-        It has been deleted, or it belongs to somebody else. Either way there is nothing to edit.
-      </p>
-      <Button as="router-link" :to="{ name: 'home' }" label="Back to your campaigns" />
+      <h1>{{ t('settings.missing.title') }}</h1>
+      <p>{{ t('settings.missing.detail') }}</p>
+      <Button as="router-link" :to="{ name: 'home' }" :label="t('settings.backHome')" />
     </template>
 
     <template v-else>
-      <h1 class="settings__title">Campaign settings</h1>
-      <p class="settings__lede">Renaming a campaign changes nothing inside it.</p>
+      <h1 class="settings__title">{{ t('settings.title') }}</h1>
+      <p class="settings__lede">{{ t('settings.lede') }}</p>
 
       <CampaignForm
         :campaign="campaign"
-        submit-label="Save changes"
+        :submit-label="t('settings.submit')"
         :busy="saving"
         :error="failure"
         @submit="save"
@@ -147,7 +144,7 @@ async function remove() {
           <!-- role="status", not alert: this is the expected outcome, and an
                assertive announcement for "it worked" interrupts for no reason. -->
           <span v-if="saved" class="settings__saved" role="status">
-            <i class="pi pi-check" aria-hidden="true" /> Saved
+            <i class="pi pi-check" aria-hidden="true" /> {{ t('settings.saved') }}
           </span>
         </template>
       </CampaignForm>
@@ -155,14 +152,15 @@ async function remove() {
       <hr class="rule-fleuron" />
 
       <section class="danger" aria-labelledby="delete-campaign">
-        <h2 id="delete-campaign" class="danger__title">Delete this campaign</h2>
-        <p class="danger__warning">
-          Everything at this table goes with it, including every character sheet. There is no undo.
-        </p>
+        <h2 id="delete-campaign" class="danger__title">{{ t('settings.delete.title') }}</h2>
+        <p class="danger__warning">{{ t('settings.delete.warning') }}</p>
 
         <form class="danger__form" novalidate @submit.prevent="remove">
+          <!-- Two keys around one `<strong>`: the name has to be emphasised in the
+               middle of the sentence, and nothing here renders an HTML string. -->
           <label for="delete-confirmation">
-            Type <strong>{{ campaign.name }}</strong> to confirm
+            {{ t('settings.delete.confirmBefore') }} <strong>{{ campaign.name }}</strong>
+            {{ t('settings.delete.confirmAfter') }}
           </label>
           <InputText
             id="delete-confirmation"
@@ -176,7 +174,7 @@ async function remove() {
           <Button
             type="submit"
             severity="danger"
-            label="Delete campaign"
+            :label="t('settings.delete.submit')"
             :disabled="!mayDelete || deleting"
             :loading="deleting"
           />

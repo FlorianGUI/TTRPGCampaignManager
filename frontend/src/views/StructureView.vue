@@ -33,6 +33,7 @@ import { useCampaignsStore } from '../stores/campaigns.js'
 import { readCollapsed, rememberCollapsed } from '../stores/collapsedNarrative.js'
 import { vDragToPlace } from '../directives/dragToPlace.js'
 import { useWriteFailure } from '../composables/useWriteFailure.js'
+import { t } from '../i18n/index.js'
 
 const route = useRoute()
 const structure = useStructureStore()
@@ -214,7 +215,7 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
 <template>
   <article class="structure">
     <header class="structure__head">
-      <h1>{{ campaign?.name ?? 'Structure' }}</h1>
+      <h1>{{ campaign?.name ?? t('structure.heading') }}</h1>
 
       <!-- The campaign's own controls, laid out like a row's: whatever else is
            here, then the plus, then the column a row keeps its status and move
@@ -226,7 +227,7 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
           size="small"
           severity="secondary"
           outlined
-          :label="allShut ? 'Expand all' : 'Collapse all'"
+          :label="allShut ? t('structure.expandAll') : t('structure.collapseAll')"
           @click="toggleAll"
         />
 
@@ -234,7 +235,7 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
           v-if="tree"
           :campaign-id="campaignId"
           :allowed="['act', 'scene']"
-          :parent-name="campaign?.name ?? 'the campaign'"
+          :parent-name="campaign?.name ?? t('structure.theCampaign')"
           @created="added"
         />
 
@@ -248,21 +249,23 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
     <ProgressSpinner
       v-if="!tree && structure.loading"
       class="structure__loading"
-      aria-label="Loading"
+      :aria-label="t('structure.loading')"
     />
 
     <Message v-else-if="!tree && structure.error" severity="error" :closable="false">
-      The structure could not be loaded.
-      <Button link label="Try again" @click="structure.reload(campaignId)" />
+      {{ t('structure.error') }}
+      <Button link :label="t('structure.retry')" @click="structure.reload(campaignId)" />
     </Message>
 
     <!--
       A campaign nobody has written in yet. It says what an act *is* rather than
       only offering one, because this is the first place the word appears.
     -->
+    <!-- Three keys around one `<strong>`: the kind is emphasised inside the
+         sentence, and nothing in this app renders an HTML string. -->
     <p v-else-if="isEmpty" class="structure__empty">
-      Nothing here yet. An <strong>act</strong> is a major division of the campaign — or write a
-      scene straight onto the campaign and add the shape later.
+      {{ t('structure.empty.before') }} <strong>{{ t('structure.empty.word') }}</strong>
+      {{ t('structure.empty.after') }}
     </p>
 
     <!--
@@ -377,8 +380,9 @@ const dragging = (list) => ({ ...list, onDrop: dropped, onSpringOpen: springOpen
               already using it, so the empty act is where it gets a sentence.
             -->
             <p v-if="!childrenOfAct(child.node).length" class="empty-slot">
-              Nothing in this act yet. A <strong>sequence</strong> is a run of scenes that tells a
-              small story of its own inside it — or write a scene straight onto the act.
+              {{ t('structure.emptyAct.before') }}
+              <strong>{{ t('structure.emptyAct.word') }}</strong>
+              {{ t('structure.emptyAct.after') }}
             </p>
           </template>
         </template>

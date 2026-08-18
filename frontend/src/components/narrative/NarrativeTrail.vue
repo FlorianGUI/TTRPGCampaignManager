@@ -29,15 +29,16 @@ const to = (campaignId, { kind, node }) => ({
   params: { campaignId, [PARAMS[kind]]: node.id },
 })
 import { titleOf } from '../../stores/structure.js'
+import { t } from '../../i18n/index.js'
 </script>
 
 <template>
-  <nav class="trail" aria-label="Breadcrumb">
+  <nav class="trail" :aria-label="t('trail.label')">
     <ol>
       <li>
-        <RouterLink :to="{ name: 'campaign-structure', params: { campaignId } }"
-          >Structure</RouterLink
-        >
+        <RouterLink :to="{ name: 'campaign-structure', params: { campaignId } }">{{
+          t('trail.structure')
+        }}</RouterLink>
       </li>
       <li v-for="step in trail" :key="step.node.id">
         <span class="trail__separator" aria-hidden="true">/</span>

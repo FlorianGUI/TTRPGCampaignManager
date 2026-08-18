@@ -28,6 +28,7 @@ import ServerUnreachable from './components/ServerUnreachable.vue'
 import { useAuthStore } from './stores/auth.js'
 import { useCampaignsStore } from './stores/campaigns.js'
 import { sections } from './content/sample.js'
+import { t } from './i18n/index.js'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -68,9 +69,20 @@ const campaign = computed(() =>
  * Bound per layout rather than to both. AuthLayout and BareLayout declare no
  * props, so anything passed to them falls through onto their root element —
  * `sections` would land in the DOM as an attribute stringified from an array.
+ *
+ * `sections()` is called here rather than imported as a value: its labels are
+ * copy, and a module-level array would have been built before the locale was
+ * resolved. `meta.title` is a catalogue key for the same reason, so the nav is
+ * handed the words rather than the key it marks the current page with.
  */
 const layoutProps = computed(() =>
-  route.meta.layout ? {} : { sections, active: route.meta.title, campaign: campaign.value },
+  route.meta.layout
+    ? {}
+    : {
+        sections: sections(),
+        active: route.meta.title ? t(route.meta.title) : null,
+        campaign: campaign.value,
+      },
 )
 </script>
 

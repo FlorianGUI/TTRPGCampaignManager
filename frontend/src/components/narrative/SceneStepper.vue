@@ -34,23 +34,24 @@ const to = (scene) => ({
   params: { campaignId: props.campaignId, sceneId: scene.id },
 })
 import { titleOf } from '../../stores/structure.js'
+import { t } from '../../i18n/index.js'
 </script>
 
 <template>
-  <nav v-if="previous || next" class="stepper" aria-label="Scenes either side of this one">
+  <nav v-if="previous || next" class="stepper" :aria-label="t('stepper.label')">
     <!--
       An end of the campaign renders nothing rather than a disabled control: a
       dead button on the first scene of every campaign is a permanent reminder of
       an edge nobody needs telling about.
     -->
     <RouterLink v-if="previous" class="stepper__step" :to="to(previous)">
-      <span class="stepper__label">Previous scene</span>
+      <span class="stepper__label">{{ t('stepper.previous') }}</span>
       <span class="stepper__title">{{ titleOf(previous, 'scene') }}</span>
     </RouterLink>
     <span v-else />
 
     <RouterLink v-if="next" class="stepper__step stepper__step--next" :to="to(next)">
-      <span class="stepper__label">Next scene</span>
+      <span class="stepper__label">{{ t('stepper.next') }}</span>
       <span class="stepper__title">{{ titleOf(next, 'scene') }}</span>
     </RouterLink>
   </nav>

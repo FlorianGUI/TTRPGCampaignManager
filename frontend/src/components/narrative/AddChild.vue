@@ -27,6 +27,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useStructureStore } from '../../stores/structure.js'
 import { useWriteFailure } from '../../composables/useWriteFailure.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -47,12 +48,12 @@ const { failed } = useWriteFailure()
 const choosing = ref(false)
 const saving = ref(false)
 
-const LABELS = { act: 'Act', sequence: 'Sequence', scene: 'Scene' }
+const LABELS = { act: 'kind.act', sequence: 'kind.sequence', scene: 'kind.scene' }
 
 const EXPLAINS = {
-  act: 'A major division of the campaign.',
-  sequence: 'A run of scenes that tells a small story of its own.',
-  scene: 'A unit of play: one place, one cast.',
+  act: 'kind.explains.act',
+  sequence: 'kind.explains.sequence',
+  scene: 'kind.explains.scene',
 }
 
 function start() {
@@ -96,21 +97,21 @@ async function add(kind) {
       size="small"
       icon="pi pi-plus"
       :loading="saving"
-      :aria-label="`Add to ${parentName}`"
+      :aria-label="t('add.toParent', { parent: parentName })"
       @click.stop="start"
     />
 
     <Dialog
       v-model:visible="choosing"
       modal
-      :header="`Add to ${parentName}`"
+      :header="t('add.toParent', { parent: parentName })"
       :style="{ width: 'min(26rem, 92vw)' }"
     >
       <ul class="add__choices">
         <li v-for="kind in allowed" :key="kind">
           <button type="button" class="add__choice" :disabled="saving" @click="add(kind)">
-            <span class="add__choice-name">{{ LABELS[kind] }}</span>
-            <span class="add__choice-what">{{ EXPLAINS[kind] }}</span>
+            <span class="add__choice-name">{{ t(LABELS[kind]) }}</span>
+            <span class="add__choice-what">{{ t(EXPLAINS[kind]) }}</span>
           </button>
         </li>
       </ul>

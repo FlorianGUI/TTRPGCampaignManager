@@ -16,6 +16,7 @@ import { ref } from 'vue'
 import Button from 'primevue/button'
 import FormField from '../components/FormField.vue'
 import { apiFetch } from '../api/http.js'
+import { t } from '../i18n/index.js'
 
 /*
  * Read during setup rather than in onMounted, so the first paint already knows
@@ -48,9 +49,7 @@ async function submit() {
     done.value = true
   } catch (error) {
     formError.value =
-      error?.status === 400
-        ? 'This link is no longer valid. It may have expired, or already been used — ask for a new one.'
-        : 'Something went wrong. Try again shortly.'
+      error?.status === 400 ? t('reset.error.invalidLink') : t('reset.error.generic')
   } finally {
     submitting.value = false
   }
@@ -59,16 +58,16 @@ async function submit() {
 
 <template>
   <div class="auth-form">
-    <h1>Choose a new password</h1>
+    <h1>{{ t('reset.title') }}</h1>
 
     <template v-if="done">
-      <p>Your password has been changed, and every session has been signed out.</p>
-      <Button as="router-link" :to="{ name: 'login' }" label="Sign in" fluid />
+      <p>{{ t('reset.done') }}</p>
+      <Button as="router-link" :to="{ name: 'login' }" :label="t('reset.signIn')" fluid />
     </template>
 
     <template v-else-if="!token">
-      <p>This link is missing its token. Ask for a new one and try again.</p>
-      <RouterLink :to="{ name: 'forgot-password' }">Request a reset link</RouterLink>
+      <p>{{ t('reset.missingToken') }}</p>
+      <RouterLink :to="{ name: 'forgot-password' }">{{ t('reset.requestLink') }}</RouterLink>
     </template>
 
     <form v-else class="auth-form__fields" novalidate @submit.prevent="submit">
@@ -77,15 +76,15 @@ async function submit() {
       <FormField
         id="reset-password"
         v-model="password"
-        label="New password"
+        :label="t('reset.password')"
         type="password"
         autocomplete="new-password"
       />
 
-      <Button type="submit" label="Change my password" :loading="submitting" fluid />
+      <Button type="submit" :label="t('reset.submit')" :loading="submitting" fluid />
 
       <p class="auth-form__aside">
-        <RouterLink :to="{ name: 'forgot-password' }">Ask for a new link</RouterLink>
+        <RouterLink :to="{ name: 'forgot-password' }">{{ t('reset.askNewLink') }}</RouterLink>
       </p>
     </form>
   </div>
