@@ -138,6 +138,36 @@ describe('the structure page', () => {
     expect(wrapper.get('.row__description').text()).toBe('The party earns the Wardens’ trust.')
   })
 
+  /*
+   * The row is the one place a description used to be printed rather than read
+   * (#132) — everywhere else it goes through `CampaignMarkdown`, and the outline
+   * showed the characters an author typed.
+   */
+  it('says what an act says, not what it was written in', async () => {
+    const wrapper = await render({
+      acts: [
+        act('a-1', 'Act I', 1024, 'The **Wardens** trust :npc[Fen Warden] with the causeway.'),
+      ],
+      sequences: [],
+      scenes: [],
+    })
+
+    const shown = wrapper.get('.row__description').text()
+
+    expect(shown).toBe('The Wardens trust Fen Warden with the causeway.')
+    expect(shown).not.toMatch(/[*:[\]]/)
+  })
+
+  it('leaves no empty line where a description is only markup', async () => {
+    const wrapper = await render({
+      acts: [act('a-1', 'Act I', 1024, '****')],
+      sequences: [],
+      scenes: [],
+    })
+
+    expect(wrapper.find('.row__description').exists()).toBe(false)
+  })
+
   describe('collapsing', () => {
     const tree = {
       acts: [act('a-1', 'Act I', 1024)],
