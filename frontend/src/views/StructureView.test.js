@@ -509,6 +509,24 @@ describe('the structure page', () => {
       expect(wrapper.find('.structure__description').text()).not.toContain(':npc[')
     })
 
+    it('sits under the name as a block, the way an act’s does in a row below', async () => {
+      /*
+       * `mode="inline"` renders a `<span>` root, and on an inline box a vertical
+       * margin and a `max-width` are ignored — the lede then has neither space
+       * under the name nor a measure, and flows as text beside it rather than
+       * sitting under it. The class carries `display: block` for that reason, so
+       * this asserts the element it lands on is the one being blockified.
+       */
+      const wrapper = await render(EMPTY, campaign)
+      const lede = wrapper.find('.structure__description')
+
+      expect(lede.element.tagName).toBe('SPAN')
+      // Outside the row that holds the title and the controls, so it inherits
+      // none of that row's alignment — see the note in the template.
+      expect(wrapper.find('.structure__head-row .structure__description').exists()).toBe(false)
+      expect(wrapper.find('.structure__head > .structure__description').exists()).toBe(true)
+    })
+
     it('leaves no empty line where a campaign has no description', async () => {
       const wrapper = await render(EMPTY, { ...campaign, description: '' })
 
