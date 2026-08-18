@@ -18,6 +18,7 @@
 import { ref } from 'vue'
 import Button from 'primevue/button'
 import { useAuthStore } from '../stores/auth.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 
@@ -36,14 +37,11 @@ async function retry() {
 
 <template>
   <main class="unreachable" role="alert">
-    <h1 class="unreachable__title">Can't reach the server</h1>
+    <h1 class="unreachable__title">{{ t('unreachable.title') }}</h1>
 
-    <p class="unreachable__text">
-      This is on our end, not yours — you have not been signed out. It usually means the app is
-      being updated, and it passes in a moment.
-    </p>
+    <p class="unreachable__text">{{ t('unreachable.detail') }}</p>
 
-    <Button label="Try again" :loading="retrying" @click="retry" />
+    <Button :label="t('unreachable.retry')" :loading="retrying" @click="retry" />
   </main>
 </template>
 

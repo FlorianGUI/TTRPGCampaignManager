@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { ENTITY_KINDS } from './entityKinds.js'
+import { t } from '../../i18n/index.js'
 
 /*
  * Chip for a linked entity. Each kind gets its own accent *and* its own icon —
@@ -23,7 +24,7 @@ const meta = computed(() => ENTITY_KINDS[props.kind])
   <span class="entity" :style="{ '--entity-accent': `var(--p-grimoire-entity-${kind})` }">
     <i class="pi entity__icon" :class="meta.icon" aria-hidden="true" />
     <span class="entity__label">{{ label }}</span>
-    <span class="visually-hidden">({{ meta.label }})</span>
+    <span class="visually-hidden">({{ t(meta.label) }})</span>
   </span>
 </template>
 

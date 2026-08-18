@@ -89,7 +89,13 @@ frontend/
       toPlainText.js               # mdast ⟶ a string, for cells and titles
       nodes.js                     # the tree facts both renderers share
     content/
-      sample.js                    # sample copy for the spike
+      sample.js                    # the nav's sections, and sample copy for the spike
+    i18n/
+      en.js                        # every string the app says, in English
+      fr.js                        # the same keys, in French
+      locale.js                    # what the browser asked for ⟶ a locale we speak
+      primevue.js                  # PrimeVue's own strings
+      index.js                     # t(), the current locale, and dates
 ```
 
 ## Design system
@@ -359,6 +365,95 @@ has to be one that muscle memory cannot satisfy.
 `currentCampaign.js` is deliberately import-free and is not a Pinia store:
 `stores/auth.js` has to clear it, and it cannot import a store that imports
 `api/client.js`, which imports the auth store.
+
+## Language: French or English, from the browser
+
+Every user-facing string the frontend owns lives in a catalogue, and the app
+speaks whichever of the two languages the browser asked for. `src/i18n/` is the
+whole of it:
+
+```
+src/i18n/
+  en.js          # the English catalogue
+  fr.js          # the French one, same keys, same order
+  locale.js      # what the browser asked for ⟶ a locale we speak
+  primevue.js    # PrimeVue's own strings, for the components we use
+  index.js       # t(), the current locale, and dates
+```
+
+**Copy goes in the catalogue, not in the template.** A new string is a key in
+`en.js` and a key in `fr.js`, read back with `t('its.key')`. That is the rule
+this section exists to state — a literal typed into a `.vue` file is a sentence
+one of the two languages will never see, and nothing catches it but a reader.
+
+```vue
+<script setup>
+import { t } from '../i18n/index.js'
+</script>
+
+<template>
+  <h1>{{ t('home.title') }}</h1>
+  <Button :label="t('home.retry')" @click="reload" />
+</template>
+```
+
+`t` is a plain function rather than a `$t` global from a plugin: it is imported
+where it is used, so ESLint sees a typo'd import, a test renders real copy with
+no plugin installed, and the store and the router — neither of which has a
+component around it — reach copy the same way a template does.
+
+**The locale is resolved once, before the app mounts.** `main.js` asks
+`resolveLocale()` what the browser wants, matched on the primary subtag so
+`fr-CA` and `fr-BE` are French, with English as the fallback for everything
+else. `setLocale` writes the answer onto `<html lang>` — `index.html` ships
+`lang="en"` for the moment before the module runs, and the app makes it true.
+There is no language switcher and no reactivity behind `t`: a chosen language is
+a preference, and a preference needs somewhere to live per account, which is a
+separate conversation.
+
+That timing is the one trap. Modules are evaluated before `main.js` runs, so
+anything built at the top level of a module is built in English and stays that
+way — `content/sample.js` exports a function for exactly this reason, and
+`SceneView`'s status options are a computed. Call `t` when something renders,
+not when a module loads.
+
+**Placeholders are whole values, never fragments**: `t('home.welcome', {
+username })`, so a translator can put the words in the order their language
+uses. `t` throws for a key nobody wrote and for a placeholder with no value —
+loudly, because a missing key rendering its own name across a button reads as
+broken to everyone except the person who could fix it. Where a
+sentence _is_ split across two or three keys it is because the markup splits it
+— a `<strong>` around a word in the middle — and never to save a duplicate. The
+renderer takes vnodes and never an HTML string, so there is no `v-html` to put a
+marked-up sentence through.
+
+**Sentences that name one of the three kinds get one key per kind** —
+`outline.nameThis.act`, `.sequence`, `.scene` — rather than a `{kind}` filled
+into one sentence. It reads as duplication in English, where the words either
+side do not change; in French, "this act" and "this sequence" do not share a
+demonstrative, and one sentence with a hole in it cannot say both.
+
+**PrimeVue has its own copy**, configured in the same breath (`app.use(PrimeVue,
+{ locale })`). It merges over the library's English defaults, so `primevue.js`
+carries only what the components this app actually uses can say — a date
+picker's month names are not translated for a date picker nobody has written.
+
+**Dates go through `formatDate`**, which is `Intl.DateTimeFormat` with the
+resolved locale. Nothing renders one yet (#78 gave records their times and no
+screen shows them); it is there so the first screen that does is already
+speaking the app's language rather than the operating system's.
+
+**What is deliberately not translated**: anything the backend writes — the
+rate-limit sentences a 429 carries arrive as finished English prose, and
+translating them would mean the API negotiating a language — and user content,
+which is never translated by anyone.
+
+The tests assert English copy, under the locale the catalogue defaults to, and
+resolve nothing through `t` where a sentence is what is being checked: asserting
+on keys would stop them noticing that the copy is wrong. `LoginView.test.js`
+pins French for one describe block, which is what checks the wiring in between.
+`i18n/catalogues.test.js` is what makes drift loud — it fails when a key exists
+in one catalogue and not the other, or when a translation drops a placeholder.
 
 ## Prose: Campaign Manager markdown
 

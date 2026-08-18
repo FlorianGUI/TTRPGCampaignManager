@@ -13,6 +13,7 @@ import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import FormField from '../components/FormField.vue'
 import { useAuthStore } from '../stores/auth.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -47,11 +48,11 @@ const submitting = ref(false)
  * same thing either way. `email` keeps its own because it says something more
  * than "no": that the address itself is the problem.
  */
-const NOT_ACCEPTED = 'That was not accepted. Try a different one.'
+const NOT_ACCEPTED = 'signup.error.notAccepted'
 
 const FIELD_SAYS = {
   username: NOT_ACCEPTED,
-  email: 'That does not look like an email address we can use. Try another.',
+  email: 'signup.error.email',
   password: NOT_ACCEPTED,
 }
 
@@ -68,13 +69,13 @@ function fieldsRefusedIn(error) {
     error.detail
       .map((problem) => String(problem?.loc?.at(-1) ?? ''))
       .filter((field) => field in FIELD_SAYS)
-      .map((field) => [field, FIELD_SAYS[field]]),
+      .map((field) => [field, t(FIELD_SAYS[field])]),
   )
 }
 
 function place(error) {
   if (error?.status === 409) {
-    fieldErrors.value = { username: 'That username is taken. Try another.' }
+    fieldErrors.value = { username: t('signup.error.usernameTaken') }
     return
   }
 
@@ -91,12 +92,12 @@ function place(error) {
     // render, or a body in a shape we did not expect. It has to land somewhere —
     // an error placed nowhere leaves the form looking like it did nothing at all.
     if (!Object.keys(fieldErrors.value).length) {
-      formError.value = 'Something in there was not accepted.'
+      formError.value = t('signup.error.something')
     }
     return
   }
 
-  formError.value = 'Something went wrong creating the account. Try again.'
+  formError.value = t('signup.error.generic')
 }
 
 async function submit() {
@@ -117,14 +118,14 @@ async function submit() {
 
 <template>
   <form class="auth-form" novalidate @submit.prevent="submit">
-    <h1>Create an account</h1>
+    <h1>{{ t('signup.title') }}</h1>
 
     <p v-if="formError" class="auth-form__error" role="alert">{{ formError }}</p>
 
     <FormField
       id="signup-username"
       v-model="username"
-      label="Username"
+      :label="t('signup.username')"
       autocomplete="username"
       :error="fieldErrors.username"
     />
@@ -132,7 +133,7 @@ async function submit() {
     <FormField
       id="signup-email"
       v-model="email"
-      label="Email"
+      :label="t('signup.email')"
       type="email"
       autocomplete="email"
       :error="fieldErrors.email"
@@ -141,17 +142,18 @@ async function submit() {
     <FormField
       id="signup-password"
       v-model="password"
-      label="Password"
+      :label="t('signup.password')"
       type="password"
       autocomplete="new-password"
       :error="fieldErrors.password"
     />
 
-    <Button type="submit" label="Create account" :loading="submitting" fluid />
+    <Button type="submit" :label="t('signup.submit')" :loading="submitting" fluid />
 
     <p class="auth-form__aside">
-      Already have one?
-      <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>.
+      {{ t('signup.haveOne') }}
+      <RouterLink :to="{ name: 'login' }">{{ t('signup.signIn') }}</RouterLink
+      >.
     </p>
   </form>
 </template>

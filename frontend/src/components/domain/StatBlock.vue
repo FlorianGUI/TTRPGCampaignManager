@@ -1,6 +1,7 @@
 <script setup>
 import DiceChip from './DiceChip.vue'
 import SourceRef from './SourceRef.vue'
+import { t } from '../../i18n/index.js'
 
 /*
  * Monster / NPC stat block, with the classic ruled header and ability row.
@@ -66,7 +67,9 @@ function modifier(score) {
       </p>
     </section>
 
-    <h4 v-if="creature.actions?.length" class="statblock__section-heading">Actions</h4>
+    <h4 v-if="creature.actions?.length" class="statblock__section-heading">
+      {{ t('statblock.actions') }}
+    </h4>
     <section v-for="action in creature.actions" :key="action.name" class="statblock__trait">
       <p>
         <em class="statblock__trait-name">{{ action.name }}.</em> {{ action.text }}

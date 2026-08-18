@@ -20,6 +20,7 @@
  * struck through when skipped — and the word is its accessible name.
  */
 import { computed } from 'vue'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps({
   status: { type: String, required: true },
@@ -34,9 +35,18 @@ const emit = defineEmits(['cycle'])
    scene brought back from the cut pile takes one press rather than three. */
 const ORDER = ['planned', 'done', 'skipped']
 
-const WORDS = { planned: 'planned', done: 'done', skipped: 'skipped' }
+const WORDS = {
+  planned: 'scene.status.planned',
+  done: 'scene.status.done',
+  skipped: 'scene.status.skipped',
+}
 
-const word = computed(() => WORDS[props.status] ?? props.status)
+/* A status the app does not know is shown as it arrived rather than looked up:
+   `t` throws on a key it has no copy for, and an unexpected value from the API
+   is not a reason for a scene to fail to render. */
+const wordFor = (status) => (WORDS[status] ? t(WORDS[status]) : status)
+
+const word = computed(() => wordFor(props.status))
 
 const next = computed(() => ORDER[(ORDER.indexOf(props.status) + 1) % ORDER.length])
 
@@ -47,7 +57,9 @@ const next = computed(() => ORDER[(ORDER.indexOf(props.status) + 1) % ORDER.leng
  * state would be announced in the sidebar (where the mark is readonly and names
  * itself) and silent in the outline, which is the one place it can be changed.
  */
-const hint = computed(() => `${word.value} — mark as ${WORDS[next.value]}`)
+const hint = computed(() =>
+  t('scene.status.hint', { status: word.value, next: wordFor(next.value) }),
+)
 </script>
 
 <template>

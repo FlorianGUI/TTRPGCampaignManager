@@ -2,9 +2,15 @@
 /*
  * Boxed text the GM reads to the table. Tinted, ruled top and bottom, italic.
  * The visible "Read aloud" label carries the meaning; the tint only reinforces it.
+ *
+ * The default is a factory so the words are looked up when the block renders
+ * rather than when this module is imported, which is before the locale is
+ * known. An author who writes `{label=...}` on the directive still wins.
  */
+import { t } from '../../i18n/index.js'
+
 defineProps({
-  label: { type: String, default: 'Read aloud' },
+  label: { type: String, default: () => t('readAloud.label') },
 })
 </script>
 

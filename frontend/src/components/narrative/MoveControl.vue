@@ -31,6 +31,7 @@ import {
   useStructureStore,
 } from '../../stores/structure.js'
 import { useWriteFailure } from '../../composables/useWriteFailure.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -109,14 +110,13 @@ async function moveInto() {
  * the campaign delete uses: closing a table takes every sheet and every scene at
  * it with no undo, and removing an act takes a heading.
  */
-const consequence = computed(
-  () =>
-    ({
-      act: 'Its sequences and scenes move to the campaign. Nothing in it is deleted.',
-      sequence: 'Its scenes move to the act above it. Nothing in it is deleted.',
-      scene: 'The scene and everything written in it goes.',
-    })[props.kind],
-)
+const CONSEQUENCES = {
+  act: 'move.consequence.act',
+  sequence: 'move.consequence.sequence',
+  scene: 'move.consequence.scene',
+}
+
+const consequence = computed(() => t(CONSEQUENCES[props.kind]))
 
 async function remove() {
   removing.value = true
@@ -172,13 +172,13 @@ async function stepTo(after) {
 
 const items = computed(() => [
   {
-    label: 'Move up',
+    label: t('move.up'),
     icon: 'pi pi-arrow-up',
     disabled: up.value === undefined,
     command: () => stepTo(up.value),
   },
   {
-    label: 'Move down',
+    label: t('move.down'),
     icon: 'pi pi-arrow-down',
     disabled: down.value === undefined,
     command: () => stepTo(down.value),
@@ -186,7 +186,7 @@ const items = computed(() => [
   ...(parents.value.length
     ? [
         {
-          label: 'Move into…',
+          label: t('move.into'),
           icon: 'pi pi-sign-in',
           command: () => {
             picking.value = true
@@ -196,7 +196,7 @@ const items = computed(() => [
     : []),
   { separator: true },
   {
-    label: 'Delete',
+    label: t('move.delete'),
     icon: 'pi pi-trash',
     // The one item here that cannot be undone by doing it again.
     class: 'move__delete',
@@ -215,7 +215,7 @@ const items = computed(() => [
       size="small"
       icon="pi pi-ellipsis-v"
       :loading="moving"
-      :aria-label="`Move ${titleOf(node, kind)}`"
+      :aria-label="t('move.menuLabel', { name: titleOf(node, kind) })"
       aria-haspopup="true"
       @click="menu.toggle($event)"
     />
@@ -224,39 +224,46 @@ const items = computed(() => [
     <Dialog
       v-model:visible="picking"
       modal
-      :header="`Move ${titleOf(node, kind)}`"
+      :header="t('move.dialog.title', { name: titleOf(node, kind) })"
       :style="{ width: 'min(28rem, 92vw)' }"
     >
-      <p class="move__consequence">
-        It goes to the end of whatever you choose. The campaign is a place in its own right — a
-        scene does not need an act to belong to.
-      </p>
+      <p class="move__consequence">{{ t('move.dialog.explain') }}</p>
 
       <Select
         v-model="chosen"
         class="move__parent"
         :options="parents"
         option-label="label"
-        placeholder="Choose where it goes"
+        :placeholder="t('move.dialog.placeholder')"
       />
 
       <template #footer>
-        <Button label="Cancel" text severity="secondary" @click="picking = false" />
-        <Button label="Move" :disabled="!chosen" :loading="moving" @click="moveInto" />
+        <Button :label="t('move.cancel')" text severity="secondary" @click="picking = false" />
+        <Button
+          :label="t('move.confirm')"
+          :disabled="!chosen"
+          :loading="moving"
+          @click="moveInto"
+        />
       </template>
     </Dialog>
 
     <Dialog
       v-model:visible="confirming"
       modal
-      :header="`Delete ${titleOf(node, kind)}?`"
+      :header="t('move.delete.title', { name: titleOf(node, kind) })"
       :style="{ width: 'min(28rem, 92vw)' }"
     >
       <p class="move__consequence">{{ consequence }}</p>
 
       <template #footer>
-        <Button label="Cancel" text severity="secondary" @click="confirming = false" />
-        <Button label="Delete" severity="danger" :loading="removing" @click="remove" />
+        <Button :label="t('move.cancel')" text severity="secondary" @click="confirming = false" />
+        <Button
+          :label="t('move.delete.confirm')"
+          severity="danger"
+          :loading="removing"
+          @click="remove"
+        />
       </template>
     </Dialog>
   </span>

@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import ToastService from 'primevue/toastservice'
 import Toast from 'primevue/toast'
-import { COULD_NOT_SAVE, useWriteFailure } from './useWriteFailure.js'
+import { couldNotSave, useWriteFailure } from './useWriteFailure.js'
 
 /*
  * The real service and a real `<Toast />`, because the thing worth asserting is
@@ -45,7 +45,7 @@ describe('useWriteFailure', () => {
     await wrapper.find('button').trigger('click')
     await nextTick()
 
-    expect(document.body.textContent).toContain(COULD_NOT_SAVE)
+    expect(document.body.textContent).toContain(couldNotSave())
   })
 
   it('announces it, so it is not for sighted users alone', async () => {
@@ -57,7 +57,7 @@ describe('useWriteFailure', () => {
     await wrapper.find('button').trigger('click')
     await nextTick()
 
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(COULD_NOT_SAVE)
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(couldNotSave())
   })
 
   it('stays put rather than fading', async () => {
@@ -74,7 +74,7 @@ describe('useWriteFailure', () => {
     vi.advanceTimersByTime(60_000)
     await nextTick()
 
-    expect(document.body.textContent).toContain(COULD_NOT_SAVE)
+    expect(document.body.textContent).toContain(couldNotSave())
     vi.useRealTimers()
   })
 
@@ -91,6 +91,6 @@ describe('useWriteFailure', () => {
     await nextTick()
 
     const alert = document.querySelector('[role="alert"]')
-    expect(alert.textContent.replace(/\s+/g, ' ').trim()).toBe(COULD_NOT_SAVE)
+    expect(alert.textContent.replace(/\s+/g, ' ').trim()).toBe(couldNotSave())
   })
 })

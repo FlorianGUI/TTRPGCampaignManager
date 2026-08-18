@@ -16,14 +16,29 @@
  * scenes has not been *written*, which is a different problem from written and
  * unplayed, and it is the one a game master can act on.
  */
+import { t } from '../../i18n/index.js'
+
 defineProps({
   progress: { type: Object, required: true },
   // The pages have room for the words; the outline and the sidebar do not.
   withLabel: { type: Boolean, default: false },
 })
 
+/*
+ * `label` is an identifier as much as a word — it names the dot's modifier class
+ * — so it stays English in the data and is looked up here. The map is written
+ * out rather than built from the label, so every key in it is a literal the
+ * catalogue check can see.
+ */
+const WORDS = {
+  empty: 'progress.empty',
+  'not started': 'progress.notStarted',
+  finished: 'progress.finished',
+  ongoing: 'progress.ongoing',
+}
+
 const spellOut = ({ total, played, label }) =>
-  total ? `${label} — ${played} of ${total} scenes played` : 'empty — nothing written in it yet'
+  total ? t('progress.spelled', { label: t(WORDS[label]), played, total }) : t('progress.none')
 </script>
 
 <template>

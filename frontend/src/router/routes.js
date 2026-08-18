@@ -14,6 +14,10 @@ import { forgetCurrentCampaign, readCurrentCampaign } from '../stores/currentCam
  *  - `meta.public: true` marks the handful of routes a signed-out visitor may
  *    reach. Everything else is behind the guard, so forgetting the flag fails
  *    closed — a new page is private until it says otherwise
+ *  - `meta.title` is a key in the copy catalogue, not the words themselves. The
+ *    tab is copy like any other, and `router/index.js` resolves it — a route
+ *    that wrote its own title would be the one English line left in a French
+ *    window
  *  - `meta.layout` names the chrome App.vue should wrap the view in: `auth` for
  *    the signed-out column, `bare` for the pages above any campaign. Saying
  *    nothing gets the campaign shell, which is what all but a handful want
@@ -74,7 +78,7 @@ export const routes = [
     name: 'home',
     component: HomeView,
     beforeEnter: enterRememberedCampaign,
-    meta: { title: 'Your campaigns', layout: 'bare' },
+    meta: { title: 'route.home', layout: 'bare' },
   },
   /*
    * Inside a campaign. The id is in the path rather than only in storage, so a
@@ -94,7 +98,7 @@ export const routes = [
     path: '/campaigns/:campaignId/sessions',
     name: 'campaign-sessions',
     component: () => import('../views/SpikeView.vue'),
-    meta: { title: 'Session notes' },
+    meta: { title: 'route.sessions' },
   },
   /*
    * The campaign's shape: acts, sequences and scenes as one outline (#88).
@@ -108,7 +112,7 @@ export const routes = [
     path: '/campaigns/:campaignId/structure',
     name: 'campaign-structure',
     component: () => import('../views/StructureView.vue'),
-    meta: { title: 'Structure' },
+    meta: { title: 'route.structure' },
   },
   /*
    * One act, sequence or scene, each on its own page (#88).
@@ -126,19 +130,19 @@ export const routes = [
     path: '/campaigns/:campaignId/acts/:actId',
     name: 'campaign-act',
     component: () => import('../views/ActView.vue'),
-    meta: { title: 'Act' },
+    meta: { title: 'route.act' },
   },
   {
     path: '/campaigns/:campaignId/sequences/:sequenceId',
     name: 'campaign-sequence',
     component: () => import('../views/SequenceView.vue'),
-    meta: { title: 'Sequence' },
+    meta: { title: 'route.sequence' },
   },
   {
     path: '/campaigns/:campaignId/scenes/:sceneId',
     name: 'campaign-scene',
     component: () => import('../views/SceneView.vue'),
-    meta: { title: 'Scene' },
+    meta: { title: 'route.scene' },
   },
   /*
    * Editing one, and the only place it can be deleted. Reached from the cog in
@@ -158,25 +162,25 @@ export const routes = [
     path: '/campaigns/:campaignId/settings',
     name: 'campaign-settings',
     component: () => import('../views/CampaignSettingsView.vue'),
-    meta: { title: 'Campaign settings' },
+    meta: { title: 'route.campaignSettings' },
   },
   {
     path: '/login',
     name: 'login',
     component: () => import('../views/LoginView.vue'),
-    meta: { title: 'Sign in', public: true, layout: 'auth' },
+    meta: { title: 'route.login', public: true, layout: 'auth' },
   },
   {
     path: '/signup',
     name: 'signup',
     component: () => import('../views/SignupView.vue'),
-    meta: { title: 'Create an account', public: true, layout: 'auth' },
+    meta: { title: 'route.signup', public: true, layout: 'auth' },
   },
   {
     path: '/forgot-password',
     name: 'forgot-password',
     component: () => import('../views/ForgotPasswordView.vue'),
-    meta: { title: 'Reset your password', public: true, layout: 'auth' },
+    meta: { title: 'route.forgotPassword', public: true, layout: 'auth' },
   },
   /*
    * Where a reset link lands, and public for the same reason /verify-email is:
@@ -186,7 +190,7 @@ export const routes = [
     path: '/reset-password',
     name: 'reset-password',
     component: () => import('../views/ResetPasswordView.vue'),
-    meta: { title: 'Choose a new password', public: true, layout: 'auth' },
+    meta: { title: 'route.resetPassword', public: true, layout: 'auth' },
   },
   /*
    * Where a verification link lands. Public because the common case is opening
@@ -197,7 +201,7 @@ export const routes = [
     path: '/verify-email',
     name: 'verify-email',
     component: () => import('../views/VerifyEmailView.vue'),
-    meta: { title: 'Confirm your address', public: true, layout: 'auth' },
+    meta: { title: 'route.verifyEmail', public: true, layout: 'auth' },
   },
   /*
    * Where a provider sign-in comes back to (#39). The API sets the refresh
@@ -212,7 +216,7 @@ export const routes = [
     path: '/auth/callback',
     name: 'sso-callback',
     component: () => import('../views/SsoCallbackView.vue'),
-    meta: { title: 'Signing you in', public: true, layout: 'auth' },
+    meta: { title: 'route.ssoCallback', public: true, layout: 'auth' },
   },
   /*
    * Dev-only. `import.meta.env.DEV` is substituted with a literal at build
@@ -231,7 +235,7 @@ export const routes = [
           path: '/styleguide',
           name: 'styleguide',
           component: () => import('../views/StyleguideView.vue'),
-          meta: { title: 'Styleguide' },
+          meta: { title: 'route.styleguide' },
         },
       ]
     : []),
@@ -239,7 +243,7 @@ export const routes = [
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('../views/NotFoundView.vue'),
-    meta: { title: 'Not found' },
+    meta: { title: 'route.notFound' },
   },
 ]
 

@@ -24,7 +24,8 @@ import { actProgress, titleOf, trailTo, useStructureStore } from '../stores/stru
 // The sentence only — see the note in `SceneView`. The controls this page hosts
 // (`AddChild`, and the move menu inside `NodeContents`) speak through the toast
 // instead, because a menu command has no form to report to.
-import { COULD_NOT_SAVE } from '../composables/useWriteFailure.js'
+import { couldNotSave } from '../composables/useWriteFailure.js'
+import { t } from '../i18n/index.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -107,7 +108,7 @@ async function save() {
     // The API takes a bare string, so it accepts a blank title and answers 422
     // only for a missing one. This is the only thing between a game master and
     // a nameless act.
-    failure.value = 'Give it a title.'
+    failure.value = t('node.needsTitle')
     return
   }
 
@@ -121,7 +122,7 @@ async function save() {
 
     editing.value = false
   } catch {
-    failure.value = COULD_NOT_SAVE
+    failure.value = couldNotSave()
   } finally {
     saving.value = false
   }
@@ -133,7 +134,8 @@ async function save() {
     <NarrativeTrail :campaign-id="campaignId" :trail="trail" />
 
     <header class="node__head">
-      <p class="label-smallcaps">{{ kind }}</p>
+      <!-- The kind, as a word rather than as the identifier the prop carries. -->
+      <p class="label-smallcaps">{{ t(kind === 'act' ? 'kind.act' : 'kind.sequence') }}</p>
 
       <template v-if="!editing">
         <h1>{{ titleOf(node, kind) }}</h1>
@@ -142,13 +144,18 @@ async function save() {
           size="small"
           severity="secondary"
           outlined
-          label="Edit"
+          :label="t('node.edit')"
           icon="pi pi-pencil"
           @click="edit"
         />
       </template>
 
-      <InputText v-else v-model="draft.title" class="node__title-field" aria-label="Title" />
+      <InputText
+        v-else
+        v-model="draft.title"
+        class="node__title-field"
+        :aria-label="t('node.title')"
+      />
     </header>
 
     <ActProgress
@@ -161,13 +168,18 @@ async function save() {
     <!-- Editing and reading in the same place, so the measure and the wrapping
          a game master writes against are the ones they will read back. -->
     <template v-if="editing">
-      <Textarea v-model="draft.description" class="node__field" rows="6" aria-label="Description" />
+      <Textarea
+        v-model="draft.description"
+        class="node__field"
+        rows="6"
+        :aria-label="t('node.description')"
+      />
 
       <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
 
       <div class="node__actions">
-        <Button label="Save" :loading="saving" @click="save" />
-        <Button label="Cancel" text severity="secondary" @click="editing = false" />
+        <Button :label="t('node.save')" :loading="saving" @click="save" />
+        <Button :label="t('node.cancel')" text severity="secondary" @click="editing = false" />
       </div>
     </template>
 
@@ -183,13 +195,13 @@ async function save() {
       it. Shown on the sequence's own page, where there is room for a sentence.
     -->
     <p v-if="kind === 'sequence'" class="node__teach">
-      A <strong>sequence</strong> is a run of scenes that tells a small story of its own inside an
-      act — a beginning and an end, at a smaller scale than the act around it.
+      {{ t('node.teach.before') }} <strong>{{ t('node.teach.word') }}</strong>
+      {{ t('node.teach.after') }}
     </p>
 
     <section class="node__section">
       <div class="node__section-head">
-        <h2 class="label-smallcaps">Contains</h2>
+        <h2 class="label-smallcaps">{{ t('node.contains') }}</h2>
         <AddChild
           :campaign-id="campaignId"
           :allowed="kind === 'act' ? ['sequence', 'scene'] : ['scene']"
@@ -206,12 +218,12 @@ async function save() {
         :children="children"
       />
       <p v-else class="node__empty">
-        Nothing in it yet.
+        {{ t('node.empty') }}
         <template v-if="kind === 'act'">
-          Add a <strong>sequence</strong> — a run of scenes that tells a small story of its own — or
-          write a scene straight onto this act.
+          {{ t('node.empty.act.before') }} <strong>{{ t('node.empty.act.word') }}</strong>
+          {{ t('node.empty.act.after') }}
         </template>
-        <template v-else>Write a scene in it.</template>
+        <template v-else>{{ t('node.empty.sequence') }}</template>
       </p>
     </section>
   </article>
@@ -219,7 +231,7 @@ async function save() {
   <Message v-else-if="structure.error" severity="error" :closable="false">
     <!-- A node that is not yours answers exactly as one that never existed, so
          there is one message for both and it does not guess between them. -->
-    That is not here.
+    {{ t('node.missing') }}
   </Message>
 </template>
 

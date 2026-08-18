@@ -26,6 +26,7 @@ import { RouterLink } from 'vue-router'
 import ActProgress from './ActProgress.vue'
 import SceneStatus from './SceneStatus.vue'
 import { actProgress, useStructureStore, titleOf } from '../../stores/structure.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps({
   campaign: { type: Object, required: true },
@@ -92,7 +93,7 @@ const to = ({ kind, node }) =>
           v-if="child.kind === 'scene'"
           class="nav__item-loose"
           aria-hidden="true"
-          title="In no act"
+          :title="t('campaignNav.looseScene')"
           >↳</span
         >
       </RouterLink>

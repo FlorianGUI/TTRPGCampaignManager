@@ -16,6 +16,7 @@ import { ref } from 'vue'
 import Button from 'primevue/button'
 import { apiFetch } from '../api/http.js'
 import { useAuthStore } from '../stores/auth.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 
@@ -29,14 +30,13 @@ async function resend() {
 
   try {
     await apiFetch('/users/verify-email/resend', { method: 'POST', token: auth.token })
-    outcome.value = { kind: 'sent', message: 'Sent. Check your inbox.' }
+    outcome.value = { kind: 'sent', message: t('verification.sent') }
   } catch (error) {
     // The 429 carries a sentence the backend wrote to be shown, and it is the only
     // failure here the reader can act on. Everything else gets a plain retry.
     outcome.value = {
       kind: 'failed',
-      message:
-        error?.status === 429 ? error.detail : 'Could not send it just now. Try again shortly.',
+      message: error?.status === 429 ? error.detail : t('verification.failed'),
     }
   } finally {
     sending.value = false
@@ -52,9 +52,7 @@ async function resend() {
   >
     <p class="notice__text">
       <template v-if="outcome">{{ outcome.message }}</template>
-      <template v-else>
-        Your email address is not confirmed yet. Confirming it keeps your account yours.
-      </template>
+      <template v-else>{{ t('verification.text') }}</template>
     </p>
 
     <div class="notice__actions">
@@ -63,10 +61,16 @@ async function resend() {
         size="small"
         text
         :loading="sending"
-        label="Send the link again"
+        :label="t('verification.resend')"
         @click="resend"
       />
-      <Button size="small" text icon="pi pi-times" aria-label="Dismiss" @click="dismissed = true" />
+      <Button
+        size="small"
+        text
+        icon="pi pi-times"
+        :aria-label="t('verification.dismiss')"
+        @click="dismissed = true"
+      />
     </div>
   </aside>
 </template>

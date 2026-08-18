@@ -17,6 +17,7 @@ import FormField from '../components/FormField.vue'
 import { useAuthStore } from '../stores/auth.js'
 import { safeRedirect } from '../router/redirect.js'
 import { DISCORD_SIGN_IN_URL, GOOGLE_SIGN_IN_URL, rememberDestination } from '../api/sso.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -42,11 +43,11 @@ const submitting = ref(false)
 const signedOut = auth.takeSignedOutReason()
 
 function waitFor(seconds) {
-  if (seconds < 60) return `${seconds} seconds`
+  if (seconds < 60) return t('login.wait.seconds', { count: seconds })
 
   const minutes = Math.ceil(seconds / 60)
 
-  return minutes === 1 ? 'a minute' : `${minutes} minutes`
+  return minutes === 1 ? t('login.wait.minute') : t('login.wait.minutes', { count: minutes })
 }
 
 function messageFor(error) {
@@ -54,9 +55,9 @@ function messageFor(error) {
   // endpoint, with nothing about the account in it (#63). Showing it beats
   // inventing one, and it is the only case where the user can act on the wait.
   if (error?.status === 429) return error.detail
-  if (error?.status === 401) return 'That username and password do not match an account.'
+  if (error?.status === 401) return t('login.error.credentials')
 
-  return 'Something went wrong signing in. Try again.'
+  return t('login.error.generic')
 }
 
 /*
@@ -91,32 +92,39 @@ async function submit() {
 
 <template>
   <form class="auth-form" novalidate @submit.prevent="submit">
-    <h1>Sign in</h1>
+    <h1>{{ t('login.title') }}</h1>
 
     <p v-if="signedOut?.message" class="auth-form__notice" role="status">
       {{ signedOut.message }}
       <!-- Falsy covers both the header the server did not send and a wait of
            zero seconds, which is not a wait worth a sentence. -->
       <template v-if="signedOut.retryAfter">
-        Signing in will work again in {{ waitFor(signedOut.retryAfter) }}.
+        {{ t('login.signedOut.retry', { wait: waitFor(signedOut.retryAfter) }) }}
       </template>
     </p>
 
     <p v-if="formError" class="auth-form__error" role="alert">{{ formError }}</p>
 
-    <FormField id="login-username" v-model="username" label="Username" autocomplete="username" />
+    <FormField
+      id="login-username"
+      v-model="username"
+      :label="t('login.username')"
+      autocomplete="username"
+    />
 
     <FormField
       id="login-password"
       v-model="password"
-      label="Password"
+      :label="t('login.password')"
       type="password"
       autocomplete="current-password"
     />
 
-    <Button type="submit" label="Sign in" :loading="submitting" fluid />
+    <Button type="submit" :label="t('login.submit')" :loading="submitting" fluid />
 
-    <p class="auth-form__or"><span>or</span></p>
+    <p class="auth-form__or">
+      <span>{{ t('login.or') }}</span>
+    </p>
 
     <!--
       Anchors, and they have to stay anchors. A consent screen is a page at the
@@ -136,7 +144,7 @@ async function submit() {
       :href="DISCORD_SIGN_IN_URL"
       rel="noopener noreferrer"
       icon="pi pi-discord"
-      label="Continue with Discord"
+      :label="t('login.discord')"
       severity="secondary"
       fluid
       @click="leaveForProvider"
@@ -147,19 +155,20 @@ async function submit() {
       :href="GOOGLE_SIGN_IN_URL"
       rel="noopener noreferrer"
       icon="pi pi-google"
-      label="Continue with Google"
+      :label="t('login.google')"
       severity="secondary"
       fluid
       @click="leaveForProvider"
     />
 
     <p class="auth-form__aside">
-      No account yet?
-      <RouterLink :to="{ name: 'signup' }">Create one</RouterLink>.
+      {{ t('login.noAccount') }}
+      <RouterLink :to="{ name: 'signup' }">{{ t('login.createOne') }}</RouterLink
+      >.
     </p>
 
     <p class="auth-form__aside">
-      <RouterLink :to="{ name: 'forgot-password' }">Forgot your password?</RouterLink>
+      <RouterLink :to="{ name: 'forgot-password' }">{{ t('login.forgotPassword') }}</RouterLink>
     </p>
   </form>
 </template>

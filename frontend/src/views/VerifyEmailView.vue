@@ -14,6 +14,7 @@ import { onMounted, ref } from 'vue'
 import Button from 'primevue/button'
 import { apiFetch } from '../api/http.js'
 import { useAuthStore } from '../stores/auth.js'
+import { t } from '../i18n/index.js'
 
 const auth = useAuthStore()
 
@@ -49,31 +50,29 @@ onMounted(async () => {
 
 <template>
   <div class="verify">
-    <p v-if="state === 'working'" class="verify__working">Confirming your address…</p>
+    <p v-if="state === 'working'" class="verify__working">{{ t('verify.working') }}</p>
 
     <template v-else-if="state === 'done'">
-      <h1>Address confirmed</h1>
-      <p>Thank you — this address is now verified.</p>
-      <Button as="router-link" :to="{ name: 'home' }" label="Continue" fluid />
+      <h1>{{ t('verify.done.title') }}</h1>
+      <p>{{ t('verify.done.detail') }}</p>
+      <Button as="router-link" :to="{ name: 'home' }" :label="t('verify.done.continue')" fluid />
     </template>
 
     <template v-else-if="state === 'unusable'">
-      <h1>This link is no longer valid</h1>
+      <h1>{{ t('verify.unusable.title') }}</h1>
       <!--
         One message for expired, already-used and never-issued, because the API
         answers all three the same way on purpose and there is nothing different
         to do about any of them. Saying which would also confirm to whoever is
         guessing that a token existed.
       -->
-      <p>
-        It may have expired, or already been used. Sign in and ask for a new one from your account.
-      </p>
-      <Button as="router-link" :to="{ name: 'login' }" label="Sign in" fluid />
+      <p>{{ t('verify.unusable.detail') }}</p>
+      <Button as="router-link" :to="{ name: 'login' }" :label="t('verify.signIn')" fluid />
     </template>
 
     <template v-else>
-      <h1>Something went wrong</h1>
-      <p>We could not confirm the address just now. The link is still good — try again shortly.</p>
+      <h1>{{ t('verify.failed.title') }}</h1>
+      <p>{{ t('verify.failed.detail') }}</p>
     </template>
   </div>
 </template>

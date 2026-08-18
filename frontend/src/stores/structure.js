@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { request } from '../api/client.js'
+import { t } from '../i18n/index.js'
 
 /*
  * One campaign's narrative tree: its acts, sequences and scenes.
@@ -316,8 +317,17 @@ export function scenesUnder(tree, act) {
  * Muted rather than bracketed: it is a real record in a real place, and the only
  * thing missing is a word.
  */
+const UNTITLED = {
+  act: 'kind.untitled.act',
+  sequence: 'kind.untitled.sequence',
+  scene: 'kind.untitled.scene',
+}
+
 export function titleOf(node, kind) {
-  return node?.title?.trim() || `Untitled ${kind}`
+  // One key per kind rather than a `{kind}` filled into one sentence: French
+  // gives each of the three a different article, so the words either side of the
+  // kind are not the same sentence in every language.
+  return node?.title?.trim() || t(UNTITLED[kind])
 }
 
 /*
@@ -489,7 +499,7 @@ export function anchorForStep(siblings, id, direction) {
 export function parentsFor(tree, kind, id) {
   if (!tree || kind === 'act') return []
 
-  const campaign = [{ label: 'The campaign', act_id: null, sequence_id: null }]
+  const campaign = [{ label: t('move.parent.campaign'), act_id: null, sequence_id: null }]
 
   const acts = tree.acts.map((act) => ({ label: act.title, act_id: act.id, sequence_id: null }))
 

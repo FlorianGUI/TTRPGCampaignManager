@@ -26,6 +26,7 @@ import { useAuthStore } from '../stores/auth.js'
 import { useCampaignsStore } from '../stores/campaigns.js'
 import { useSourcesStore } from '../stores/sources.js'
 import { rememberCurrentCampaign } from '../stores/currentCampaign.js'
+import { t } from '../i18n/index.js'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -143,34 +144,29 @@ async function create(values) {
     <!-- ---- Campaigns ------------------------------------------------ -->
 
     <template v-if="campaigns.error && !campaigns.loaded">
-      <h1 class="home__title">We could not reach your campaigns</h1>
-      <p class="home__lede" role="alert">
-        The app is signed in, so this is the connection rather than your account.
-      </p>
-      <Button class="home__retry" label="Try again" @click="campaigns.reload()" />
+      <h1 class="home__title">{{ t('home.unreachable.title') }}</h1>
+      <p class="home__lede" role="alert">{{ t('home.unreachable.detail') }}</p>
+      <Button class="home__retry" :label="t('home.retry')" @click="campaigns.reload()" />
     </template>
 
     <template v-else-if="isEmpty">
-      <h1 class="home__title">Welcome, {{ auth.user?.username }}</h1>
-      <p class="home__lede">One thing to do first.</p>
+      <h1 class="home__title">{{ t('home.welcome', { username: auth.user?.username ?? '' }) }}</h1>
+      <p class="home__lede">{{ t('home.oneThing') }}</p>
 
       <div class="home__empty">
         <i class="pi pi-th-large home__empty-icon" aria-hidden="true" />
-        <h2>Start your first campaign</h2>
-        <p>
-          A campaign holds your session notes, your factions, your locations and the people at your
-          table. Everything else in here hangs off one.
-        </p>
-        <Button label="Create a campaign" icon="pi pi-plus" @click="openDialog" />
+        <h2>{{ t('home.empty.title') }}</h2>
+        <p>{{ t('home.empty.detail') }}</p>
+        <Button :label="t('home.empty.action')" icon="pi pi-plus" @click="openDialog" />
       </div>
     </template>
 
     <template v-else>
-      <h1 class="home__title">Which table are you running?</h1>
-      <p class="home__lede">Everything else lives inside a campaign.</p>
+      <h1 class="home__title">{{ t('home.title') }}</h1>
+      <p class="home__lede">{{ t('home.lede') }}</p>
 
       <p v-if="campaigns.loading && !campaigns.loaded" class="home__waiting">
-        Fetching your campaigns…
+        {{ t('home.waiting') }}
       </p>
 
       <ul v-else class="home__grid">
@@ -190,7 +186,7 @@ async function create(values) {
         <li>
           <button type="button" class="card card--new" @click="openDialog">
             <i class="pi pi-plus" aria-hidden="true" />
-            <span>New campaign</span>
+            <span>{{ t('home.newCampaign') }}</span>
           </button>
         </li>
       </ul>
@@ -208,7 +204,9 @@ async function create(values) {
       <hr class="rule-fleuron" />
 
       <section class="shelf" aria-labelledby="home-sources">
-        <h2 id="home-sources" class="label-smallcaps shelf__label">Your sources</h2>
+        <h2 id="home-sources" class="label-smallcaps shelf__label">
+          {{ t('home.sources.title') }}
+        </h2>
 
         <ul class="shelf__row">
           <li v-for="source in sources.items" :key="source.id" class="chip">
@@ -217,18 +215,21 @@ async function create(values) {
           </li>
         </ul>
 
-        <p class="shelf__note">
-          Sources belong to you, not to a campaign — every campaign you run can see all of them.
-        </p>
+        <p class="shelf__note">{{ t('home.sources.note') }}</p>
       </section>
     </template>
 
     <!-- ---- Create --------------------------------------------------- -->
 
-    <Dialog v-model:visible="dialogOpen" modal header="New campaign" class="home__dialog">
+    <Dialog
+      v-model:visible="dialogOpen"
+      modal
+      :header="t('home.create.header')"
+      class="home__dialog"
+    >
       <CampaignForm
         class="home__form"
-        submit-label="Create campaign"
+        :submit-label="t('home.create.submit')"
         :busy="submitting"
         :error="failure"
         @submit="create"

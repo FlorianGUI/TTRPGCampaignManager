@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sections } from './sample.js'
+import { sections as build } from './sample.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { light, dark } from '../design-system/tokens/semantic.js'
 
@@ -11,6 +11,13 @@ import { light, dark } from '../design-system/tokens/semantic.js'
  * rot quietly: the icons are `ENTITY_KINDS`, so the way into every location and
  * the chip a `:location[…]` renders as in a scene cannot start disagreeing.
  */
+
+/*
+ * Built rather than imported: the labels are translated, so `sections` is a
+ * function called once the locale is settled. The catalogue's default is
+ * English, which is what this file reads back.
+ */
+const sections = build()
 
 describe('the sidebar sections', () => {
   it('are Resources and Organization', () => {

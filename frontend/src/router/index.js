@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { routes } from './routes.js'
 import { useAuthStore } from '../stores/auth.js'
+import { t } from '../i18n/index.js'
 
 export const APP_TITLE = 'TTRPG Campaign Manager'
 
@@ -57,10 +58,13 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
     return { name: 'login', query: { redirect: to.fullPath }, replace: true }
   })
 
-  // The title is the only chrome outside the Vue tree, so it is set here rather
-  // than in a component.
+  /*
+   * The title is the only chrome outside the Vue tree, so it is set here rather
+   * than in a component. `meta.title` is a catalogue key — the app's name is not,
+   * being a name — so only one half of this sentence is translated.
+   */
   router.afterEach((to) => {
-    document.title = to.meta.title ? `${to.meta.title} — ${APP_TITLE}` : APP_TITLE
+    document.title = to.meta.title ? `${t(to.meta.title)} — ${APP_TITLE}` : APP_TITLE
   })
 
   return router

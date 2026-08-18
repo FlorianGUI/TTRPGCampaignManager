@@ -20,6 +20,7 @@ import SceneStatus from './SceneStatus.vue'
 import { titleOf, useStructureStore } from '../../stores/structure.js'
 import { toPlainText } from '../../markdown/toPlainText.js'
 import { useWriteFailure } from '../../composables/useWriteFailure.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps({
   campaignId: { type: String, required: true },
@@ -149,6 +150,15 @@ const to = computed(() => ({
   params: { campaignId: props.campaignId, [PARAMS[props.kind]]: props.node.id },
 }))
 
+/* One key per kind rather than a `{kind}` in one sentence — see `titleOf`. */
+const NAME_THIS = {
+  act: 'outline.nameThis.act',
+  sequence: 'outline.nameThis.sequence',
+  scene: 'outline.nameThis.scene',
+}
+
+const nameThis = computed(() => t(NAME_THIS[props.kind]))
+
 /* Headings for the grouping levels, so the outline is a document outline too. */
 const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.kind])
 </script>
@@ -160,19 +170,14 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
       type="button"
       class="chevron"
       :aria-expanded="!shut"
-      :aria-label="`${shut ? 'Expand' : 'Collapse'} ${name}`"
+      :aria-label="shut ? t('outline.expand', { name }) : t('outline.collapse', { name })"
       @click="$emit('toggle', node.id)"
     >
       <i class="pi" :class="shut ? 'pi-chevron-right' : 'pi-chevron-down'" />
     </button>
     <span v-else class="chevron chevron--none" aria-hidden="true" />
 
-    <span
-      v-if="skipsLevel"
-      class="row__skip"
-      title="Attached to the act, skipping the sequence level"
-      >↳</span
-    >
+    <span v-if="skipsLevel" class="row__skip" :title="t('outline.skipsLevel')">↳</span>
 
     <div class="row__main">
       <!--
@@ -187,8 +192,8 @@ const tag = computed(() => ({ act: 'h2', sequence: 'h3', scene: 'span' })[props.
             ref="field"
             v-model="draft"
             class="row__field"
-            :aria-label="`Name this ${kind}`"
-            :placeholder="`Name this ${kind}`"
+            :aria-label="nameThis"
+            :placeholder="nameThis"
             @keyup.enter="commit"
             @keyup.esc="$emit('cancel-rename')"
             @blur="commit"

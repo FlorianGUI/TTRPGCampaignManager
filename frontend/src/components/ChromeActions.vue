@@ -40,6 +40,7 @@ import Menu from 'primevue/menu'
 import { useThemeStore } from '../stores/theme.js'
 import { useAuthStore } from '../stores/auth.js'
 import { forgetCurrentCampaign } from '../stores/currentCampaign.js'
+import { t } from '../i18n/index.js'
 
 const props = defineProps({
   // The campaign you are in, or null on every page above one — which is what
@@ -110,18 +111,18 @@ function openSettings() {
  */
 const items = computed(() => [
   {
-    label: 'Switch theme',
+    label: t('chrome.switchTheme'),
     icon: theme.value === 'candlelight' ? 'pi pi-sun' : 'pi pi-moon',
     command: toggleTheme,
   },
   ...(props.campaign
     ? [
-        { label: 'Campaign settings', icon: 'pi pi-cog', command: openSettings },
-        { label: 'Close campaign', icon: 'pi pi-times', command: closeCampaign },
+        { label: t('chrome.campaignSettings'), icon: 'pi pi-cog', command: openSettings },
+        { label: t('chrome.closeCampaign'), icon: 'pi pi-times', command: closeCampaign },
       ]
     : []),
   { separator: true },
-  { label: 'Sign out', icon: 'pi pi-sign-out', command: signOut },
+  { label: t('chrome.signOut'), icon: 'pi pi-sign-out', command: signOut },
 ])
 
 /*

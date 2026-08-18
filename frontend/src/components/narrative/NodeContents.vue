@@ -32,6 +32,7 @@ const to = (campaignId, { kind, node }) =>
     ? { name: 'campaign-sequence', params: { campaignId, sequenceId: node.id } }
     : { name: 'campaign-scene', params: { campaignId, sceneId: node.id } }
 import { titleOf } from '../../stores/structure.js'
+import { t } from '../../i18n/index.js'
 
 const structure = useStructureStore()
 const { failed } = useWriteFailure()
@@ -96,7 +97,9 @@ async function dropped({ item, parent, after }) {
           {{ titleOf(child.node, child.kind) }}
         </span>
 
-        <span v-if="child.kind === 'sequence'" class="contents__kind">sequence</span>
+        <span v-if="child.kind === 'sequence'" class="contents__kind">{{
+          t('node.contents.sequence')
+        }}</span>
       </RouterLink>
 
       <SceneStatus

@@ -6,6 +6,7 @@ import LoginView from './LoginView.vue'
 import { ApiError } from '../api/http.js'
 import { DISCORD_SIGN_IN_URL, GOOGLE_SIGN_IN_URL, takeDestination } from '../api/sso.js'
 import { useAuthStore } from '../stores/auth.js'
+import { setLocale } from '../i18n/index.js'
 
 const router = { replace: vi.fn() }
 let query = {}
@@ -258,6 +259,39 @@ describe('LoginView', () => {
       await clickProvider(view)
 
       expect(takeDestination()).toBe('/')
+    })
+  })
+
+  /*
+   * The one place a whole page is read back in the other language.
+   *
+   * Every other assertion in the suite is in English, under the locale the
+   * catalogue defaults to — asserting on keys instead would stop the tests
+   * noticing that the copy is wrong, which is worse than what they did before
+   * (#87). This is what checks that the wiring in between actually reaches the
+   * French catalogue: the fields, the button, and the error written in JS.
+   */
+  describe('in French', () => {
+    beforeEach(() => setLocale('fr'))
+    afterEach(() => setLocale('en'))
+
+    it('renders the form in French', () => {
+      const view = mountView()
+
+      expect(view.find('h1').text()).toBe('Connexion')
+      expect(view.find('label[for="login-username"]').text()).toBe('Nom d’utilisateur')
+      expect(view.find('button[type="submit"]').text()).toContain('Se connecter')
+    })
+
+    it('says a refused sign-in in French too', async () => {
+      vi.spyOn(useAuthStore(), 'logIn').mockRejectedValue(new ApiError(401, 'Incorrect'))
+
+      const view = mountView()
+      await submitWith(view)
+
+      expect(view.find('[role="alert"]').text()).toBe(
+        'Ce nom d’utilisateur et ce mot de passe ne correspondent à aucun compte.',
+      )
     })
   })
 

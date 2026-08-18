@@ -1,4 +1,5 @@
 import { useToast } from 'primevue/usetoast'
+import { t } from '../i18n/index.js'
 
 /*
  * The one sentence the app says when a write is refused.
@@ -14,7 +15,10 @@ import { useToast } from 'primevue/usetoast'
  * the request rather than for whoever is using the app — #102 settled that
  * reasoning for the sign-up form, and nothing about it is specific to signing up.
  */
-export const COULD_NOT_SAVE = 'That change could not be saved.'
+/* A function, not a constant: a constant would be built at import time, before
+   `main.js` has resolved the locale, and would be English for the rest of the
+   session. */
+export const couldNotSave = () => t('write.failed')
 
 /*
  * Telling someone that what they just asked for did not happen.
@@ -47,7 +51,7 @@ export function useWriteFailure() {
    * already gone, say — it is one parameter away, added deliberately.
    */
   function failed() {
-    toast.add({ severity: 'error', summary: COULD_NOT_SAVE })
+    toast.add({ severity: 'error', summary: couldNotSave() })
   }
 
   return { failed }

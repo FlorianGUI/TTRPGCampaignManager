@@ -17,6 +17,7 @@
  * in frontend/README.md).
  */
 import ChromeActions from './ChromeActions.vue'
+import { t } from '../i18n/index.js'
 </script>
 
 <template>
@@ -24,7 +25,7 @@ import ChromeActions from './ChromeActions.vue'
     <header class="bare__topbar texture-grain">
       <div class="bare__brand">
         <i class="pi pi-book" aria-hidden="true" />
-        <span>Campaign Manager</span>
+        <span>{{ t('app.name') }}</span>
       </div>
 
       <ChromeActions class="bare__actions" />
