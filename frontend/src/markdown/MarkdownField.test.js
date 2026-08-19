@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import MarkdownField from './MarkdownField.vue'
-import MarkdownToolbar from './MarkdownToolbar.vue'
 import { TOOLBAR_ITEMS } from './toolbar.js'
 import { DIRECTIVES } from './directives.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
@@ -59,9 +58,7 @@ describe('MarkdownField says what it takes', () => {
   })
 
   it('shows a button for every directive the renderer implements', () => {
-    const toolbar = mountField().getComponent(MarkdownToolbar)
-
-    expect(toolbar.findAllComponents({ name: 'Button' })).toHaveLength(
+    expect(mountField().findAllComponents({ name: 'Button' })).toHaveLength(
       Object.keys(DIRECTIVES).length,
     )
   })
