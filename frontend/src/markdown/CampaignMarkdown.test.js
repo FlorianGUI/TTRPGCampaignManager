@@ -136,6 +136,65 @@ describe('CampaignMarkdown degradation', () => {
   })
 })
 
+/*
+ * The fallback promises the author's own text, and it used to rebuild that text
+ * from the tree — which has already thrown away how the attributes were
+ * written. Every case below round-tripped wrong, and none of the degradation
+ * tests above caught it, because not one of them uses a quoted value.
+ */
+describe('CampaignMarkdown quotes the source rather than rebuilding it', () => {
+  const cases = [
+    [
+      'a quoted value, whose spaces an unquoted one would not survive',
+      ':npx[Fen]{label="the old man"}',
+    ],
+    [
+      'the id and class shorthand, which the tree stores under other names',
+      ':npx[Fen]{#gate .big}',
+    ],
+    ['a valueless attribute, indistinguishable in the tree from an empty one', ':npx[Fen]{flag}'],
+    [
+      'an explicitly empty value, indistinguishable in the tree from a bare flag',
+      ':npx[Fen]{empty=""}',
+    ],
+    ['an attribute the dialect knows but refuses', ':dice[1d20]{result=high}'],
+  ]
+
+  for (const [what, source] of cases) {
+    it(`gives back ${what}`, () => {
+      expect(render(`Before ${source} after.`).text()).toContain(source)
+    })
+  }
+
+  it('gives back what would otherwise become invalid syntax', () => {
+    // The old rebuild wrote `{label=the old man}`. An unquoted value ends at the
+    // first space, so what was on screen would parse differently from what
+    // produced it — a writer copying the fallback back in got a second typo.
+    const text = render(':npx[Fen]{label="the old man"}').text()
+
+    expect(text).not.toContain('{label=the old man}')
+  })
+
+  it('renders a block directive’s body once, not once as source and once as prose', () => {
+    const wrapper = render(':::spellbook{#gate}\nMagic missile.\n:::')
+    const occurrences = wrapper.text().split('Magic missile.').length - 1
+
+    expect(occurrences).toBe(1)
+    expect(wrapper.text()).toContain(':::spellbook{#gate}')
+  })
+
+  it('does not print a closing fence the author never typed', () => {
+    expect(render(':::spellbook\nMagic missile.').text()).not.toContain(':::\n:::')
+    expect(render(':::spellbook\nMagic missile.\n:::').text()).toContain(':::')
+  })
+
+  it('quotes the source in inline mode too', () => {
+    expect(render('Before :npx[Fen]{label="the old man"} after.', 'inline').text()).toContain(
+      ':npx[Fen]{label="the old man"}',
+    )
+  })
+})
+
 describe('CampaignMarkdown cannot execute what it renders', () => {
   for (const mode of ['block', 'inline']) {
     it(`renders a script tag as text in ${mode} mode`, () => {
@@ -181,6 +240,13 @@ describe('CampaignMarkdown cannot execute what it renders', () => {
 
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.text()).toContain('A map of the marsh')
+  })
+
+  it('elides an image with no alt rather than putting its URL in the prose', () => {
+    const wrapper = render('Look ![](https://example.com/map.png) here')
+
+    expect(wrapper.text()).not.toContain('example.com')
+    expect(wrapper.text()).toContain('[…]')
   })
 })
 
