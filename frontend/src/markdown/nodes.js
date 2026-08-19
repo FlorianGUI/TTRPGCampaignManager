@@ -112,24 +112,21 @@ export function textOf(node) {
   // is a file path wearing the clothes of a sentence.
   if (node.type === 'image') return node.alt || ELISION
 
-  if (isDirective(node) && !isRecognised(node)) {
-    /*
-     * Ignored, projected. The label of a directive nobody recognises is an
-     * argument to something we cannot read, and printing it as prose is what
-     * made `:npx[Fen Warden]` indistinguishable from a chip that worked in
-     * every list, title and search result in the app.
-     *
-     * A container is the exception, and it is not a special case so much as
-     * the same rule applied one level down: its children are ordinary blocks
-     * that happened to be wrapped, so the wrapper is what nobody recognised
-     * and the prose inside it is still the author's. Its `[label]` goes with
-     * the wrapper — those words are an argument on the opening line, not a
-     * paragraph of the body.
-     */
-    if (node.type !== 'containerDirective') return ELISION
-
-    return joinChildren({ children: (node.children ?? []).filter((c) => !isDirectiveLabel(c)) })
-  }
+  /*
+   * Ignored, projected — and projected the same way whatever form the directive
+   * took. What a directive nobody recognises contains is an argument to
+   * something we cannot read: printing it as prose is what made
+   * `:npx[Fen Warden]` indistinguishable from a chip that worked in every list,
+   * title and search result in the app, and the body of an unreadable block is
+   * no more trustworthy than the label of an unreadable span.
+   *
+   * A container tempts an exception here, since its children look like ordinary
+   * blocks that merely got wrapped. Taking it would mean the same source
+   * degrading two ways depending on the marker that failed, which is exactly
+   * the per-node inventiveness these three cases exist to end. The page still
+   * shows all of it, byte for byte, which is where an author finds their typo.
+   */
+  if (isDirective(node) && !isRecognised(node)) return ELISION
 
   return joinChildren(node)
 }

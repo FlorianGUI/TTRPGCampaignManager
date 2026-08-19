@@ -45,10 +45,8 @@ describe('toPlainText', () => {
   })
 
   it('elides a known name used in the wrong form, as the page does', () => {
-    // `:::npc` names a directive that exists and uses it as a block. The label
-    // rides on the opening line, so it goes with the wrapper rather than
-    // surviving as if it were a paragraph.
-    expect(toPlainText(':::npc[Fen]\nA warden.\n:::')).toBe('A warden.')
+    // `:::npc` names a directive that exists and uses it as a block.
+    expect(toPlainText(':::npc[Fen]\nA warden.\n:::')).toBe('[…]')
   })
 
   it('elides a directive whose attributes are refused', () => {
@@ -62,11 +60,14 @@ describe('toPlainText', () => {
     expect(toPlainText('A :npc with no name.')).toBe('A […] with no name.')
   })
 
-  /* A container is the exception, and it is the same rule one level down: its
-     children are ordinary blocks that happened to be wrapped, so the wrapper is
-     what nobody recognised and the prose inside it is still the author's. */
-  it('keeps the body of a block directive it does not know', () => {
-    expect(toPlainText(':::spellbook\nMagic missile.\n:::')).toBe('Magic missile.')
+  /* A container takes the same fallback as a span, and does not get an exception
+     for looking like ordinary blocks that merely got wrapped. The body of an
+     unreadable block is no more trustworthy than the label of an unreadable
+     span, and one source degrading two ways depending on which marker failed is
+     the per-node inventiveness these cases exist to end. The page still shows
+     all of it. */
+  it('elides a block directive it does not know, body and all', () => {
+    expect(toPlainText(':::spellbook\nMagic missile.\n:::')).toBe('[…]')
   })
 
   it('elides an image with no alt rather than showing its URL', () => {

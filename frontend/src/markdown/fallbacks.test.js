@@ -38,7 +38,13 @@ const cases = [
     'Ignored — a known name in a form it does not take',
     ':::npc[Fen]\nA warden.\n:::',
     ':::npc[Fen]',
-    'A warden.',
+    ELISION,
+  ],
+  [
+    'Ignored — a block directive nobody knows, which takes no exception for its body',
+    ':::spellbook\nMagic missile.\n:::',
+    'Magic missile.',
+    ELISION,
   ],
   [
     'Ignored — attributes the dialect refuses',
