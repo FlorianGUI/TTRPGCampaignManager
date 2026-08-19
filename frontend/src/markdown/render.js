@@ -1,6 +1,14 @@
 import { h, Fragment } from 'vue'
-import { DIRECTIVES } from './directives.js'
-import { DIRECTIVE_MARKER, isBlock, isDirective, labelOf } from './nodes.js'
+import { specFor } from './dialect.js'
+import { DIRECTIVE_COMPONENTS } from './directives.js'
+import {
+  DIRECTIVE_MARKER,
+  ELISION,
+  isBlock,
+  isDirective,
+  isDirectiveLabel,
+  labelOf,
+} from './nodes.js'
 
 /*
  * mdast → vnodes. No HTML string is built anywhere in here, so there is nothing
@@ -16,7 +24,9 @@ import { DIRECTIVE_MARKER, isBlock, isDirective, labelOf } from './nodes.js'
  *           that have no room for a boxed paragraph.
  *
  * For the third projection — no components at all, for list cells and page
- * titles — see toPlainText.js.
+ * titles — see toPlainText.js. The three fallbacks all three of them share are
+ * written down in nodes.js; both modes here take the Ignored case as *the
+ * source*, which is why the walker carries the source text alongside the tree.
  */
 
 export const MODES = ['block', 'inline']
@@ -55,86 +65,135 @@ function safeUrl(url) {
   return SAFE_SCHEME.test(cleaned) ? cleaned : null
 }
 
-function renderChildren(node, mode) {
+function renderChildren(node, mode, source) {
   const children = node.children ?? []
 
   return children.flatMap((child, index) =>
     // Flattened blocks would otherwise run their last word into the next one's
     // first.
     index > 0 && mode === 'inline' && isBlock(child)
-      ? [' ', renderNode(child, mode)]
-      : [renderNode(child, mode)],
+      ? [' ', renderNode(child, mode, source)]
+      : [renderNode(child, mode, source)],
   )
 }
 
-function attributesText(node) {
-  const entries = Object.entries(node.attributes ?? {})
-  if (entries.length === 0) return ''
+/*
+ * The author's own bytes, taken from the source by the offsets the parser
+ * recorded.
+ *
+ * The fallback used to rebuild the directive from the tree, and the tree has
+ * already thrown away how the attributes were written: `{label="the old man"}`
+ * came back as `{label=the old man}`, which is not merely different but invalid
+ * — an unquoted value ends at the first space, so a writer who copied the
+ * fallback back into the field got a directive broken in a new way. `{flag}`
+ * and `{empty=""}` parse to the same tree, so no reconstruction could have told
+ * them apart either.
+ *
+ * Slicing is faithful by construction: no escaping rules to get right, and
+ * nothing to keep in step as the dialect grows.
+ */
+function sliceOf(node, source) {
+  const start = node.position?.start?.offset
+  const end = node.position?.end?.offset
 
-  return `{${entries.map(([key, value]) => `${key}=${value}`).join(' ')}}`
+  if (typeof start !== 'number' || typeof end !== 'number') return null
+
+  return source.slice(start, end)
 }
 
 /*
- * A directive nobody recognises — a typo, or a note written against a newer
- * dialect — is shown as what the author typed. Swallowing it would lose their
- * writing with no signal that anything had happened.
+ * A container spans its own children, so quoting it whole would print the body
+ * twice — once as source and once as the rendered children below it. Only the
+ * opening line is the directive; the rest is the author's prose and renders as
+ * prose.
+ */
+function openingOf(node, source) {
+  const slice = sliceOf(node, source)
+  if (slice === null) return `${DIRECTIVE_MARKER[node.type]}${node.name}`
+
+  const newline = slice.indexOf('\n')
+
+  return newline === -1 ? slice : slice.slice(0, newline)
+}
+
+// Quoted rather than assumed: a container left unclosed at the end of the body
+// still parses, and printing a `:::` the author never typed would be the same
+// bug in a smaller place.
+function closingOf(node, source) {
+  const slice = sliceOf(node, source)
+
+  return slice !== null && slice.length > 3 && slice.endsWith(':::') ? ':::' : ''
+}
+
+/*
+ * Ignored: a directive nobody recognises — a typo, or a note written against a
+ * newer dialect — is shown as what the author typed. Swallowing it would lose
+ * their writing with no signal that anything had happened.
  *
  * The class is a hook and carries no styling on purpose: the fallback is
  * already legible, and marking it more loudly is a design decision rather than
  * a correctness one.
  */
-function renderLiteral(node, mode) {
-  const opening = `${DIRECTIVE_MARKER[node.type]}${node.name}`
-  const children = node.children ?? []
-
+function renderLiteral(node, mode, source) {
   if (node.type === 'containerDirective') {
-    const marker = `${opening}${attributesText(node)}`
+    // The `[label]` sits on the opening line, which has just been quoted whole.
+    // Rendering it again below would print those words twice.
+    const body = { children: (node.children ?? []).filter((child) => !isDirectiveLabel(child)) }
+    const opening = openingOf(node, source)
+    const closing = closingOf(node, source)
 
     return mode === 'inline'
-      ? h('span', { class: 'markdown__unknown' }, [`${marker} `, ...renderChildren(node, mode)])
+      ? h('span', { class: 'markdown__unknown' }, [
+          `${opening} `,
+          ...renderChildren(body, mode, source),
+        ])
       : h('div', { class: 'markdown__unknown' }, [
-          h('p', marker),
-          ...renderChildren(node, mode),
-          h('p', ':::'),
+          h('p', opening),
+          ...renderChildren(body, mode, source),
+          ...(closing ? [h('p', closing)] : []),
         ])
   }
 
-  return h('span', { class: 'markdown__unknown' }, [
-    opening,
-    ...(children.length ? ['[', ...renderChildren(node, mode), ']'] : []),
-    attributesText(node),
-  ])
+  const slice = sliceOf(node, source)
+
+  return h(
+    'span',
+    { class: 'markdown__unknown' },
+    slice === null ? `${DIRECTIVE_MARKER[node.type]}${node.name}` : slice,
+  )
 }
 
-function renderDirective(node, mode) {
-  const spec = DIRECTIVES[node.name]
-  if (!spec || !spec.types.includes(node.type)) return renderLiteral(node, mode)
+function renderDirective(node, mode, source) {
+  const spec = specFor(node)
+  const component = DIRECTIVE_COMPONENTS[node.name]
+  if (!spec || !component) return renderLiteral(node, mode, source)
 
   const props = spec.props(node, labelOf(node))
-  if (!props) return renderLiteral(node, mode)
+  if (!props) return renderLiteral(node, mode, source)
 
-  if (!spec.content) return h(spec.component, props)
+  if (!spec.content) return h(component, props)
 
   // A block component in inline mode has no room to draw itself. Its words are
   // still the author's, so they stay.
   return mode === 'inline'
-    ? h(Fragment, renderChildren(node, mode))
-    : h(spec.component, props, () => renderChildren(node, mode))
+    ? h(Fragment, renderChildren(node, mode, source))
+    : h(component, props, () => renderChildren(node, mode, source))
 }
 
-function renderLink(node, mode) {
+function renderLink(node, mode, source) {
   const href = safeUrl(node.url)
-  if (href === null) return h(Fragment, renderChildren(node, mode))
+  if (href === null) return h(Fragment, renderChildren(node, mode, source))
 
-  return h('a', { href, title: node.title ?? undefined }, renderChildren(node, mode))
+  return h('a', { href, title: node.title ?? undefined }, renderChildren(node, mode, source))
 }
 
-function renderNode(node, mode) {
+function renderNode(node, mode, source) {
   switch (node.type) {
     case 'text':
       return node.value
-    // The whole of the HTML story. A raw <script> in the source is a string,
-    // and a string rendered by Vue is text on the page.
+    // Ignored, and the whole of the HTML story. A raw <script> in the source is
+    // markup this dialect does not implement, so it is left alone — and a
+    // string left alone by Vue is text on the page.
     case 'html':
       return node.value
     case 'inlineCode':
@@ -146,31 +205,33 @@ function renderNode(node, mode) {
     case 'thematicBreak':
       return mode === 'inline' ? null : h('hr', { class: 'rule-double' })
     case 'link':
-      return renderLink(node, mode)
+      return renderLink(node, mode, source)
     // Images wait for the asset context (#29): until there is somewhere for a
     // map to live, the alt text is the honest thing to show and an arbitrary
-    // remote <img> in a shared note is a tracking pixel.
+    // remote <img> in a shared note is a tracking pixel. With no alt there is
+    // nothing to narrow to, so it is Skipped rather than shown as its URL — a
+    // file path is not a caption and reads as one.
     case 'image':
-      return node.alt || node.url
+      return node.alt || ELISION
     default:
       break
   }
 
-  if (isDirective(node)) return renderDirective(node, mode)
+  if (isDirective(node)) return renderDirective(node, mode, source)
 
   const inlineTag = INLINE_ELEMENTS[node.type]
-  if (inlineTag) return h(inlineTag, renderChildren(node, mode))
+  if (inlineTag) return h(inlineTag, renderChildren(node, mode, source))
 
   const blockTag = BLOCK_ELEMENTS[node.type]
-  if (blockTag && mode === 'block') return h(blockTag(node), renderChildren(node, mode))
+  if (blockTag && mode === 'block') return h(blockTag(node), renderChildren(node, mode, source))
 
   // The root, every block node in inline mode, and any node type this walker
   // has never heard of: keep the content, drop the wrapper.
-  return h(Fragment, renderChildren(node, mode))
+  return h(Fragment, renderChildren(node, mode, source))
 }
 
-export function renderTree(tree, mode) {
+export function renderTree(tree, mode, source = '') {
   // One root element, so a caller's class and attributes fall through — that is
   // how `.prose` gets applied from outside.
-  return h(mode === 'inline' ? 'span' : 'div', renderChildren(tree, mode))
+  return h(mode === 'inline' ? 'span' : 'div', renderChildren(tree, mode, source))
 }

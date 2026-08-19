@@ -23,18 +23,56 @@ describe('toPlainText', () => {
     expect(plain).not.toMatch(/[:{[]/)
   })
 
+  it('leaks no syntax when it elides either — a marker, never the markup', () => {
+    const plain = toPlainText(':npx[Fen]{label="the old man"} and :dice[1d20]{result=high}')
+
+    expect(plain).toBe('[…] and […]')
+    expect(plain).not.toMatch(/[:{]/)
+  })
+
   it('keeps the words of a read-aloud block without its label', () => {
     expect(toPlainText(':::read-aloud\nThe water is cold.\n:::')).toBe('The water is cold.')
   })
 
-  it('keeps the words of a directive it does not know', () => {
+  /* The three fallbacks, from this projection's side. `block` and `inline` quote
+     an unrecognised directive back verbatim; a table cell cannot, so it elides.
+     What it must not do is reduce to the label, which is what made a broken
+     directive read exactly like a working one everywhere off the page. */
+  it('elides a directive it does not know rather than passing off the label', () => {
     expect(toPlainText('The party meets :npx[Fen Warden] outside.')).toBe(
-      'The party meets Fen Warden outside.',
+      'The party meets […] outside.',
     )
   })
 
-  it('names a directive that has no label, so nothing comes out empty', () => {
-    expect(toPlainText(':spellbook')).toBe('spellbook')
+  it('elides a known name used in the wrong form, as the page does', () => {
+    // `:::npc` names a directive that exists and uses it as a block.
+    expect(toPlainText(':::npc[Fen]\nA warden.\n:::')).toBe('[…]')
+  })
+
+  it('elides a directive whose attributes are refused', () => {
+    expect(toPlainText('Rolls :dice[1d20]{outcome=nat20} now.')).toBe('Rolls […] now.')
+  })
+
+  it('elides a directive with no label rather than naming it', () => {
+    // `:spellbook` used to come out as the word "spellbook" — an English key
+    // reaching a French list, and a half-typed directive reading as prose.
+    expect(toPlainText(':spellbook')).toBe('[…]')
+    expect(toPlainText('A :npc with no name.')).toBe('A […] with no name.')
+  })
+
+  /* A container takes the same fallback as a span, and does not get an exception
+     for looking like ordinary blocks that merely got wrapped. The body of an
+     unreadable block is no more trustworthy than the label of an unreadable
+     span, and one source degrading two ways depending on which marker failed is
+     the per-node inventiveness these cases exist to end. The page still shows
+     all of it. */
+  it('elides a block directive it does not know, body and all', () => {
+    expect(toPlainText(':::spellbook\nMagic missile.\n:::')).toBe('[…]')
+  })
+
+  it('elides an image with no alt rather than showing its URL', () => {
+    expect(toPlainText('Look ![](https://example.com/map.png) here')).toBe('Look […] here')
+    expect(toPlainText('Look ![a map](https://example.com/map.png) here')).toBe('Look a map here')
   })
 
   it('strips ordinary markdown too', () => {

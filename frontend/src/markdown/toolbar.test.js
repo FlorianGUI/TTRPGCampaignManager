@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { COMMONMARK_ITEMS, TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
-import { DIRECTIVES } from './directives.js'
+import { DIRECTIVES } from './dialect.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { parse } from './parse.js'
 
@@ -30,7 +30,7 @@ describe('the toolbar is derived, not transcribed', () => {
      `DIRECTIVES` instead of listing what it knows. A kind added to the table
      must arrive here without this file — or that one — being edited.
 
-     Mocked rather than mutated: `DIRECTIVES` is built when `directives.js` is
+     Mocked rather than mutated: `DIRECTIVES` is built when `dialect.js` is
      imported, so pushing a kind into the live object proves nothing. The whole
      chain is rebuilt on top of a table that has `scene` in it, which is what
      adding one would actually do. */

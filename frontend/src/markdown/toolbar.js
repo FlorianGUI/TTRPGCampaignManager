@@ -1,4 +1,4 @@
-import { DIRECTIVES } from './directives.js'
+import { DIRECTIVES } from './dialect.js'
 import { DIRECTIVE_MARKER } from './nodes.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 

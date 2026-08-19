@@ -30,7 +30,12 @@ export default {
   setup(props) {
     const tree = computed(() => parse(props.source))
 
-    return () => renderTree(tree.value, props.mode)
+    /*
+     * The source goes down with the tree. A directive the dialect cannot read
+     * is shown as the author's own bytes, and the tree no longer has them —
+     * mdast keeps offsets into this string rather than how anything was typed.
+     */
+    return () => renderTree(tree.value, props.mode, props.source ?? '')
   },
 }
 </script>
