@@ -346,6 +346,15 @@ export const fr = {
   'progress.spelled': '{label} — {played} scènes jouées sur {total}',
   'progress.none': 'vide — rien n’y est encore écrit',
 
+  /* ---- Writing prose ------------------------------------------------------ */
+
+  'markdown.hint': 'Ce champ accepte le markdown de Campaign Manager.',
+  'markdown.toolbar': 'Insérer du markdown',
+  'markdown.insert': 'Insérer {name}',
+  'markdown.directive.dice': 'Dés',
+  'markdown.directive.ref': 'Source',
+  'markdown.directive.readAloud': 'À voix haute',
+
   /* ---- What prose renders as -------------------------------------------- */
 
   'entity.npc': 'PNJ',
