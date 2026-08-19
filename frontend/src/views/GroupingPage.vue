@@ -14,8 +14,8 @@ import { computed, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
-import Textarea from 'primevue/textarea'
 import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
+import MarkdownField from '../markdown/MarkdownField.vue'
 import ActProgress from '../components/narrative/ActProgress.vue'
 import AddChild from '../components/narrative/AddChild.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
@@ -166,14 +166,11 @@ async function save() {
     />
 
     <!-- Editing and reading in the same place, so the measure and the wrapping
-         a game master writes against are the ones they will read back. -->
+         a game master writes against are the ones they will read back. A
+         description takes the same dialect a scene does, so it takes the same
+         field (#103). -->
     <template v-if="editing">
-      <Textarea
-        v-model="draft.description"
-        class="node__field"
-        rows="6"
-        :aria-label="t('node.description')"
-      />
+      <MarkdownField v-model="draft.description" rows="6" :aria-label="t('node.description')" />
 
       <Message v-if="failure" severity="error" :closable="false">{{ failure }}</Message>
 
@@ -282,7 +279,6 @@ async function save() {
 
 .node__progress,
 .node__prose,
-.node__field,
 .node__teach {
   margin-top: var(--space-4);
 }
@@ -295,12 +291,6 @@ async function save() {
  */
 .node__prose {
   max-width: none;
-}
-
-.node__field {
-  width: 100%;
-  font-family: var(--grimoire-font-mono);
-  font-size: var(--step--1);
 }
 
 .node__actions {

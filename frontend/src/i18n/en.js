@@ -384,6 +384,20 @@ export const en = {
   'progress.spelled': '{label} — {played} of {total} scenes played',
   'progress.none': 'empty — nothing written in it yet',
 
+  /* ---- Writing prose ------------------------------------------------------ */
+
+  /* The sentence the edit form was missing. It names the dialect rather than
+     saying "markdown", because the directives are the part nothing else
+     announces. */
+  'markdown.hint': 'This field takes Campaign Manager markdown.',
+  'markdown.toolbar': 'Insert markdown',
+  /* Read by a screen reader off each button, which shows the bare name — the
+     verb is what makes it a control rather than a heading. */
+  'markdown.insert': 'Insert {name}',
+  'markdown.directive.dice': 'Dice',
+  'markdown.directive.ref': 'Source',
+  'markdown.directive.readAloud': 'Read aloud',
+
   /* ---- What prose renders as -------------------------------------------- */
 
   'entity.npc': 'NPC',

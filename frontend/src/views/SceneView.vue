@@ -19,8 +19,8 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
-import Textarea from 'primevue/textarea'
 import CampaignMarkdown from '../markdown/CampaignMarkdown.vue'
+import MarkdownField from '../markdown/MarkdownField.vue'
 import NarrativeTrail from '../components/narrative/NarrativeTrail.vue'
 import SceneStatus from '../components/narrative/SceneStatus.vue'
 import SceneStepper from '../components/narrative/SceneStepper.vue'
@@ -153,15 +153,11 @@ async function save() {
     <!--
       Written and read in the same column. The source is plain text and stays
       plain text — nothing here parses it before sending it back, which is what
-      "stored byte for byte" means from this end.
+      "stored byte for byte" means from this end. What the field takes is
+      `MarkdownField`'s to say (#103); this page has never known the dialect and
+      still does not.
     -->
-    <Textarea
-      v-if="editing"
-      v-model="draft.body"
-      class="scene__field"
-      rows="18"
-      :aria-label="t('scene.body')"
-    />
+    <MarkdownField v-if="editing" v-model="draft.body" rows="18" :aria-label="t('scene.body')" />
 
     <CampaignMarkdown v-else-if="scene.body" class="prose scene__body" :source="scene.body" />
 
@@ -240,16 +236,8 @@ async function save() {
 }
 
 .scene__body,
-.scene__unwritten,
-.scene__field {
+.scene__unwritten {
   margin-top: var(--space-5);
-}
-
-.scene__field {
-  width: 100%;
-  font-family: var(--grimoire-font-mono);
-  font-size: var(--step--1);
-  line-height: 1.6;
 }
 
 .scene__unwritten {
