@@ -351,6 +351,7 @@ export const fr = {
   'markdown.hint': 'Ce champ accepte le markdown de Campaign Manager.',
   'markdown.toolbar': 'Insérer du markdown',
   'markdown.insert': 'Insérer {name}',
+  'markdown.entity': 'Entité',
   'markdown.commonmark.bold': 'Gras',
   'markdown.commonmark.italic': 'Italique',
   'markdown.commonmark.heading': 'Titre',

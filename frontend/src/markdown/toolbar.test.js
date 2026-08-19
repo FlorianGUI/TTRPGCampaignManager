@@ -56,8 +56,26 @@ describe('the toolbar is derived, not transcribed', () => {
     expect(itemFor('npc').label).toBe(ENTITY_KINDS.npc.label)
   })
 
-  it('gives every button an icon, so none arrives blank', () => {
-    for (const item of TOOLBAR_ITEMS) expect(item.icon).toBeTruthy()
+  /* A face of some sort, so none arrives blank — a named font icon for most, a
+     drawn one where PrimeIcons has nothing to name. */
+  it('gives every button a face, so none arrives blank', () => {
+    for (const item of TOOLBAR_ITEMS) {
+      expect(item.icon || item.drawn, item.name).toBeTruthy()
+    }
+  })
+
+  /* The two are exclusive: an item that draws its own must not also carry a
+     font icon, or the button would render both. */
+  it('never gives a button two faces', () => {
+    for (const item of TOOLBAR_ITEMS) {
+      expect(Boolean(item.icon) && Boolean(item.drawn), item.name).toBe(false)
+    }
+  })
+
+  /* PrimeIcons has no die, and the nearest thing in it is a lightning bolt. */
+  it('draws the dice button rather than naming it', () => {
+    expect(itemFor('dice').drawn).toBe('die')
+    expect(itemFor('dice').icon).toBeNull()
   })
 
   it('opens a container directive on its own lines and an inline one in place', () => {

@@ -397,6 +397,7 @@ export const en = {
   /* Words rather than letters. The conventional single-letter marks are
      language-bound — French marks bold `G` for *gras* — and PrimeIcons has no
      glyph for bold, italic, heading or quote to fall back on. */
+  'markdown.entity': 'Entity',
   'markdown.commonmark.bold': 'Bold',
   'markdown.commonmark.italic': 'Italic',
   'markdown.commonmark.heading': 'Heading',

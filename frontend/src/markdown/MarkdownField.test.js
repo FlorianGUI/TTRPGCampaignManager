@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import PrimeVue from 'primevue/config'
 import MarkdownField from './MarkdownField.vue'
-import { COMMONMARK_ITEMS, TOOLBAR_ITEMS } from './toolbar.js'
-import { DIRECTIVES } from './directives.js'
+import { COMMONMARK_ITEMS, ENTITY_ITEMS, MARKER_ITEMS, TOOLBAR_ITEMS } from './toolbar.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { t } from '../i18n/index.js'
 
@@ -38,12 +38,38 @@ const mountField = (start = '') =>
 const nameOf = (item) => (item.label ? t(item.label) : item.name)
 
 const buttonFor = (wrapper, name) => {
-  const item = TOOLBAR_ITEMS.find((candidate) => candidate.name === name)
+  const item = TOOLBAR_ITEMS.find((candidate) => candidate.name === name) ?? { name, label: null }
   const label = t('markdown.insert', { name: nameOf(item) })
 
   return wrapper
     .findAllComponents({ name: 'Button' })
     .find((button) => button.attributes('aria-label') === label)
+}
+
+/*
+ * Press a directive wherever it lives. The entity kinds moved into a menu and
+ * the rest stayed on the row, and every test below cares about what gets written
+ * rather than which surface it was written from — so the seam is hidden here
+ * instead of splitting each case in two.
+ */
+const press = async (wrapper, name) => {
+  const button = buttonFor(wrapper, name)
+
+  if (button) {
+    await button.trigger('click')
+    return
+  }
+
+  const item = TOOLBAR_ITEMS.find((candidate) => candidate.name === name)
+  const entry = wrapper
+    .findComponent({ name: 'Menu' })
+    .props('model')
+    .find((candidate) => candidate.label === nameOf(item))
+
+  if (!entry) throw new Error(`no control for ${name}`)
+
+  entry.command()
+  await nextTick()
 }
 
 describe('MarkdownField says what it takes', () => {
@@ -57,26 +83,99 @@ describe('MarkdownField says what it takes', () => {
     expect(mountField().get('textarea').attributes('aria-label')).toBe('Body')
   })
 
-  it('shows a button for every directive the renderer implements', () => {
-    const names = mountField()
+  it('reaches every directive the renderer implements', () => {
+    const wrapper = mountField()
+    const onRow = wrapper
+      .findAllComponents({ name: 'Button' })
+      .map((button) => button.attributes('aria-label'))
+    const inMenu = wrapper
+      .findComponent({ name: 'Menu' })
+      .props('model')
+      .map((entry) => entry.label)
+
+    for (const item of TOOLBAR_ITEMS) {
+      const reachable =
+        onRow.includes(t('markdown.insert', { name: nameOf(item) })) ||
+        inMenu.includes(nameOf(item))
+
+      expect(reachable, item.name).toBe(true)
+    }
+  })
+
+  /*
+   * The six kinds are one idea with six accents, and the length of that run was
+   * what made the row a wall. The three that are not a set stay out, because
+   * each is its own idea and none is guessable — which is what #103 is about.
+   */
+  it('puts the entity kinds behind one door and leaves the rest out', () => {
+    const wrapper = mountField()
+
+    expect(wrapper.findComponent({ name: 'Menu' }).props('model')).toHaveLength(ENTITY_ITEMS.length)
+
+    const onRow = wrapper
       .findAllComponents({ name: 'Button' })
       .map((button) => button.attributes('aria-label'))
 
-    for (const item of TOOLBAR_ITEMS) {
-      expect(names, item.name).toContain(t('markdown.insert', { name: nameOf(item) }))
+    for (const item of MARKER_ITEMS) {
+      expect(onRow, item.name).toContain(t('markdown.insert', { name: nameOf(item) }))
     }
-    expect(names).toHaveLength(Object.keys(DIRECTIVES).length + COMMONMARK_ITEMS.length)
   })
 
-  /* The directives take the top row and CommonMark the one under it: not a
-     ranking of usefulness, a ranking of discoverability. */
-  it('puts the directives above the plain marks', () => {
-    const tiers = mountField().findAll('.md-field__tier')
+  /* Read-aloud first — it is the one that changes the page rather than a word
+     in it — then the two inline marks. */
+  it('orders the visible directives read-aloud, dice, source', () => {
+    expect(MARKER_ITEMS.map((item) => item.name)).toEqual(['read-aloud', 'dice', 'ref'])
+  })
 
-    expect(tiers).toHaveLength(2)
-    expect(tiers[0].findAll('button')).toHaveLength(TOOLBAR_ITEMS.length)
-    expect(tiers[1].findAll('button')).toHaveLength(COMMONMARK_ITEMS.length)
-    expect(tiers[1].classes()).toContain('md-field__tier--plain')
+  it('lays the plain marks out before the dialect own', () => {
+    const names = mountField()
+      .findAll('button')
+      .map((button) => button.attributes('aria-label'))
+
+    expect(names[0]).toBe(t('markdown.insert', { name: t('markdown.commonmark.bold') }))
+    expect(names.at(-1)).toBe(t('markdown.entity'))
+  })
+
+  /*
+   * Every button is an icon now, so the name has to be somewhere else entirely.
+   * `aria-label` covers the screen reader; the tooltip covers the mouse; and it
+   * is set to open on focus too, because a tooltip that only answers to hover is
+   * one the keyboard never sees.
+   */
+  it('names every icon-only button without showing the word', () => {
+    const buttons = mountField().findAllComponents({ name: 'Button' })
+
+    for (const button of buttons.slice(0, -1)) {
+      expect(button.attributes('aria-label')).toBeTruthy()
+      expect(button.text()).not.toMatch(/\w{3,}/)
+    }
+  })
+
+  /*
+   * Ten identical icons in an unbroken line was the shape that made the row
+   * unreadable, so the runs are ruled off from each other. Between only — the
+   * gap that pushes the dialect's own controls to the far end already separates
+   * them, and a rule there as well left a hairline stranded in open space.
+   */
+  it('rules the plain marks off into runs', () => {
+    const wrapper = mountField()
+    const runs = new Set(COMMONMARK_ITEMS.map((item) => item.group))
+
+    expect(wrapper.findAll('.md-field__rule')).toHaveLength(runs.size - 1)
+  })
+
+  it('draws a letterform for the marks PrimeIcons has no glyph for', () => {
+    const wrapper = mountField()
+
+    for (const item of COMMONMARK_ITEMS.filter((candidate) => candidate.glyph)) {
+      expect(wrapper.find(`.md-field__glyph--${item.name}`).text(), item.name).toBe(item.glyph)
+    }
+  })
+
+  it('gives every plain mark either an icon or a glyph', () => {
+    for (const item of COMMONMARK_ITEMS) {
+      expect(Boolean(item.icon) !== Boolean(item.glyph), item.name).toBe(true)
+    }
   })
 
   it('gives every button a name a screen reader can read', () => {
@@ -100,7 +199,7 @@ describe('MarkdownField says what it takes', () => {
     const buttons = mountField().findAll('button')
     const reachable = buttons.filter((button) => button.attributes('tabindex') === '0')
 
-    expect(buttons.length).toBe(TOOLBAR_ITEMS.length + COMMONMARK_ITEMS.length)
+    expect(buttons.length).toBe(COMMONMARK_ITEMS.length + MARKER_ITEMS.length + 1)
     expect(reachable).toHaveLength(1)
   })
 
@@ -161,7 +260,7 @@ describe('pressing a button', () => {
   it('writes the directive into the model', async () => {
     const wrapper = mountField()
 
-    await buttonFor(wrapper, 'npc').trigger('click')
+    await press(wrapper, 'npc')
 
     expect(wrapper.vm.body).toBe(':npc[]')
   })
@@ -170,7 +269,7 @@ describe('pressing a button', () => {
     const wrapper = mountField('Maerin Holt')
 
     wrapper.get('textarea').element.setSelectionRange(0, 11)
-    await buttonFor(wrapper, 'npc').trigger('click')
+    await press(wrapper, 'npc')
 
     expect(wrapper.vm.body).toBe(':npc[Maerin Holt]')
   })
@@ -184,7 +283,7 @@ describe('pressing a button', () => {
     const wrapper = mountField()
     const textarea = wrapper.get('textarea').element
 
-    await buttonFor(wrapper, 'npc').trigger('click')
+    await press(wrapper, 'npc')
 
     expect(document.activeElement).toBe(textarea)
     expect(textarea.selectionStart).toBe(':npc['.length)
@@ -196,7 +295,7 @@ describe('pressing a button', () => {
     const textarea = wrapper.get('textarea').element
 
     textarea.setSelectionRange(0, 7)
-    await buttonFor(wrapper, 'dice').trigger('click')
+    await press(wrapper, 'dice')
 
     expect(wrapper.vm.body).toBe(':dice[2d8 + 5]{result=}')
     expect(textarea.selectionStart).toBe(':dice[2d8 + 5]{result='.length)
@@ -206,7 +305,7 @@ describe('pressing a button', () => {
     const wrapper = mountField('A cold wind off the water.')
 
     wrapper.get('textarea').element.setSelectionRange(0, 26)
-    await buttonFor(wrapper, 'read-aloud').trigger('click')
+    await press(wrapper, 'read-aloud')
 
     expect(wrapper.vm.body).toBe(':::read-aloud\nA cold wind off the water.\n:::')
   })
@@ -215,16 +314,45 @@ describe('pressing a button', () => {
     const wrapper = mountField('Before. After.')
 
     wrapper.get('textarea').element.setSelectionRange(8, 8)
-    await buttonFor(wrapper, 'npc').trigger('click')
+    await press(wrapper, 'npc')
 
     expect(wrapper.vm.body).toBe('Before. :npc[]After.')
+  })
+
+  /* The menu is the only way to reach a kind now, so the command it runs has to
+     do the same work a button did. */
+  it('writes through the menu the same way it writes through a button', async () => {
+    const wrapper = mountField('Maerin Holt')
+
+    wrapper.get('textarea').element.setSelectionRange(0, 11)
+
+    const npc = wrapper
+      .findComponent({ name: 'Menu' })
+      .props('model')
+      .find((entry) => entry.label === t('entity.npc'))
+
+    npc.command()
+    await nextTick()
+
+    expect(wrapper.vm.body).toBe(':npc[Maerin Holt]')
+  })
+
+  it('offers every kind in the menu, with its own face', () => {
+    const model = mountField().findComponent({ name: 'Menu' }).props('model')
+
+    for (const item of ENTITY_ITEMS) {
+      const entry = model.find((candidate) => candidate.label === nameOf(item))
+
+      expect(entry, item.name).toBeDefined()
+      expect(entry.icon).toContain(item.icon)
+    }
   })
 
   it('leaves every kind able to write itself', async () => {
     for (const kind of Object.keys(ENTITY_KINDS)) {
       const wrapper = mountField()
 
-      await buttonFor(wrapper, kind).trigger('click')
+      await press(wrapper, kind)
 
       expect(wrapper.vm.body).toBe(`:${kind}[]`)
     }

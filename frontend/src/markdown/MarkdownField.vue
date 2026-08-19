@@ -24,10 +24,11 @@
  * the source is written and read at the same measure — what a game master types
  * here wraps the way it will wrap when they read it back at the table.
  */
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import Button from 'primevue/button'
+import Menu from 'primevue/menu'
 import Textarea from 'primevue/textarea'
-import { COMMONMARK_ITEMS, TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
+import { COMMONMARK_ITEMS, ENTITY_ITEMS, MARKER_ITEMS, applyInsertion } from './toolbar.js'
 import { t } from '../i18n/index.js'
 
 const props = defineProps({
@@ -58,22 +59,58 @@ const textarea = () => field.value?.$el ?? null
 const nameOf = (item) => (item.label ? t(item.label) : item.name)
 
 /*
- * Two tiers, one control.
+ * Nineteen controls above a field was a wall. What shortened it was noticing
+ * which of them are the same button repeated.
  *
- * The directives take the top row and CommonMark the one under it. Not a
- * ranking of usefulness — a ranking of discoverability. Bold and italic are what
- * a game master will guess at; `:ref[Cities of the Vale]{page=88}` is what #103
- * exists to surface, and it must not have to compete for attention with a bold
- * button.
+ * **Left: the plain marks**, laid out one per control the way a writing toolbar
+ * always has. They are words rather than icons because PrimeIcons has no bold,
+ * italic, heading or quote glyph, and the single-letter conventions are
+ * language-bound — French marks bold `G` for *gras*.
  *
- * The offset is what keeps them one toolbar rather than two. `active` indexes
- * every button on both rows, so the arrows walk the whole palette and the tab
- * order still sees a single stop.
+ * **Right: the dialect's own.** `:::read-aloud`, `:dice` and `:ref` keep their
+ * places: each is its own idea, none is guessable, and #103 exists because a
+ * game master has no way to find them. The six entity kinds are one idea with
+ * six accents, so they go behind a single door at the end — the length of that
+ * run was the problem, and a menu is where a set belongs.
+ *
+ * `Menu` popup is the control `MoveControl` and `ChromeActions` already use.
  */
-const TIERS = [
-  { items: TOOLBAR_ITEMS, offset: 0, plain: false },
-  { items: COMMONMARK_ITEMS, offset: TOOLBAR_ITEMS.length, plain: true },
-]
+const menu = ref(null)
+
+/*
+ * One roving index across everything, so the arrows walk the whole toolbar and
+ * the tab order still sees a single stop. The menu button is the last of them
+ * and hands its own keyboard over once open.
+ */
+const PLAIN_AT = 0
+const MARKER_AT = COMMONMARK_ITEMS.length
+const MENU_INDEX = MARKER_AT + MARKER_ITEMS.length
+
+/*
+ * The plain marks in runs, with a rule between them — character marks, block
+ * marks, then the things that insert something. Ten identical icons in an
+ * unbroken line is the shape that made the row unreadable; the grouping is what
+ * lets the eye find bold without counting.
+ *
+ * Built from the items' own `group` rather than sliced by index, so reordering
+ * the list or adding a mark cannot silently put a separator in the wrong place.
+ */
+const PLAIN_GROUPS = COMMONMARK_ITEMS.reduce((groups, item, index) => {
+  const last = groups.at(-1)
+
+  if (last && last.group === item.group) last.items.push({ item, index })
+  else groups.push({ group: item.group, items: [{ item, index }] })
+
+  return groups
+}, [])
+
+const entityItems = computed(() =>
+  ENTITY_ITEMS.map((item) => ({
+    label: nameOf(item),
+    icon: `pi ${item.icon}`,
+    command: () => insert(MENU_INDEX, item),
+  })),
+)
 
 /*
  * Insert, then hand the field back.
@@ -154,28 +191,93 @@ function move(event) {
       :aria-label="t('markdown.toolbar')"
       @keydown="move"
     >
-      <div
-        v-for="tier in TIERS"
-        :key="tier.offset"
-        class="md-field__tier"
-        :class="{ 'md-field__tier--plain': tier.plain }"
-      >
+      <template v-for="(group, at) in PLAIN_GROUPS" :key="group.group">
+        <span v-if="at > 0" class="md-field__rule" aria-hidden="true" />
+
         <Button
-          v-for="(item, index) in tier.items"
+          v-for="entry in group.items"
+          :key="entry.item.name"
+          v-tooltip.bottom="{ value: nameOf(entry.item), showOnFocus: true }"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          class="md-field__tool md-field__tool--plain"
+          :aria-label="t('markdown.insert', { name: nameOf(entry.item) })"
+          :tabindex="PLAIN_AT + entry.index === active ? 0 : -1"
+          @click="insert(PLAIN_AT + entry.index, entry.item)"
+          @focus="active = PLAIN_AT + entry.index"
+        >
+          <i v-if="entry.item.icon" class="pi" :class="entry.item.icon" aria-hidden="true" />
+          <span v-else class="md-field__glyph" :class="`md-field__glyph--${entry.item.name}`">{{
+            entry.item.glyph
+          }}</span>
+        </Button>
+      </template>
+
+      <span class="md-field__custom">
+        <Button
+          v-for="(item, index) in MARKER_ITEMS"
           :key="item.name"
+          v-tooltip.bottom="{ value: nameOf(item), showOnFocus: true }"
           type="button"
           size="small"
           severity="secondary"
           text
           class="md-field__tool"
-          :icon="item.icon ? `pi ${item.icon}` : undefined"
-          :label="nameOf(item)"
           :aria-label="t('markdown.insert', { name: nameOf(item) })"
-          :tabindex="tier.offset + index === active ? 0 : -1"
-          @click="insert(tier.offset + index, item)"
-          @focus="active = tier.offset + index"
+          :tabindex="MARKER_AT + index === active ? 0 : -1"
+          @click="insert(MARKER_AT + index, item)"
+          @focus="active = MARKER_AT + index"
+        >
+          <i v-if="item.icon" class="pi" :class="item.icon" aria-hidden="true" />
+
+          <!-- A die, because PrimeIcons has none and the nearest thing in it is
+               a lightning bolt — which says "sudden", not "roll". Stroked in
+               `currentColor` so it takes the button's states along with the font
+               icons beside it, and hidden from the accessibility tree because
+               the button is already named. -->
+          <svg
+            v-else-if="item.drawn === 'die'"
+            class="md-field__die"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"
+          >
+            <!-- Drawn to the edge of the viewBox, inset only by half the
+                 stroke so it is not clipped. Sitting at 3.5 with a 24 box left
+                 the die a third smaller than the font icons beside it, which
+                 carry their own bearing already. -->
+            <rect x="0.9" y="0.9" width="22.2" height="22.2" rx="4.6" />
+            <g fill="currentColor" stroke="none">
+              <circle cx="7.4" cy="7.4" r="2.05" />
+              <circle cx="16.6" cy="7.4" r="2.05" />
+              <circle cx="12" cy="12" r="2.05" />
+              <circle cx="7.4" cy="16.6" r="2.05" />
+              <circle cx="16.6" cy="16.6" r="2.05" />
+            </g>
+          </svg>
+        </Button>
+
+        <Button
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          class="md-field__tool"
+          icon="pi pi-angle-down"
+          icon-pos="right"
+          :label="t('markdown.entity')"
+          :aria-label="t('markdown.entity')"
+          aria-haspopup="true"
+          :tabindex="MENU_INDEX === active ? 0 : -1"
+          @click="menu.toggle($event)"
+          @focus="active = MENU_INDEX"
         />
-      </div>
+        <Menu ref="menu" :model="entityItems" popup />
+      </span>
     </div>
 
     <Textarea
@@ -208,40 +310,99 @@ function move(event) {
  * to find is barely better than one that was never there.
  */
 .md-field__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
   margin-top: var(--space-5);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--p-content-border-color);
 }
 
-.md-field__tier {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
+.md-field__tool {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--step--1);
 }
 
 /*
- * Subordinate, and by weight rather than by a second rule. The row above it is
- * icons and accent-carrying words; this one is words alone, a step down and
- * muted, so the eye reaches the directives first. Another hairline here would
- * make the toolbar look like two controls stacked, which is the opposite of what
- * the tiering is for.
+ * The plain marks are the quieter half: muted, so the eye reaches the dialect's
+ * own controls on the right first. They are the ones a game master would have
+ * found without help.
  */
-.md-field__tier--plain {
-  margin-top: var(--space-1);
-}
-
-.md-field__tier--plain .md-field__tool {
-  font-size: var(--step--2);
+.md-field__tool--plain {
   color: var(--p-text-muted-color);
 }
 
 /*
- * Tightened from the default: nine of these at button spacing reads as a row of
- * nine decisions. Closed up, it reads as one palette.
+ * A hairline between runs, the way an editor toolbar has always separated
+ * character marks from block ones. Rules are how this design system makes a
+ * division — there is no elevation scale to reach for — and ten identical icons
+ * in an unbroken line was the shape that made the row unreadable.
  */
-.md-field__tool {
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--step--1);
+.md-field__rule {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--space-1) var(--space-1);
+  background: var(--p-content-border-color);
+}
+
+/*
+ * The four marks PrimeIcons has no glyph for. A letterform rather than a
+ * picture, which is the convention rather than a compromise: the mark on an
+ * editor's bold button is a `B` whatever language the interface speaks, read as
+ * a symbol and not as the first letter of a word. The name is in the tooltip.
+ *
+ * Set in the display face so it reads as drawn rather than typed, and sized to
+ * sit on the same optical line as the `pi` icons beside it.
+ */
+.md-field__glyph {
+  display: inline-block;
+  min-width: 1em;
+  font-family: var(--grimoire-font-display);
+  font-size: 1.05em;
+  line-height: 1;
+  text-align: center;
+}
+
+.md-field__glyph--bold {
+  font-weight: 700;
+}
+
+.md-field__glyph--italic {
+  font-style: italic;
+}
+
+/*
+ * `rem`, not `em`, because that is the unit PrimeIcons sizes itself in: `.pi`
+ * sets `font-size: 1rem` and so draws at 16px regardless of the button's own
+ * 14px text. Matching in `em` made the die 14px and visibly the odd one out.
+ */
+.md-field__die {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* The quote mark hangs high in the face; nudged down to sit level with the row
+   rather than floating above it. */
+.md-field__glyph--quote {
+  font-size: 1.5em;
+  /* The mark is drawn against the cap line, so it needs pushing down almost a
+     third of its own height to sit level with the icons beside it. */
+  transform: translateY(0.22em);
+}
+
+/*
+ * Pushed to the far end and kept together, so the two groups read as two
+ * vocabularies rather than one long run. `margin-left: auto` rather than a
+ * separator: depth here comes from space and rules, and the row already sits on
+ * one.
+ */
+.md-field__custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
 }
 
 /*
