@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
+import { COMMONMARK_ITEMS, TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
 import { DIRECTIVES } from './directives.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { parse } from './parse.js'
@@ -56,8 +56,26 @@ describe('the toolbar is derived, not transcribed', () => {
     expect(itemFor('npc').label).toBe(ENTITY_KINDS.npc.label)
   })
 
-  it('gives every button an icon, so none arrives blank', () => {
-    for (const item of TOOLBAR_ITEMS) expect(item.icon).toBeTruthy()
+  /* A face of some sort, so none arrives blank — a named font icon for most, a
+     drawn one where PrimeIcons has nothing to name. */
+  it('gives every button a face, so none arrives blank', () => {
+    for (const item of TOOLBAR_ITEMS) {
+      expect(item.icon || item.drawn, item.name).toBeTruthy()
+    }
+  })
+
+  /* The two are exclusive: an item that draws its own must not also carry a
+     font icon, or the button would render both. */
+  it('never gives a button two faces', () => {
+    for (const item of TOOLBAR_ITEMS) {
+      expect(Boolean(item.icon) && Boolean(item.drawn), item.name).toBe(false)
+    }
+  })
+
+  /* PrimeIcons has no die, and the nearest thing in it is a lightning bolt. */
+  it('draws the dice button rather than naming it', () => {
+    expect(itemFor('dice').drawn).toBe('die')
+    expect(itemFor('dice').icon).toBeNull()
   })
 
   it('opens a container directive on its own lines and an inline one in place', () => {
@@ -159,5 +177,145 @@ describe('what a button writes is what the parser reads', () => {
     const [directive] = directiveIn(value)
 
     expect(directive.children[0].value).toBe('Maerin Holt')
+  })
+})
+
+/*
+ * The CommonMark half. Hand-written rather than derived, because CommonMark is a
+ * fixed spec and cannot grow under the toolbar the way `DIRECTIVES` can — but it
+ * can drift from the *renderer*, which is what these check.
+ */
+describe('the CommonMark half', () => {
+  const plain = (name) => COMMONMARK_ITEMS.find((item) => item.name === name)
+  const write = (name, value, start, end = start) =>
+    withCaret(applyInsertion(plain(name), value, start, end))
+
+  it('offers nothing the parser cannot read', () => {
+    const names = COMMONMARK_ITEMS.map((item) => item.name)
+
+    expect(names).not.toContain('strikethrough')
+    expect(names).not.toContain('table')
+    expect(names).not.toContain('image')
+  })
+
+  it('names every button through the catalogue', () => {
+    for (const item of COMMONMARK_ITEMS) expect(item.label).toMatch(/^markdown\./)
+  })
+
+  it('wraps a selection in an inline mark', () => {
+    expect(write('bold', 'quite important', 6, 15)).toBe('quite **important**‸')
+  })
+
+  it('leaves the caret between the marks when there is no selection', () => {
+    expect(write('italic', 'a  b', 2)).toBe('a *‸* b')
+  })
+
+  it('seeds a link with the scheme safeUrl will accept', () => {
+    expect(write('link', 'the tide table', 0, 14)).toBe('[the tide table](https://‸)')
+  })
+
+  /* The caret keeps its place in the words rather than jumping to the end: the
+     line moved, the sentence did not. */
+  it('marks the line the caret is on, not the selection', () => {
+    expect(write('heading', 'The causeway', 4)).toBe('## The ‸causeway')
+  })
+
+  it('marks every line a selection touches', () => {
+    expect(write('bullet', 'salt\nrope\nlantern', 2, 12)).toBe('- salt\n- rope\n- la‸ntern')
+  })
+
+  /* `1.` on each line: CommonMark numbers from the first item and ignores the
+     rest, so the source never has to be renumbered when a line moves. */
+  it('numbers an ordered list without counting', () => {
+    expect(write('ordered', 'one\ntwo', 0, 7)).toBe('1. one\n1. two‸')
+  })
+
+  /* A button whose only direction is on has to be undone by hand. */
+  it('takes a prefix off again when every line already has it', () => {
+    expect(write('quote', '> salt\n> rope', 0, 13)).toBe('salt\nrope‸')
+  })
+
+  it('adds the prefix when only some lines have it', () => {
+    expect(write('bullet', '- salt\nrope', 0, 11)).toBe('- - salt\n- rope‸')
+  })
+
+  it('opens a fence around a selected block', () => {
+    expect(write('codeBlock', '  +---+', 0, 7)).toBe('```\n  +---+\n```‸')
+  })
+
+  /* A rule separates; it has nothing to say about the words that were selected,
+     and wrapping them in `---` would destroy them and write something that is
+     not a thematic break. */
+  it('drops a rule on its own line and keeps the selection', () => {
+    expect(write('rule', 'before\nafter', 6, 6)).toBe('before\n\n---\n\n‸after')
+  })
+
+  /*
+   * `---` on the line directly under a paragraph is a setext heading: it turns
+   * that paragraph into an h2 and draws no rule. The failure lands on the
+   * sentence above, nowhere near where the button was pressed.
+   */
+  it('leaves a blank line so the paragraph above stays a paragraph', () => {
+    const { value } = applyInsertion(plain('rule'), 'A cold wind.', 12, 12)
+
+    expect(value).toBe('A cold wind.\n\n---\n')
+  })
+
+  it('leaves a selection alone when dropping a rule', () => {
+    const { value } = applyInsertion(plain('rule'), 'keep me', 0, 7)
+
+    expect(value).toContain('keep me')
+    expect(value).toContain('---')
+  })
+})
+
+/*
+ * The half that can rot: every CommonMark button must produce something
+ * `render.js` has a case for. A mark that stopped rendering would otherwise show
+ * up as literal asterisks on a game master's page.
+ */
+describe('what the CommonMark buttons write is what the renderer draws', () => {
+  const typesIn = (source) => {
+    const found = new Set()
+    const walk = (node) => {
+      found.add(node.type)
+      for (const child of node.children ?? []) walk(child)
+    }
+    walk(parse(source))
+    return found
+  }
+
+  const EXPECTED = {
+    bold: 'strong',
+    italic: 'emphasis',
+    heading: 'heading',
+    bullet: 'list',
+    ordered: 'list',
+    quote: 'blockquote',
+    code: 'inlineCode',
+    codeBlock: 'code',
+    rule: 'thematicBreak',
+    link: 'link',
+  }
+
+  it('covers every button', () => {
+    expect(Object.keys(EXPECTED).sort()).toEqual(COMMONMARK_ITEMS.map((i) => i.name).sort())
+  })
+
+  it('parses into the node the renderer maps', () => {
+    for (const item of COMMONMARK_ITEMS) {
+      const { value } = applyInsertion(item, 'Words', 0, 5)
+
+      expect(typesIn(value), `${item.name} wrote something else`).toContain(EXPECTED[item.name])
+    }
+  })
+
+  /* The three that look obvious and would each write text the parser walks
+     straight past. Guarded here so nobody adds them back believing they were
+     merely forgotten. */
+  it('confirms the excluded three still do not parse', () => {
+    expect(typesIn('~~gone~~')).not.toContain('delete')
+    expect(typesIn('| a | b |\n|---|---|\n| 1 | 2 |')).not.toContain('table')
+    expect(typesIn('![map](/m.png)').has('image')).toBe(true)
   })
 })
