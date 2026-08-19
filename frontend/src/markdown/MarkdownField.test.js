@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PrimeVue from 'primevue/config'
 import MarkdownField from './MarkdownField.vue'
-import { TOOLBAR_ITEMS } from './toolbar.js'
+import { COMMONMARK_ITEMS, TOOLBAR_ITEMS } from './toolbar.js'
 import { DIRECTIVES } from './directives.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { t } from '../i18n/index.js'
@@ -58,9 +58,25 @@ describe('MarkdownField says what it takes', () => {
   })
 
   it('shows a button for every directive the renderer implements', () => {
-    expect(mountField().findAllComponents({ name: 'Button' })).toHaveLength(
-      Object.keys(DIRECTIVES).length,
-    )
+    const names = mountField()
+      .findAllComponents({ name: 'Button' })
+      .map((button) => button.attributes('aria-label'))
+
+    for (const item of TOOLBAR_ITEMS) {
+      expect(names, item.name).toContain(t('markdown.insert', { name: nameOf(item) }))
+    }
+    expect(names).toHaveLength(Object.keys(DIRECTIVES).length + COMMONMARK_ITEMS.length)
+  })
+
+  /* The directives take the top row and CommonMark the one under it: not a
+     ranking of usefulness, a ranking of discoverability. */
+  it('puts the directives above the plain marks', () => {
+    const tiers = mountField().findAll('.md-field__tier')
+
+    expect(tiers).toHaveLength(2)
+    expect(tiers[0].findAll('button')).toHaveLength(TOOLBAR_ITEMS.length)
+    expect(tiers[1].findAll('button')).toHaveLength(COMMONMARK_ITEMS.length)
+    expect(tiers[1].classes()).toContain('md-field__tier--plain')
   })
 
   it('gives every button a name a screen reader can read', () => {
@@ -84,7 +100,7 @@ describe('MarkdownField says what it takes', () => {
     const buttons = mountField().findAll('button')
     const reachable = buttons.filter((button) => button.attributes('tabindex') === '0')
 
-    expect(buttons.length).toBe(Object.keys(DIRECTIVES).length)
+    expect(buttons.length).toBe(TOOLBAR_ITEMS.length + COMMONMARK_ITEMS.length)
     expect(reachable).toHaveLength(1)
   })
 

@@ -27,7 +27,7 @@
 import { nextTick, ref } from 'vue'
 import Button from 'primevue/button'
 import Textarea from 'primevue/textarea'
-import { TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
+import { COMMONMARK_ITEMS, TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
 import { t } from '../i18n/index.js'
 
 const props = defineProps({
@@ -56,6 +56,24 @@ const textarea = () => field.value?.$el ?? null
  * show a plain word.
  */
 const nameOf = (item) => (item.label ? t(item.label) : item.name)
+
+/*
+ * Two tiers, one control.
+ *
+ * The directives take the top row and CommonMark the one under it. Not a
+ * ranking of usefulness — a ranking of discoverability. Bold and italic are what
+ * a game master will guess at; `:ref[Cities of the Vale]{page=88}` is what #103
+ * exists to surface, and it must not have to compete for attention with a bold
+ * button.
+ *
+ * The offset is what keeps them one toolbar rather than two. `active` indexes
+ * every button on both rows, so the arrows walk the whole palette and the tab
+ * order still sees a single stop.
+ */
+const TIERS = [
+  { items: TOOLBAR_ITEMS, offset: 0, plain: false },
+  { items: COMMONMARK_ITEMS, offset: TOOLBAR_ITEMS.length, plain: true },
+]
 
 /*
  * Insert, then hand the field back.
@@ -136,21 +154,28 @@ function move(event) {
       :aria-label="t('markdown.toolbar')"
       @keydown="move"
     >
-      <Button
-        v-for="(item, index) in TOOLBAR_ITEMS"
-        :key="item.name"
-        type="button"
-        size="small"
-        severity="secondary"
-        text
-        class="md-field__tool"
-        :icon="`pi ${item.icon}`"
-        :label="nameOf(item)"
-        :aria-label="t('markdown.insert', { name: nameOf(item) })"
-        :tabindex="index === active ? 0 : -1"
-        @click="insert(index, item)"
-        @focus="active = index"
-      />
+      <div
+        v-for="tier in TIERS"
+        :key="tier.offset"
+        class="md-field__tier"
+        :class="{ 'md-field__tier--plain': tier.plain }"
+      >
+        <Button
+          v-for="(item, index) in tier.items"
+          :key="item.name"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          class="md-field__tool"
+          :icon="item.icon ? `pi ${item.icon}` : undefined"
+          :label="nameOf(item)"
+          :aria-label="t('markdown.insert', { name: nameOf(item) })"
+          :tabindex="tier.offset + index === active ? 0 : -1"
+          @click="insert(tier.offset + index, item)"
+          @focus="active = tier.offset + index"
+        />
+      </div>
     </div>
 
     <Textarea
@@ -183,12 +208,31 @@ function move(event) {
  * to find is barely better than one that was never there.
  */
 .md-field__tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
   margin-top: var(--space-5);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--p-content-border-color);
+}
+
+.md-field__tier {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/*
+ * Subordinate, and by weight rather than by a second rule. The row above it is
+ * icons and accent-carrying words; this one is words alone, a step down and
+ * muted, so the eye reaches the directives first. Another hairline here would
+ * make the toolbar look like two controls stacked, which is the opposite of what
+ * the tiering is for.
+ */
+.md-field__tier--plain {
+  margin-top: var(--space-1);
+}
+
+.md-field__tier--plain .md-field__tool {
+  font-size: var(--step--2);
+  color: var(--p-text-muted-color);
 }
 
 /*

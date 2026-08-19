@@ -146,6 +146,40 @@
     font-size: 0.9em;
   }
 
+  /*
+   * A fenced block, dressed.
+   *
+   * `render.js` has emitted `<pre><code>` since #53 and nothing ever styled it,
+   * which was survivable while the construct was undiscoverable — nobody reaches
+   * for a code fence in a scene by accident. A button advertises it (#141), and a
+   * button is a promise the design system has an answer.
+   *
+   * Rules and a wash, like everything else here: there is no elevation scale, so
+   * a block is set apart by its border and its ground, not by a shadow. No
+   * syntax highlighting — that wants a dependency, and none of the honest uses
+   * are code. It is an ASCII map, or a handout whose spacing carries the
+   * meaning.
+   */
+  pre {
+    margin: var(--space-4) 0;
+    padding: var(--space-3);
+    background: var(--p-content-hover-background);
+    border: 1px solid var(--p-content-border-color);
+    border-radius: var(--p-border-radius-sm);
+    /* The one construct that cannot be made to wrap: its whitespace is its
+       meaning, so a long line scrolls inside the block rather than widening the
+       column the prose is measured at. */
+    overflow-x: auto;
+  }
+
+  pre code {
+    /* The wash is the block's, and a second one on the code inside it would
+       print a lighter rectangle within a darker one. */
+    background: none;
+    font-size: var(--step--1);
+    line-height: 1.5;
+  }
+
   /* ---- Long-form reading surface ------------------------------------ */
 
   .prose {

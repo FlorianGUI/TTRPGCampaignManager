@@ -394,6 +394,19 @@ export const en = {
   /* Read by a screen reader off each button, which shows the bare name — the
      verb is what makes it a control rather than a heading. */
   'markdown.insert': 'Insert {name}',
+  /* Words rather than letters. The conventional single-letter marks are
+     language-bound — French marks bold `G` for *gras* — and PrimeIcons has no
+     glyph for bold, italic, heading or quote to fall back on. */
+  'markdown.commonmark.bold': 'Bold',
+  'markdown.commonmark.italic': 'Italic',
+  'markdown.commonmark.heading': 'Heading',
+  'markdown.commonmark.bullet': 'List',
+  'markdown.commonmark.ordered': 'Numbered',
+  'markdown.commonmark.quote': 'Quote',
+  'markdown.commonmark.code': 'Code',
+  'markdown.commonmark.codeBlock': 'Code block',
+  'markdown.commonmark.rule': 'Rule',
+  'markdown.commonmark.link': 'Link',
   'markdown.directive.dice': 'Dice',
   'markdown.directive.ref': 'Source',
   'markdown.directive.readAloud': 'Read aloud',
