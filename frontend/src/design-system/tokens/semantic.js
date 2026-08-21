@@ -1,4 +1,5 @@
 import { ink, vellum, gold, blood, moss, torch, scrying } from './primitives.js'
+import { PROSE_HUES, PROSE_TIERS } from '../proseColors.js'
 
 /*
  * Layer 2 — semantic. Gives the primitives jobs.
@@ -76,10 +77,55 @@ export const DARK_ROLES = {
 }
 
 /*
+ * Where each prose tier sits on a hue ramp — and, exactly like the surface roles
+ * above, the two schemes travel in opposite directions. Light walks *down* from
+ * 800 because a dark tone is what carries contrast on parchment; dark walks *up*
+ * from 200 for the same reason mirrored.
+ *
+ * **Do not collapse these into one map with shared indices.** It is the same
+ * mistake `LIGHT_ROLES` / `DARK_ROLES` are kept apart to prevent, and it fails
+ * the same way — twenty-one dark-on-dark spans instead of one light-on-light
+ * page. Every value in both is stated here; none is derived from the other by
+ * arithmetic.
+ */
+export const LIGHT_PROSE_TIERS = { bold: 800, medium: 700, subtle: 600 }
+export const DARK_PROSE_TIERS = { bold: 200, medium: 300, subtle: 400 }
+
+/*
+ * The read-aloud wash, as numbers rather than as a CSS string.
+ *
+ * It is translucent, so the surface underneath a read-aloud box is neither the
+ * card nor the page but the two composited — a third surface, and the one
+ * `torch` `subtle` was found failing on. `check-contrast.mjs` composites it and
+ * gates prose against it, which it can only do if the alpha and the tint are
+ * readable rather than buried in `rgb(… / 0.08)`.
+ */
+export const READ_ALOUD_WASH = { tint: [92, 127, 176], light: 0.08, dark: 0.1 }
+
+const washCss = (alpha) => `rgb(${READ_ALOUD_WASH.tint.join(' ')} / ${alpha})`
+
+/*
+ * The twenty-one prose colours for one scheme, built from the hue table and
+ * that scheme's own tier map.
+ *
+ * Generated rather than written out: seven hand-written triples per scheme is
+ * where an eighth hue gets added in one theme and forgotten in the other, and
+ * the values that matter — the hexes — are already hand-written, in the ramps.
+ */
+function proseColors(tiers) {
+  return Object.fromEntries(
+    Object.entries(PROSE_HUES).map(([hue, { ramp }]) => [
+      hue,
+      Object.fromEntries(Object.keys(PROSE_TIERS).map((tier) => [tier, ramp[tiers[tier]]])),
+    ]),
+  )
+}
+
+/*
  * One scheme's colour block. Both schemes share this shape; what differs is the
  * ramp, the role map above, and the direction travelled through the accent.
  */
-function scheme({ ramp, roles, accent, onAccent, tone }) {
+function scheme({ ramp, roles, accent, onAccent, tone, proseTiers }) {
   // r('text') -> the hex for that role in this scheme's ramp.
   const r = (role) => ramp[roles[role]]
 
@@ -233,6 +279,15 @@ function scheme({ ramp, roles, accent, onAccent, tone }) {
          * sidebar heading was reworded.
          */
         scene: { doneColor: tone.success },
+        /*
+         * `:color[…]{hue=wyrd tier=bold}`, resolved. Twenty-one per scheme,
+         * emitted as `--p-grimoire-prose-<hue>-<tier>` and read by exactly one
+         * table of CSS rules in `base.css`.
+         *
+         * A token rather than a hex in the source is what makes the mark flip
+         * with the theme, and what lets the contrast checker gate it at all.
+         */
+        prose: proseColors(proseTiers),
         entity: {
           npc: tone.info,
           location: tone.success,
@@ -253,6 +308,7 @@ export const light = scheme({
   // walks *down* the gold ramp.
   accent: { 600: gold[600], 700: gold[700], 800: gold[800], 900: gold[900] },
   onAccent: vellum[0],
+  proseTiers: LIGHT_PROSE_TIERS,
   tone: {
     danger: blood[600],
     dangerStrong: blood[700],
@@ -264,7 +320,7 @@ export const light = scheme({
     mask: 'rgb(37 30 22 / 0.45)',
     highlightBackground: gold[100],
     highlightFocusBackground: gold[200],
-    readAloudBackground: 'rgb(92 127 176 / 0.08)',
+    readAloudBackground: washCss(READ_ALOUD_WASH.light),
   },
 })
 
@@ -274,6 +330,7 @@ export const dark = scheme({
   // On candlelight it walks *up* — the same token names, mirrored.
   accent: { 600: gold[400], 700: gold[300], 800: gold[200], 900: gold[100] },
   onAccent: ink[950],
+  proseTiers: DARK_PROSE_TIERS,
   tone: {
     danger: blood[400],
     dangerStrong: blood[300],
@@ -285,7 +342,7 @@ export const dark = scheme({
     mask: 'rgb(6 5 4 / 0.7)',
     highlightBackground: 'rgb(220 179 86 / 0.16)',
     highlightFocusBackground: 'rgb(220 179 86 / 0.24)',
-    readAloudBackground: 'rgb(92 127 176 / 0.1)',
+    readAloudBackground: washCss(READ_ALOUD_WASH.dark),
   },
 })
 

@@ -132,6 +132,36 @@ Two rules that are load-bearing:
 `tokens/primitives.js` is deliberately import-free so plain Node tooling can
 read it; `scripts/check-contrast.mjs` imports it directly.
 
+### The prose palette
+
+`design-system/proseColors.js` is the seven hues and three tiers that
+`:color[…]{hue=… tier=…}` resolves to (#147). It sits beside the token layers
+rather than inside `markdown/`, because four unrelated modules ask it the same
+question — the dialect (is this a colour?), the picker (what can be chosen?),
+`tokens/semantic.js` (what does it resolve to?) and the contrast checker (what
+has to be gated?) — and none of them should hold an opinion of its own.
+
+- **Every hue ramp carries 200–800.** Three legible tiers need ends the original
+  300–700 ramps did not have: measured on the page, `torch` cleared 4.5:1 at
+  exactly one step. Light walks **800/700/600** down, dark walks **200/300/400**
+  up, and the two step maps in `tokens/semantic.js` are kept apart for the same
+  reason `LIGHT_ROLES` / `DARK_ROLES` are.
+- **Not 900 in light**, though it passes AA comfortably. At 900 the hues
+  converge on near-black and a red, a blue and a violet become three blacks in
+  running prose. A palette whose strongest tier cannot be told apart by hue is
+  not a palette.
+- **`gold` is not a prose hue.** It is reserved for affordances, and prose that
+  can borrow the accent makes every link and button on the page ambiguous.
+- **Four surfaces are checked, not two.** A colour sits on a card, on the page,
+  or on either of those seen through a `:::read-aloud` box's wash — which is a
+  third, composited surface, and the one `torch` `subtle` was found failing on.
+  `READ_ALOUD_WASH` is stated as numbers so the checker can flatten it.
+- **Adding an eighth hue** is a row in `PROSE_HUES`, a ramp in `primitives.js`
+  and three rules in `base.css` — nothing in `render.js`, the picker or the
+  checker. The CSS is the one table written out by hand, because CSS cannot
+  build a custom-property name from a class, and `proseColors.test.js` fails if
+  it drifts from the table.
+
 ### Elevation
 
 **There is no elevation scale, and that is a decision rather than an omission.**
@@ -471,6 +501,8 @@ The water is waist-deep and colder than it has any right to be.
 :::
 
 Owlbears here are unusually aggressive :ref[SRD 5.1]{page=249}.
+
+The ward answers with :color[searing light]{hue=torch tier=bold}.
 ```
 
 The syntax is [CommonMark generic
@@ -479,11 +511,19 @@ directives](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
 `remark-parse` + `remark-directive`. One grammar covers all four components, and
 attributes map onto props, so there is no per-directive translation layer.
 
-**`directives.js` is the dialect.** Directive name → component, the forms it
-accepts, and the props to build. A new directive is an entry in that table, not
-a branch in the walker. `ENTITY_KINDS` is asked there and nowhere else, so
-adding a kind to the design system is the whole change needed to make
-`:that-kind[…]` render.
+**`dialect.js` is the dialect.** Directive name → the forms it accepts and the
+props to build, with `directives.js` holding the other half of the table —
+name → component. A new directive is an entry there, not a branch in the walker.
+`ENTITY_KINDS` is asked in `dialect.js` and nowhere else, so adding a kind to the
+design system is the whole change needed to make `:that-kind[…]` render.
+
+**`:color` is the one directive that is presentation and nothing else**, and it
+is worth naming that rather than discovering it later. Every other directive
+says what a phrase _is_; this one says how it looks, so the note is colour-coded
+to a convention only its author knows — and the rendered span deliberately
+carries no ARIA, because "wyrd, bold" is a decision about ink and reading it out
+is noise. A rule the game itself owns (damage types, say) comes back as its own
+semantic directive built on the same tokens, never as a preset in the picker.
 
 ### Three projections, one parser
 

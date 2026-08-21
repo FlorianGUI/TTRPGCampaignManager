@@ -365,6 +365,22 @@ export const fr = {
   'markdown.directive.dice': 'Dés',
   'markdown.directive.ref': 'Source',
   'markdown.directive.readAloud': 'À voix haute',
+  'markdown.directive.color': 'Couleur',
+
+  /* Les teintes portent des noms de table, pas de longueurs d'onde — « wyrd »
+     reste « wyrd », comme en anglais : c'est un nom propre, pas un adjectif. */
+  'prose.hue.blood': 'Sang',
+  'prose.hue.torch': 'Torche',
+  'prose.hue.moss': 'Mousse',
+  'prose.hue.scrying': 'Scrutation',
+  'prose.hue.verdigris': 'Vert-de-gris',
+  'prose.hue.wyrd': 'Wyrd',
+  'prose.hue.slate': 'Ardoise',
+  /* « Soutenu » plutôt que « gras » : la barre d'outils appelle déjà `**` du
+     gras, et un niveau d'intensité n'est pas une graisse de caractère. */
+  'prose.tier.bold': 'Soutenu',
+  'prose.tier.medium': 'Moyen',
+  'prose.tier.subtle': 'Discret',
 
   /* ---- What prose renders as -------------------------------------------- */
 

@@ -2,6 +2,7 @@ import EntityTag from '../components/domain/EntityTag.vue'
 import DiceChip from '../components/domain/DiceChip.vue'
 import SourceRef from '../components/domain/SourceRef.vue'
 import ReadAloud from '../components/domain/ReadAloud.vue'
+import ProseColor from '../components/domain/ProseColor.vue'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 
 /*
@@ -26,4 +27,5 @@ export const DIRECTIVE_COMPONENTS = Object.fromEntries([
   ['dice', DiceChip],
   ['ref', SourceRef],
   ['read-aloud', ReadAloud],
+  ['color', ProseColor],
 ])

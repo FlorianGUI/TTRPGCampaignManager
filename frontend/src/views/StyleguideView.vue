@@ -23,6 +23,7 @@ import StatBlock from '../components/domain/StatBlock.vue'
 import ReadAloud from '../components/domain/ReadAloud.vue'
 import DiceChip from '../components/domain/DiceChip.vue'
 import EntityTag from '../components/domain/EntityTag.vue'
+import ProseColor from '../components/domain/ProseColor.vue'
 import SourceRef from '../components/domain/SourceRef.vue'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 
@@ -34,8 +35,12 @@ import {
   moss,
   torch,
   scrying,
+  verdigris,
+  wyrd,
+  slate,
 } from '../design-system/tokens/primitives.js'
 import { light, dark } from '../design-system/tokens/semantic.js'
+import { PROSE_HUES, PROSE_SWATCHES } from '../design-system/proseColors.js'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '../stores/theme.js'
 import { owlbear } from '../content/sample.js'
@@ -46,7 +51,12 @@ const themeStore = useThemeStore()
 const { theme } = storeToRefs(themeStore)
 const { toggleTheme } = themeStore
 
-const RAMPS = { ink, vellum, gold, blood, moss, torch, scrying }
+const RAMPS = { ink, vellum, gold, blood, moss, torch, scrying, verdigris, wyrd, slate }
+
+/* The prose palette, in the shape the picker draws it: a hue per column, a tier
+   per row. Rendered live rather than as hexes, because the whole claim being
+   made is that these read as seven distinguishable hues in the active theme. */
+const HUE_COUNT = Object.keys(PROSE_HUES).length
 
 const TYPE_STEPS = [
   '--step-5',
@@ -329,6 +339,21 @@ const tokenRows = semanticRows.filter((r) => !r.path.startsWith('surface.'))
 
       <h3 class="sg__subhead">StatBlock</h3>
       <div class="sg__statblock"><StatBlock :creature="owlbear" /></div>
+
+      <h3 class="sg__subhead">ProseColor — seven hues, three tiers</h3>
+      <div class="prose">
+        <p>
+          The one directive that is presentation and nothing else. Read down a column for a hue's
+          three weights, across a row for seven hues at the same weight. Every one of these clears
+          WCAG AA on the card, the page, and either seen through a read-aloud box's wash — in both
+          themes, which is what <code>scripts/check-contrast.mjs</code> gates.
+        </p>
+      </div>
+      <div class="sg__palette" :style="{ '--palette-columns': HUE_COUNT }">
+        <p v-for="swatch in PROSE_SWATCHES" :key="`${swatch.hue}-${swatch.tier}`" class="sg__ink">
+          <ProseColor :hue="swatch.hue" :tier="swatch.tier">{{ swatch.hue }}</ProseColor>
+        </p>
+      </div>
     </section>
 
     <!-- ---- Overridden PrimeVue components -------------------------------- -->
@@ -403,6 +428,18 @@ const tokenRows = semanticRows.filter((r) => !r.path.startsWith('surface.'))
   gap: var(--space-2);
   align-items: center;
   margin-top: var(--space-3);
+}
+
+/* The prose palette, laid out the way the picker lays it out. */
+.sg__palette {
+  display: grid;
+  grid-template-columns: repeat(var(--palette-columns), 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.sg__ink {
+  margin: 0;
 }
 
 /* ---- Colour ---------------------------------------------------------- */

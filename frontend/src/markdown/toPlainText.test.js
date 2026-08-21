@@ -30,6 +30,18 @@ describe('toPlainText', () => {
     expect(plain).not.toMatch(/[:{]/)
   })
 
+  /* Interpreted: a colour is presentation, and a cell that cannot show ink can
+     still show the words it was going to be applied to. */
+  it('keeps a coloured phrase and drops the colour', () => {
+    expect(toPlainText('The door is :color[already open]{hue=slate}.')).toBe(
+      'The door is already open.',
+    )
+  })
+
+  it('elides a colour whose hue it does not know', () => {
+    expect(toPlainText('The door is :color[open]{hue=chartreuse}.')).toBe('The door is […].')
+  })
+
   it('keeps the words of a read-aloud block without its label', () => {
     expect(toPlainText(':::read-aloud\nThe water is cold.\n:::')).toBe('The water is cold.')
   })

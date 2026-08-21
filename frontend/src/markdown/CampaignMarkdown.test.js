@@ -5,7 +5,14 @@ import EntityTag from '../components/domain/EntityTag.vue'
 import DiceChip from '../components/domain/DiceChip.vue'
 import SourceRef from '../components/domain/SourceRef.vue'
 import ReadAloud from '../components/domain/ReadAloud.vue'
+import ProseColor from '../components/domain/ProseColor.vue'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+import {
+  DEFAULT_TIER,
+  PROSE_HUES,
+  PROSE_TIERS,
+  proseColorClass,
+} from '../design-system/proseColors.js'
 
 /*
  * Three contracts are worth protecting here, in this order:
@@ -88,6 +95,113 @@ describe('CampaignMarkdown directives', () => {
   })
 })
 
+/*
+ * The prose palette (#147) — the first directive in the dialect that is
+ * presentation and nothing else.
+ */
+describe('CampaignMarkdown colours', () => {
+  it('colours a phrase with the hue and tier it was given', () => {
+    const wrapper = render('The ward answers with :color[searing light]{hue=torch tier=bold}.')
+    const mark = wrapper.findComponent(ProseColor)
+
+    expect(mark.props()).toEqual({ hue: 'torch', tier: 'bold' })
+    expect(mark.text()).toBe('searing light')
+  })
+
+  /*
+   * An inline directive has room to draw itself where a block one does not, so
+   * unlike `:::read-aloud` this survives the inline projection — a description
+   * is exactly where a game master would expect the mark they made to hold.
+   */
+  for (const mode of ['block', 'inline']) {
+    it(`renders as a coloured span in ${mode} mode`, () => {
+      const wrapper = render('The door is :color[already open]{hue=slate}.', mode)
+
+      expect(wrapper.findComponent(ProseColor).exists(), mode).toBe(true)
+      expect(wrapper.find(`.${proseColorClass('slate', DEFAULT_TIER)}`).exists(), mode).toBe(true)
+      expect(wrapper.text()).toContain('already open')
+    })
+  }
+
+  it('offers every hue at every tier, and takes them from the palette', () => {
+    for (const hue of Object.keys(PROSE_HUES)) {
+      for (const tier of Object.keys(PROSE_TIERS)) {
+        const wrapper = render(`:color[word]{hue=${hue} tier=${tier}}`)
+
+        expect(wrapper.find(`.${proseColorClass(hue, tier)}`).exists(), `${hue} ${tier}`).toBe(true)
+      }
+    }
+  })
+
+  it('defaults the tier rather than requiring one', () => {
+    expect(render(':color[word]{hue=moss}').findComponent(ProseColor).props().tier).toBe(
+      DEFAULT_TIER,
+    )
+  })
+
+  /* Marked-up words keep their marks: the children are the phrase, not a label
+     for it. */
+  it('keeps the markup inside a coloured phrase', () => {
+    const wrapper = render(':color[the **ward** answers]{hue=wyrd}')
+
+    expect(wrapper.findComponent(ProseColor).find('strong').text()).toBe('ward')
+  })
+
+  /*
+   * No ARIA, deliberately. Every other directive announces a fact a listener
+   * would otherwise miss — `EntityTag` says "(NPC)". This one has no fact:
+   * "wyrd, bold" is a decision about ink, and reading it out is noise.
+   */
+  it('says nothing to a screen reader that a reader cannot see', () => {
+    const span = render(':color[quiet]{hue=wyrd tier=bold}').findComponent(ProseColor)
+
+    expect(span.attributes('aria-label')).toBeUndefined()
+    expect(span.attributes('role')).toBeUndefined()
+    expect(span.text()).toBe('quiet')
+  })
+
+  /* A token, resolved by a class — never a hex written into the DOM, which
+     could not flip with the theme. */
+  it('carries no inline style', () => {
+    expect(
+      render(':color[quiet]{hue=blood}').findComponent(ProseColor).attributes('style'),
+    ).toBeUndefined()
+  })
+
+  for (const source of [
+    ':color[word]{hue=chartreuse}',
+    ':color[word]{hue=moss tier=whisper}',
+    ':color[word]',
+    // `in` would inherit a truthy answer from Object.prototype and resolve to a
+    // class nothing has ever styled.
+    ':color[word]{hue=constructor}',
+  ]) {
+    it(`refuses ${source} and shows it as its own text`, () => {
+      const wrapper = render(`Before ${source} after.`)
+
+      expect(wrapper.findComponent(ProseColor).exists()).toBe(false)
+      expect(wrapper.text()).toContain(source)
+    })
+  }
+
+  it('renders the leaf and container forms literally', () => {
+    expect(render('::color[word]{hue=moss}').text()).toContain('::color')
+    expect(render(':::color{hue=moss}\nword\n:::').text()).toContain(':::color')
+    expect(render('::color[word]{hue=moss}').findComponent(ProseColor).exists()).toBe(false)
+    expect(render(':::color{hue=moss}\nword\n:::').findComponent(ProseColor).exists()).toBe(false)
+  })
+})
+
+describe('CampaignMarkdown renders ordinary markdown', () => {
+  it('renders ordinary markdown around the directives', () => {
+    const wrapper = render('# Greyfen\n\nA causeway of **black timber**.\n\n- one\n- two')
+
+    expect(wrapper.find('h1').text()).toBe('Greyfen')
+    expect(wrapper.find('strong').text()).toBe('black timber')
+    expect(wrapper.findAll('li')).toHaveLength(2)
+  })
+})
+
 describe('CampaignMarkdown degradation', () => {
   it('shows a misspelled directive rather than swallowing it', () => {
     const wrapper = render('The party meets :npx[Fen Warden] outside.')
@@ -126,6 +240,19 @@ describe('CampaignMarkdown degradation', () => {
 
     expect(wrapper.findComponent(DiceChip).exists()).toBe(false)
     expect(wrapper.text()).toContain(':dice[1d20]{result=high}')
+  })
+
+  /*
+   * `DIRECTIVES` is an ordinary object, so a bare lookup finds
+   * `Object.prototype.constructor` for this name and asks a function what forms
+   * it accepts. That threw, and a TypeError in the walker takes down the page
+   * rather than the directive — the one failure this dialect exists to not have.
+   */
+  it('shows a directive named after a prototype member rather than crashing', () => {
+    const wrapper = render('The party meets :constructor[Fen] outside.')
+
+    expect(wrapper.text()).toContain(':constructor[Fen]')
+    expect(wrapper.text()).toContain('The party meets')
   })
 
   it('keeps the contents of an unknown block', () => {

@@ -411,6 +411,24 @@ export const en = {
   'markdown.directive.dice': 'Dice',
   'markdown.directive.ref': 'Source',
   'markdown.directive.readAloud': 'Read aloud',
+  'markdown.directive.color': 'Colour',
+
+  /* The prose palette (#147). Both halves are named because a swatch is
+     identified by its pair — three of the twenty-one are wyrd, and a tooltip
+     reading only "wyrd" names none of them. */
+  'prose.hue.blood': 'Blood',
+  'prose.hue.torch': 'Torch',
+  'prose.hue.moss': 'Moss',
+  'prose.hue.scrying': 'Scrying',
+  'prose.hue.verdigris': 'Verdigris',
+  'prose.hue.wyrd': 'Wyrd',
+  'prose.hue.slate': 'Slate',
+  /* Not "light" for the third: it is a mid-dark colour on parchment, because a
+     pastel there fails AA outright. "Subtle" describes the emphasis, which is
+     the thing that holds in both themes. */
+  'prose.tier.bold': 'Bold',
+  'prose.tier.medium': 'Medium',
+  'prose.tier.subtle': 'Subtle',
 
   /* ---- What prose renders as -------------------------------------------- */
 
