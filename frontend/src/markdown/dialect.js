@@ -1,4 +1,5 @@
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+import { DEFAULT_TIER, isProseColor } from '../design-system/proseColors.js'
 
 /*
  * The dialect, as a table: directive name → the rules it is accepted under.
@@ -80,6 +81,37 @@ export const DIRECTIVES = Object.fromEntries([
     },
   ],
 
+  /*
+   * The one directive whose attributes are its whole point: `:color[…]` with no
+   * hue is a phrase with no colour, which is a phrase.
+   *
+   * **Both attributes refuse rather than fall back.** An unknown hue could
+   * quietly become `slate` and an unknown tier could quietly become `medium`,
+   * and both would leave a game master looking at prose that renders but is not
+   * what they wrote. `:dice[1d20]{outcome=nat20}` set the precedent: an
+   * attribute the dialect cannot honour degrades the directive to its own text,
+   * where the typo is visible and fixable.
+   *
+   * `content: true` because the words are the phrase, not a label for it — so
+   * `:color[the **ward** answers]{hue=wyrd}` keeps its bold. `read-aloud` is the
+   * only other content directive and is a block; this one is inline, which is
+   * the distinction `render.js` draws when it decides what survives `inline`
+   * mode.
+   */
+  [
+    'color',
+    {
+      types: ['textDirective'],
+      content: true,
+      props: (node) => {
+        const hue = node.attributes.hue
+        const tier = node.attributes.tier ?? DEFAULT_TIER
+
+        return isProseColor(hue, tier) ? { hue, tier } : null
+      },
+    },
+  ],
+
   [
     'read-aloud',
     {
@@ -100,7 +132,14 @@ export const DIRECTIVES = Object.fromEntries([
  * new feature, and it degrades exactly like a name nobody has heard of.
  */
 export function specFor(node) {
-  const spec = DIRECTIVES[node.name]
+  /*
+   * `Object.hasOwn`, not a bare lookup. `DIRECTIVES` is an ordinary object, so
+   * `:constructor[x]` finds `Object.prototype.constructor` — a function with no
+   * `types` — and asking it took the whole page down with a TypeError. Every
+   * other unknown name degrades to visible text, and this one crashed, which is
+   * the opposite of what a dialect nobody can typo-proof is supposed to do.
+   */
+  const spec = Object.hasOwn(DIRECTIVES, node.name) ? DIRECTIVES[node.name] : null
 
   return spec && spec.types.includes(node.type) ? spec : null
 }

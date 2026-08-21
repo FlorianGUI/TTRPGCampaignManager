@@ -3,7 +3,13 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import PrimeVue from 'primevue/config'
 import MarkdownField from './MarkdownField.vue'
-import { COMMONMARK_ITEMS, ENTITY_ITEMS, MARKER_ITEMS, TOOLBAR_ITEMS } from './toolbar.js'
+import {
+  COLOR_ITEMS,
+  COMMONMARK_ITEMS,
+  ENTITY_ITEMS,
+  MARKER_ITEMS,
+  TOOLBAR_ITEMS,
+} from './toolbar.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
 import { t } from '../i18n/index.js'
 
@@ -52,6 +58,27 @@ const buttonFor = (wrapper, name) => {
  * rather than which surface it was written from — so the seam is hidden here
  * instead of splitting each case in two.
  */
+const swatchName = (item) => `${t(item.hueLabel)} ${t(item.tierLabel)}`
+
+/*
+ * Open the palette and hand back its swatches.
+ *
+ * Queried off the document rather than off the wrapper: a `Popover` teleports to
+ * the body, so the grid is on the page but not inside the component's own tree.
+ * Every caller unmounts, which is what takes the teleported node back out again
+ * — a stale grid left behind would be found by the next test that looks.
+ */
+const openPalette = async (wrapper) => {
+  const door = wrapper
+    .findAllComponents({ name: 'Button' })
+    .find((button) => button.attributes('aria-label') === t('markdown.directive.color'))
+
+  await door.trigger('click')
+  await nextTick()
+
+  return [...document.querySelectorAll('.md-palette__swatch')]
+}
+
 const press = async (wrapper, name) => {
   const button = buttonFor(wrapper, name)
 
@@ -83,7 +110,7 @@ describe('MarkdownField says what it takes', () => {
     expect(mountField().get('textarea').attributes('aria-label')).toBe('Body')
   })
 
-  it('reaches every directive the renderer implements', () => {
+  it('reaches every directive the renderer implements', async () => {
     const wrapper = mountField()
     const onRow = wrapper
       .findAllComponents({ name: 'Button' })
@@ -92,14 +119,69 @@ describe('MarkdownField says what it takes', () => {
       .findComponent({ name: 'Menu' })
       .props('model')
       .map((entry) => entry.label)
+    const inPalette = await openPalette(wrapper)
 
     for (const item of TOOLBAR_ITEMS) {
+      /* `:color` is one directive with twenty-one faces, and is reached by
+         picking a hue rather than by pressing the name — a `:color[…]` with no
+         hue is refused, so a button that wrote one would be a button that
+         writes text. */
       const reachable =
-        onRow.includes(t('markdown.insert', { name: nameOf(item) })) ||
-        inMenu.includes(nameOf(item))
+        item.name === 'color'
+          ? inPalette.length === COLOR_ITEMS.length
+          : onRow.includes(t('markdown.insert', { name: nameOf(item) })) ||
+            inMenu.includes(nameOf(item))
 
       expect(reachable, item.name).toBe(true)
     }
+
+    wrapper.unmount()
+  })
+
+  /*
+   * The row has no space for twenty-one more controls — #146 had just cut it
+   * down to one tier of icons — and a palette is a grid rather than a list,
+   * which is why this is a `Popover` where the entity kinds are a `Menu`.
+   */
+  it('puts every hue and tier behind one door', async () => {
+    const wrapper = mountField()
+    const swatches = await openPalette(wrapper)
+
+    expect(swatches).toHaveLength(COLOR_ITEMS.length)
+
+    wrapper.unmount()
+  })
+
+  /*
+   * Both halves of the name, both from the catalogue (#87).
+   *
+   * A grid of twenty-one unlabelled colour squares is unusable without sight.
+   * Labelling them by hue alone is unusable *with* it as well — three of the
+   * twenty-one are wyrd, and only the tier tells them apart.
+   */
+  it('names every swatch by its hue and its tier', async () => {
+    const wrapper = mountField()
+    const labels = (await openPalette(wrapper)).map((swatch) => swatch.getAttribute('aria-label'))
+
+    for (const item of COLOR_ITEMS) {
+      expect(labels, item.name).toContain(t('markdown.insert', { name: swatchName(item) }))
+      expect(swatchName(item)).not.toMatch(/^prose\./)
+    }
+
+    wrapper.unmount()
+  })
+
+  /* The swatch and the span it writes read the same twenty-one rules, so a
+     picker cannot show one colour and insert another. */
+  it('paints each swatch with the class the rendered span carries', async () => {
+    const wrapper = mountField()
+    const swatches = await openPalette(wrapper)
+
+    for (const [index, item] of COLOR_ITEMS.entries()) {
+      expect([...swatches[index].classList], item.name).toContain(item.class)
+    }
+
+    wrapper.unmount()
   })
 
   /*
@@ -199,7 +281,9 @@ describe('MarkdownField says what it takes', () => {
     const buttons = mountField().findAll('button')
     const reachable = buttons.filter((button) => button.attributes('tabindex') === '0')
 
-    expect(buttons.length).toBe(COMMONMARK_ITEMS.length + MARKER_ITEMS.length + 1)
+    // The plain marks, the dialect's own, and the two doors — colour and
+    // entity — which each hand their own keyboard over once open.
+    expect(buttons.length).toBe(COMMONMARK_ITEMS.length + MARKER_ITEMS.length + 2)
     expect(reachable).toHaveLength(1)
   })
 

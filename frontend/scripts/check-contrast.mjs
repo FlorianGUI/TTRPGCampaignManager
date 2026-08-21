@@ -7,7 +7,9 @@
  * Exits non-zero if any pair fails, so it can be wired into CI later.
  */
 // The primitives layer is deliberately import-free, so this plain Node script
-// can read the real ramps rather than regex-parsing the source for them.
+// can read the real ramps rather than regex-parsing the source for them. The
+// two modules below are framework-free for the same reason, and are read here
+// so the prose pairs are generated from the real palette — see PROSE below.
 import {
   ink,
   vellum,
@@ -17,17 +19,43 @@ import {
   torch,
   scrying,
 } from '../src/design-system/tokens/primitives.js'
+import { PROSE_HUES, PROSE_TIERS } from '../src/design-system/proseColors.js'
+import {
+  LIGHT_PROSE_TIERS,
+  DARK_PROSE_TIERS,
+  READ_ALOUD_WASH,
+} from '../src/design-system/tokens/semantic.js'
 
 const srgb = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
 
+const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+
 function luminance(hex) {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  const [r, g, b] = channels(hex).map((c) => c / 255)
   return 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
 }
 
 function contrast(a, b) {
   const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m)
   return (x + 0.05) / (y + 0.05)
+}
+
+/*
+ * A translucent wash flattened onto what is behind it.
+ *
+ * A ratio needs two opaque colours, and `readAloudBackground` is not one: text
+ * in a read-aloud box sits on the card or the page *seen through* the wash.
+ * Checking against the card alone is checking a surface nobody reads on, which
+ * is how `torch` `subtle` sat below AA inside a read-aloud block while passing
+ * everywhere else.
+ */
+function composite([r, g, b], alpha, backdrop) {
+  const under = channels(backdrop)
+
+  return `#${[r, g, b]
+    .map((c, i) => Math.round(c * alpha + under[i] * (1 - alpha)))
+    .map((c) => c.toString(16).padStart(2, '0'))
+    .join('')}`
 }
 
 // [label, foreground, background, minimum]
@@ -93,21 +121,65 @@ const candlelight = [
   ['nav icon rest', ink[300], ink[950], 3],
 ]
 
+/*
+ * The prose palette (#147): seven hues × three tiers × four surfaces, per
+ * theme. Eighty-four pairs.
+ *
+ * **Generated, not transcribed.** The `[label, fg, bg, min]` tuples above are
+ * readable at their count and would drown at this one — and a hand-written row
+ * per swatch is a row somebody forgets when an eighth hue is added, which is
+ * precisely the pair that would then ship below AA. This reads the same tables
+ * the app renders from, so a hue that exists is a hue that is checked.
+ *
+ * Four surfaces rather than two: a colour can sit on a card, on the page, or on
+ * either of those seen through a read-aloud box's wash.
+ */
+function proseSurfaces(card, page, alpha) {
+  return [
+    ['card', card],
+    ['page', page],
+    ['read-aloud/card', composite(READ_ALOUD_WASH.tint, alpha, card)],
+    ['read-aloud/page', composite(READ_ALOUD_WASH.tint, alpha, page)],
+  ]
+}
+
+function prosePairs(tiers, surfaces) {
+  return Object.entries(PROSE_HUES).flatMap(([hue, { ramp }]) =>
+    Object.keys(PROSE_TIERS).flatMap((tier) =>
+      surfaces.map(([where, background]) => [
+        `prose ${hue} ${tier} on ${where}`,
+        ramp[tiers[tier]],
+        background,
+        4.5,
+      ]),
+    ),
+  )
+}
+
+const parchmentProse = prosePairs(
+  LIGHT_PROSE_TIERS,
+  proseSurfaces(vellum[0], vellum[100], READ_ALOUD_WASH.light),
+)
+const candlelightProse = prosePairs(
+  DARK_PROSE_TIERS,
+  proseSurfaces(ink[900], ink[950], READ_ALOUD_WASH.dark),
+)
+
 let failures = 0
 
 for (const [theme, pairs] of [
-  ['parchment (light)', parchment],
-  ['candlelight (dark)', candlelight],
+  ['parchment (light)', [...parchment, ...parchmentProse]],
+  ['candlelight (dark)', [...candlelight, ...candlelightProse]],
 ]) {
   console.log(`\n  ${theme}`)
-  console.log(`  ${'─'.repeat(62)}`)
+  console.log(`  ${'─'.repeat(72)}`)
   for (const [label, fg, bg, min] of pairs) {
     const ratio = contrast(fg, bg)
     const ok = ratio >= min
     if (!ok) failures++
     const mark = ok ? '✓' : '✗'
     console.log(
-      `  ${mark} ${label.padEnd(24)} ${fg} on ${bg}  ` +
+      `  ${mark} ${label.padEnd(34)} ${fg} on ${bg}  ` +
         `${ratio.toFixed(2).padStart(5)}:1  (min ${min})`,
     )
   }

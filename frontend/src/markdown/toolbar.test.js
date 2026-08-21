@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { COMMONMARK_ITEMS, TOOLBAR_ITEMS, applyInsertion } from './toolbar.js'
-import { DIRECTIVES } from './dialect.js'
+import {
+  COLOR_ITEMS,
+  COMMONMARK_ITEMS,
+  MARKER_ITEMS,
+  TOOLBAR_ITEMS,
+  applyInsertion,
+} from './toolbar.js'
+import { DIRECTIVES, propsFor } from './dialect.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+import { DEFAULT_TIER, PROSE_HUES, PROSE_TIERS } from '../design-system/proseColors.js'
+import { labelOf } from './nodes.js'
 import { parse } from './parse.js'
 
 const itemFor = (name) => TOOLBAR_ITEMS.find((item) => item.name === name)
@@ -177,6 +185,81 @@ describe('what a button writes is what the parser reads', () => {
     const [directive] = directiveIn(value)
 
     expect(directive.children[0].value).toBe('Maerin Holt')
+  })
+})
+
+/*
+ * The palette (#147). Twenty-one buttons for one directive, and the only set in
+ * the toolbar whose members differ by attribute rather than by name.
+ */
+describe('the colour picker', () => {
+  const firstDirective = (source) => {
+    let found = null
+    const walk = (node) => {
+      if (!found && node.type === 'textDirective') found = node
+      for (const child of node.children ?? []) walk(child)
+    }
+    walk(parse(source))
+    return found
+  }
+
+  it('offers every hue at every tier', () => {
+    expect(COLOR_ITEMS).toHaveLength(
+      Object.keys(PROSE_HUES).length * Object.keys(PROSE_TIERS).length,
+    )
+
+    for (const hue of Object.keys(PROSE_HUES)) {
+      for (const tier of Object.keys(PROSE_TIERS)) {
+        expect(
+          COLOR_ITEMS.some((item) => item.hue === hue && item.tier === tier),
+          `${hue} ${tier}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  /* The whole point of a picker: nobody has to know the attribute names. */
+  it('writes the hue and the tier a game master clicked', () => {
+    const bold = COLOR_ITEMS.find((item) => item.hue === 'torch' && item.tier === 'bold')
+
+    expect(withCaret(applyInsertion(bold, 'a searing light here', 2, 15))).toBe(
+      'a :color[searing light]{hue=torch tier=bold}‸ here',
+    )
+  })
+
+  /*
+   * `{hue=slate}`, not `{hue=slate tier=medium}`. A default exists so the common
+   * case is short, and a picker that spelled it out anyway would teach a syntax
+   * longer than the one it documents.
+   */
+  it('leaves the default tier out of the syntax', () => {
+    const medium = COLOR_ITEMS.find((item) => item.hue === 'slate' && item.tier === DEFAULT_TIER)
+
+    expect(withCaret(applyInsertion(medium, 'already open', 0, 12))).toBe(
+      ':color[already open]{hue=slate}‸',
+    )
+  })
+
+  /* Written and read back through the real parser and the real dialect: a
+     swatch that produced a directive the renderer refuses would put text on the
+     page where a colour was asked for. */
+  it('writes something the dialect accepts, for every swatch', () => {
+    for (const item of COLOR_ITEMS) {
+      const { value } = applyInsertion(item, 'Words', 0, 5)
+      const node = firstDirective(value)
+
+      expect(node, `${item.name} did not parse`).not.toBeNull()
+      expect(propsFor(node, labelOf(node)), item.name).toEqual({
+        hue: item.hue,
+        tier: item.tier,
+      })
+    }
+  })
+
+  /* Behind the door, not on the row — twenty-one more controls would have
+     undone the shortening #146 was for. */
+  it('keeps the swatches off the toolbar row', () => {
+    expect(MARKER_ITEMS.map((item) => item.name)).not.toContain('color')
   })
 })
 

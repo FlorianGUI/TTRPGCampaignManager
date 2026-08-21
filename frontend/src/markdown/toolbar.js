@@ -1,6 +1,7 @@
 import { DIRECTIVES } from './dialect.js'
 import { DIRECTIVE_MARKER } from './nodes.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
+import { DEFAULT_TIER, PROSE_SWATCHES } from '../design-system/proseColors.js'
 
 /*
  * The writing side of the dialect: one button per directive the renderer knows,
@@ -38,6 +39,14 @@ const PRESENTATION = {
   dice: { drawn: 'die', label: 'markdown.directive.dice', attributes: '{result=}' },
   ref: { icon: 'pi-book', label: 'markdown.directive.ref', attributes: '{page=}' },
   'read-aloud': { icon: 'pi-megaphone', label: 'markdown.directive.readAloud' },
+  /*
+   * Never pressed as one button — the picker below replaces its `after` with a
+   * chosen hue. It carries `{hue=}` anyway so the shape the table describes is
+   * the shape that would actually work: a `:color[…]` with no hue is refused by
+   * the dialect, and a fallback that types a refused directive is a trap left
+   * for whoever adds the next set.
+   */
+  color: { drawn: 'swatch', label: 'markdown.directive.color', attributes: '{hue=}' },
 }
 
 const FALLBACK_ICON = 'pi-code'
@@ -124,6 +133,56 @@ export const TOOLBAR_ITEMS = Object.entries(DIRECTIVES).map(([name, spec]) => {
 export const ENTITY_ITEMS = TOOLBAR_ITEMS.filter((item) => item.name in ENTITY_KINDS)
 
 /*
+ * The other set, and the second door: twenty-one swatches for one directive
+ * rather than six directives for one button.
+ *
+ * `:color` is one name with two attributes, so `TOOLBAR_ITEMS` gives it a single
+ * control — and a single control cannot ask which of seven hues. The alternative
+ * was seven named directives (`:torch[…]`, `:slate[…]`), which would have put
+ * seven buttons on a row #146 had just cut down to one tier of icons behind
+ * doors.
+ *
+ * **Derived from the palette, so an eighth hue is a row in `PROSE_HUES`.**
+ * Nothing here lists what a hue is, and the shape comes from the `color` entry
+ * in `DIRECTIVES` rather than being spelled out a second time — only the
+ * attributes differ between swatches.
+ */
+export const COLOR_ITEM = TOOLBAR_ITEMS.find((item) => item.name === 'color')
+
+/*
+ * `{hue=slate}`, not `{hue=slate tier=medium}`.
+ *
+ * The default tier is a default so that the common case is short, and a picker
+ * that wrote it out anyway would make the syntax it teaches longer than the
+ * syntax it documents. What a game master reads back in the field is the
+ * shortest thing that means what they clicked.
+ */
+function colorAttributes({ hue, tier }) {
+  return tier === DEFAULT_TIER ? `{hue=${hue}}` : `{hue=${hue} tier=${tier}}`
+}
+
+export const COLOR_ITEMS = PROSE_SWATCHES.map((swatch) => ({
+  ...COLOR_ITEM,
+  ...swatch,
+  name: `color-${swatch.hue}-${swatch.tier}`,
+  after: `]${colorAttributes(swatch)}`,
+  // Nothing is left blank, so the caret goes to the end rather than back into an
+  // attribute — the hue was the choice, and it has already been made.
+  fill: 0,
+}))
+
+/*
+ * The directives that are one of a set, and so live behind a door rather than on
+ * the row: six entity kinds, and every prose colour.
+ *
+ * **Asked, not listed.** `ENTITY_KINDS` answers for the kinds, so adding `scene`
+ * there moves it into the menu with no edit here. `color` is named because it is
+ * one directive rather than a family — the set is in its attributes, which is a
+ * fact about `:color` and not about directives in general.
+ */
+const SET_DIRECTIVES = new Set(['color', ...Object.keys(ENTITY_KINDS)])
+
+/*
  * Read-aloud first: it is the one that changes the page rather than a word in
  * it. Then the two inline marks, in the order a scene tends to want them.
  * A directive this list has never heard of falls in after them rather than
@@ -131,7 +190,7 @@ export const ENTITY_ITEMS = TOOLBAR_ITEMS.filter((item) => item.name in ENTITY_K
  */
 const MARKER_ORDER = ['read-aloud', 'dice', 'ref']
 
-export const MARKER_ITEMS = TOOLBAR_ITEMS.filter((item) => !(item.name in ENTITY_KINDS)).sort(
+export const MARKER_ITEMS = TOOLBAR_ITEMS.filter((item) => !SET_DIRECTIVES.has(item.name)).sort(
   (a, b) => {
     const rank = (item) => {
       const at = MARKER_ORDER.indexOf(item.name)

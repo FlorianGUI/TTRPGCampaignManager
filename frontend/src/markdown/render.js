@@ -173,9 +173,18 @@ function renderDirective(node, mode, source) {
 
   if (!spec.content) return h(component, props)
 
-  // A block component in inline mode has no room to draw itself. Its words are
-  // still the author's, so they stay.
-  return mode === 'inline'
+  /*
+   * A *block* component in inline mode has no room to draw itself. Its words
+   * are still the author's, so they stay and the box around them does not.
+   *
+   * An inline one has room by definition — `:color[…]` is a span in the middle
+   * of a sentence, and a description is exactly where a game master would want
+   * the mark they put there to survive. Asked of the node rather than of the
+   * mode, so this stays right for whatever the dialect grows next: the question
+   * was always "does this take a line of its own", and `isBlock` is where the
+   * app already answers it.
+   */
+  return mode === 'inline' && isBlock(node)
     ? h(Fragment, renderChildren(node, mode, source))
     : h(component, props, () => renderChildren(node, mode, source))
 }

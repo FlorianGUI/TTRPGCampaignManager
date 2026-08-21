@@ -27,8 +27,16 @@
 import { computed, nextTick, ref } from 'vue'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
+import Popover from 'primevue/popover'
 import Textarea from 'primevue/textarea'
-import { COMMONMARK_ITEMS, ENTITY_ITEMS, MARKER_ITEMS, applyInsertion } from './toolbar.js'
+import {
+  COLOR_ITEM,
+  COLOR_ITEMS,
+  COMMONMARK_ITEMS,
+  ENTITY_ITEMS,
+  MARKER_ITEMS,
+  applyInsertion,
+} from './toolbar.js'
 import { t } from '../i18n/index.js'
 
 const props = defineProps({
@@ -78,13 +86,55 @@ const nameOf = (item) => (item.label ? t(item.label) : item.name)
 const menu = ref(null)
 
 /*
+ * The second door, and the toolbar's first `Popover`.
+ *
+ * A palette is a grid — seven hues across, three tiers down — and `Menu` is a
+ * vertical list. Twenty-one swatches in a column would be a scroll, and the
+ * thing a picker has to do is let the eye compare two hues side by side.
+ *
+ * The row could not hold them any other way: #146 cut this toolbar down to one
+ * tier of icons precisely so it would stop being a wall, and twenty-one more
+ * controls would have undone that in a single feature.
+ */
+const palette = ref(null)
+
+/*
  * One roving index across everything, so the arrows walk the whole toolbar and
- * the tab order still sees a single stop. The menu button is the last of them
- * and hands its own keyboard over once open.
+ * the tab order still sees a single stop. The two doors are the last of them and
+ * each hands its own keyboard over once open.
  */
 const PLAIN_AT = 0
 const MARKER_AT = COMMONMARK_ITEMS.length
-const MENU_INDEX = MARKER_AT + MARKER_ITEMS.length
+const PALETTE_INDEX = MARKER_AT + MARKER_ITEMS.length
+const MENU_INDEX = PALETTE_INDEX + 1
+
+/*
+ * Hue *and* tier, both from the catalogue.
+ *
+ * A grid of twenty-one unlabelled colour squares is unusable without sight, and
+ * a tooltip reading only "wyrd" is unusable with it — three of the swatches are
+ * wyrd. `nameOf` cannot do this: every swatch inherits the same `label` from the
+ * `color` directive, and the pair is what names the button. #87 is why both
+ * halves are keys rather than words.
+ */
+const swatchName = (item) => `${t(item.hueLabel)} ${t(item.tierLabel)}`
+
+/* Counted, not written: the grid is as wide as the palette has hues. */
+const HUE_COUNT = new Set(COLOR_ITEMS.map((item) => item.hue)).size
+
+/*
+ * Close first, then insert.
+ *
+ * `Popover.hide()` only lowers a flag — it does not restore focus to the
+ * trigger, and the focus trap unbinds without reaching for anything — so the
+ * field `insert` hands back on the next tick keeps the caret. Closing after
+ * would race that.
+ */
+function pick(item) {
+  palette.value.hide()
+
+  return insert(PALETTE_INDEX, item)
+}
 
 /*
  * The plain marks in runs, with a rule between them — character marks, block
@@ -261,6 +311,51 @@ function move(event) {
           </svg>
         </Button>
 
+        <!-- A glyph rather than an icon, and the convention every editor uses:
+             a letterform over a bar carrying the colour. PrimeIcons has a
+             palette glyph, and it would say "choose a colour" where this says
+             "colour these words". -->
+        <Button
+          v-tooltip.bottom="{ value: nameOf(COLOR_ITEM), showOnFocus: true }"
+          type="button"
+          size="small"
+          severity="secondary"
+          text
+          class="md-field__tool"
+          :aria-label="nameOf(COLOR_ITEM)"
+          aria-haspopup="true"
+          :tabindex="PALETTE_INDEX === active ? 0 : -1"
+          @click="palette.toggle($event)"
+          @focus="active = PALETTE_INDEX"
+        >
+          <span class="md-field__ink" aria-hidden="true">
+            <span class="md-field__ink-letter">A</span>
+            <span class="md-field__ink-bar" />
+          </span>
+        </Button>
+
+        <!-- Seven across and three down, both counted off the palette rather
+             than written here: an eighth hue widens the grid on its own. -->
+        <Popover ref="palette">
+          <div
+            class="md-palette"
+            role="group"
+            :aria-label="nameOf(COLOR_ITEM)"
+            :style="{ '--palette-columns': HUE_COUNT }"
+          >
+            <button
+              v-for="item in COLOR_ITEMS"
+              :key="item.name"
+              v-tooltip.bottom="{ value: swatchName(item), showOnFocus: true }"
+              type="button"
+              class="md-palette__swatch"
+              :class="item.class"
+              :aria-label="t('markdown.insert', { name: swatchName(item) })"
+              @click="pick(item)"
+            />
+          </div>
+        </Popover>
+
         <Button
           type="button"
           size="small"
@@ -389,6 +484,76 @@ function move(event) {
   /* The mark is drawn against the cap line, so it needs pushing down almost a
      third of its own height to sit level with the icons beside it. */
   transform: translateY(0.22em);
+}
+
+/*
+ * The colour door: an `A` with a bar under it.
+ *
+ * Stacked rather than side by side, because the bar is standing in for the ink
+ * the letter would be written in — that is what makes it read as *colour these
+ * words* rather than as a swatch that happens to sit next to a letter.
+ *
+ * The bar shows no hue of its own. A picker button that previewed one would be
+ * claiming a current colour, and there is none: every press opens the grid.
+ */
+.md-field__ink {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12em;
+  line-height: 1;
+}
+
+.md-field__ink-letter {
+  font-family: var(--grimoire-font-display);
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.md-field__ink-bar {
+  width: 1em;
+  height: 0.2em;
+  border-radius: var(--p-border-radius-xs);
+  background: currentcolor;
+}
+
+/*
+ * The palette: a hue per column, a tier per row.
+ *
+ * Reading down a column is comparing one hue's three weights; reading across a
+ * row is comparing seven hues at the same weight. Both are things a game master
+ * actually does, and neither is possible in a list — which is why this is the
+ * toolbar's one `Popover` and not a second `Menu`.
+ */
+.md-palette {
+  display: grid;
+  grid-template-columns: repeat(var(--palette-columns), 1fr);
+  gap: var(--space-1);
+}
+
+/*
+ * Square, and big enough to hit. 1.75rem clears nothing like the 44px touch
+ * floor the app holds elsewhere — but that floor is for controls a thumb has to
+ * find on a page, and this is a grid opened deliberately, where the density is
+ * what makes the comparison possible at all.
+ *
+ * The colour comes from `--prose-color`, set by the same twenty-one rules in
+ * `base.css` that paint the rendered span. So a swatch cannot show one thing and
+ * write another.
+ */
+.md-palette__swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-border-radius-xs);
+  background: var(--prose-color);
+  cursor: pointer;
+}
+
+.md-palette__swatch:hover {
+  border-color: var(--p-text-color);
 }
 
 /*

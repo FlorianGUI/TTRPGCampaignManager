@@ -198,6 +198,85 @@
     color: var(--p-primary-color);
   }
 
+  /*
+   * The prose palette (#147), as classes.
+   *
+   * **The one table in the app that is written out rather than generated, and
+   * only because CSS cannot build a custom-property name.** `PROSE_HUES` ×
+   * `PROSE_TIERS` is seven times three everywhere else — in the tokens, in the
+   * picker, in the contrast checker — and here it is twenty-one lines. A test
+   * reads this file and fails if the two ever disagree, so an eighth hue is
+   * caught rather than shipped rendering unstyled.
+   *
+   * **Here rather than in `ProseColor.vue`, because two components need it.**
+   * The span in a game master's prose paints the colour on its text; the swatch
+   * in the picker paints the same colour as a block of ground. Both read
+   * `--prose-color`, and neither holds an opinion about what a hue resolves to.
+   */
+  .prose-color--blood-bold {
+    --prose-color: var(--p-grimoire-prose-blood-bold);
+  }
+  .prose-color--blood-medium {
+    --prose-color: var(--p-grimoire-prose-blood-medium);
+  }
+  .prose-color--blood-subtle {
+    --prose-color: var(--p-grimoire-prose-blood-subtle);
+  }
+  .prose-color--torch-bold {
+    --prose-color: var(--p-grimoire-prose-torch-bold);
+  }
+  .prose-color--torch-medium {
+    --prose-color: var(--p-grimoire-prose-torch-medium);
+  }
+  .prose-color--torch-subtle {
+    --prose-color: var(--p-grimoire-prose-torch-subtle);
+  }
+  .prose-color--moss-bold {
+    --prose-color: var(--p-grimoire-prose-moss-bold);
+  }
+  .prose-color--moss-medium {
+    --prose-color: var(--p-grimoire-prose-moss-medium);
+  }
+  .prose-color--moss-subtle {
+    --prose-color: var(--p-grimoire-prose-moss-subtle);
+  }
+  .prose-color--scrying-bold {
+    --prose-color: var(--p-grimoire-prose-scrying-bold);
+  }
+  .prose-color--scrying-medium {
+    --prose-color: var(--p-grimoire-prose-scrying-medium);
+  }
+  .prose-color--scrying-subtle {
+    --prose-color: var(--p-grimoire-prose-scrying-subtle);
+  }
+  .prose-color--verdigris-bold {
+    --prose-color: var(--p-grimoire-prose-verdigris-bold);
+  }
+  .prose-color--verdigris-medium {
+    --prose-color: var(--p-grimoire-prose-verdigris-medium);
+  }
+  .prose-color--verdigris-subtle {
+    --prose-color: var(--p-grimoire-prose-verdigris-subtle);
+  }
+  .prose-color--wyrd-bold {
+    --prose-color: var(--p-grimoire-prose-wyrd-bold);
+  }
+  .prose-color--wyrd-medium {
+    --prose-color: var(--p-grimoire-prose-wyrd-medium);
+  }
+  .prose-color--wyrd-subtle {
+    --prose-color: var(--p-grimoire-prose-wyrd-subtle);
+  }
+  .prose-color--slate-bold {
+    --prose-color: var(--p-grimoire-prose-slate-bold);
+  }
+  .prose-color--slate-medium {
+    --prose-color: var(--p-grimoire-prose-slate-medium);
+  }
+  .prose-color--slate-subtle {
+    --prose-color: var(--p-grimoire-prose-slate-subtle);
+  }
+
   /* Small-caps section label. */
   .label-smallcaps {
     font-family: var(--grimoire-font-display);
