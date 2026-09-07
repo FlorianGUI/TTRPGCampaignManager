@@ -5,6 +5,7 @@ import {
   MARKER_ITEMS,
   TOOLBAR_ITEMS,
   applyInsertion,
+  narrowedTo,
 } from './toolbar.js'
 import { DIRECTIVES, propsFor } from './dialect.js'
 import { ENTITY_KINDS } from '../components/domain/entityKinds.js'
@@ -400,5 +401,69 @@ describe('what the CommonMark buttons write is what the renderer draws', () => {
     expect(typesIn('~~gone~~')).not.toContain('delete')
     expect(typesIn('| a | b |\n|---|---|\n| 1 | 2 |')).not.toContain('table')
     expect(typesIn('![map](/m.png)').has('image')).toBe(true)
+  })
+})
+
+/*
+ * The bridge between a function that returns a whole string and an editor that
+ * records what changed. Its whole job is that undoing a button press restores a
+ * caret rather than a selection across the scene, so what is checked is the
+ * span — not that applying it produces the right text, which is arithmetic the
+ * cases above already cover.
+ */
+describe('the change a press really makes', () => {
+  const applied = ({ from, to, insert }, before) =>
+    before.slice(0, from) + insert + before.slice(to)
+
+  it('reaches only the characters that differ', () => {
+    expect(narrowedTo('Before. After.', 'Before. :npc[]After.')).toEqual({
+      from: 8,
+      to: 8,
+      insert: ':npc[]',
+    })
+  })
+
+  it('keeps a wrap to the word it wrapped', () => {
+    const change = narrowedTo('The tide is turning.', 'The tide is **turning**.')
+
+    expect(change.from).toBe(12)
+    expect(change.to).toBe(19)
+  })
+
+  /* Deleting is not something a button does, but the same helper carries the
+     model's writes from outside — a cancelled edit puts back a shorter body. */
+  it('narrows a removal as well as an addition', () => {
+    expect(narrowedTo('a **bold** word', 'a bold word')).toEqual({
+      from: 2,
+      to: 10,
+      insert: 'bold',
+    })
+  })
+
+  it('says nothing changed when nothing did', () => {
+    const { from, to, insert } = narrowedTo('Unchanged.', 'Unchanged.')
+
+    expect(from).toBe(to)
+    expect(insert).toBe('')
+  })
+
+  /*
+   * The property that matters, over every button and both shapes of press. A
+   * narrower change that does not reproduce the string would be a field that
+   * quietly wrote something other than what was tested above.
+   */
+  it('reproduces exactly what the insertion returned', () => {
+    const before = 'A cold wind off the water.'
+
+    for (const item of TOOLBAR_ITEMS) {
+      for (const [start, end] of [
+        [7, 7],
+        [2, 6],
+      ]) {
+        const { value } = applyInsertion(item, before, start, end)
+
+        expect(applied(narrowedTo(before, value), before), item.name).toBe(value)
+      }
+    }
   })
 })

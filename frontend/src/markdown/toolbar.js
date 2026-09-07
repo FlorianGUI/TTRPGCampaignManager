@@ -472,3 +472,33 @@ export function applyInsertion(item, value, selectionStart, selectionEnd) {
 
   return { value: next, caret }
 }
+
+/*
+ * The same result, said as the smallest edit that produces it.
+ *
+ * `applyInsertion` returns a whole string because that is what it always
+ * returned and what it can be tested on. Handing that whole string to the editor
+ * as one replacement works and reads wrong afterwards: the change the editor
+ * records spans the document, so undoing a press and redoing it leaves the
+ * entire scene selected — one keystroke away from losing it — and any decoration
+ * over the text is rebuilt from nothing on every button.
+ *
+ * The common prefix and suffix are the answer, and they are exact rather than
+ * approximate: `applyInsertion` only ever inserts, wraps or prefixes, so what
+ * differs between the two strings is always one contiguous span.
+ */
+export function narrowedTo(before, after) {
+  const limit = Math.min(before.length, after.length)
+
+  let start = 0
+  while (start < limit && before[start] === after[start]) start += 1
+
+  let tail = 0
+  while (
+    tail < limit - start &&
+    before[before.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail += 1
+
+  return { from: start, to: before.length - tail, insert: after.slice(start, after.length - tail) }
+}

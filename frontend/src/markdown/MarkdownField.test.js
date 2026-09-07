@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import PrimeVue from 'primevue/config'
+import { EditorView } from '@codemirror/view'
+import { undo } from '@codemirror/commands'
 import MarkdownField from './MarkdownField.vue'
 import {
   COLOR_ITEMS,
@@ -40,6 +42,36 @@ const Holder = {
 
 const mountField = (start = '') =>
   mount(Holder, { props: { start }, attachTo: document.body, global: { plugins: [PrimeVue] } })
+
+/*
+ * The editor behind the field, found the way CodeMirror offers rather than
+ * through a prop the component exposes for tests. Nothing in the app needs the
+ * view handed to it, and adding an API so a test can reach one would be the
+ * test deciding the component's shape.
+ */
+const editor = (wrapper) => EditorView.findFromDOM(wrapper.get('.md-field__area').element)
+
+const sourceOf = (wrapper) => editor(wrapper).state.doc.toString()
+
+const caretIn = (wrapper) => editor(wrapper).state.selection.main
+
+const select = (wrapper, from, to) =>
+  editor(wrapper).dispatch({ selection: { anchor: from, head: to } })
+
+/*
+ * Typing, as the editor sees it. A keypress on a contenteditable reaches
+ * CodeMirror as a DOM mutation its observer turns into exactly this transaction,
+ * and jsdom has no contenteditable to mutate — so the transaction is where the
+ * test starts. What is being checked is what the field does with a change, not
+ * whether a browser can produce one.
+ */
+const typeInto = async (wrapper, source) => {
+  editor(wrapper).dispatch({
+    changes: { from: 0, to: editor(wrapper).state.doc.length, insert: source },
+  })
+
+  await nextTick()
+}
 
 const nameOf = (item) => (item.label ? t(item.label) : item.name)
 
@@ -106,8 +138,15 @@ describe('MarkdownField says what it takes', () => {
     expect(mountField().text()).toContain(t('markdown.hint'))
   })
 
-  it('carries the aria-label the view gave it through to the textarea', () => {
-    expect(mountField().get('textarea').attributes('aria-label')).toBe('Body')
+  /* The writing surface is a contenteditable now, so the label the view passes
+     has to arrive on it as an attribute rather than on an element that carries
+     one natively. Without this the field is announced as nothing at all. */
+  it('carries the aria-label the view gave it through to the writing surface', () => {
+    const content = mountField().get('.cm-content')
+
+    expect(content.attributes('aria-label')).toBe('Body')
+    expect(content.attributes('role')).toBe('textbox')
+    expect(content.attributes('aria-multiline')).toBe('true')
   })
 
   it('reaches every directive the renderer implements', async () => {
@@ -352,7 +391,7 @@ describe('pressing a button', () => {
   it('wraps what the game master had selected', async () => {
     const wrapper = mountField('Maerin Holt')
 
-    wrapper.get('textarea').element.setSelectionRange(0, 11)
+    select(wrapper, 0, 11)
     await press(wrapper, 'npc')
 
     expect(wrapper.vm.body).toBe(':npc[Maerin Holt]')
@@ -365,30 +404,28 @@ describe('pressing a button', () => {
    */
   it('hands the field back with the caret where the label goes', async () => {
     const wrapper = mountField()
-    const textarea = wrapper.get('textarea').element
 
     await press(wrapper, 'npc')
 
-    expect(document.activeElement).toBe(textarea)
-    expect(textarea.selectionStart).toBe(':npc['.length)
-    expect(textarea.selectionEnd).toBe(':npc['.length)
+    expect(document.activeElement).toBe(wrapper.get('.cm-content').element)
+    expect(caretIn(wrapper).from).toBe(':npc['.length)
+    expect(caretIn(wrapper).to).toBe(':npc['.length)
   })
 
   it('leaves the caret in the attribute when the label is already written', async () => {
     const wrapper = mountField('2d8 + 5')
-    const textarea = wrapper.get('textarea').element
 
-    textarea.setSelectionRange(0, 7)
+    select(wrapper, 0, 7)
     await press(wrapper, 'dice')
 
     expect(wrapper.vm.body).toBe(':dice[2d8 + 5]{result=}')
-    expect(textarea.selectionStart).toBe(':dice[2d8 + 5]{result='.length)
+    expect(caretIn(wrapper).from).toBe(':dice[2d8 + 5]{result='.length)
   })
 
   it('opens a read-aloud box around the selection', async () => {
     const wrapper = mountField('A cold wind off the water.')
 
-    wrapper.get('textarea').element.setSelectionRange(0, 26)
+    select(wrapper, 0, 26)
     await press(wrapper, 'read-aloud')
 
     expect(wrapper.vm.body).toBe(':::read-aloud\nA cold wind off the water.\n:::')
@@ -397,7 +434,7 @@ describe('pressing a button', () => {
   it('inserts at the caret rather than at the end of the field', async () => {
     const wrapper = mountField('Before. After.')
 
-    wrapper.get('textarea').element.setSelectionRange(8, 8)
+    select(wrapper, 8, 8)
     await press(wrapper, 'npc')
 
     expect(wrapper.vm.body).toBe('Before. :npc[]After.')
@@ -408,7 +445,7 @@ describe('pressing a button', () => {
   it('writes through the menu the same way it writes through a button', async () => {
     const wrapper = mountField('Maerin Holt')
 
-    wrapper.get('textarea').element.setSelectionRange(0, 11)
+    select(wrapper, 0, 11)
 
     const npc = wrapper
       .findComponent({ name: 'Menu' })
@@ -450,12 +487,43 @@ describe('MarkdownField stores what was typed', () => {
     const wrapper = mountField()
     const source = '  :::read-aloud\n\n  ragged   spacing  \n:::  \n\n'
 
-    await wrapper.get('textarea').setValue(source)
+    await typeInto(wrapper, source)
 
     expect(wrapper.vm.body).toBe(source)
+    expect(sourceOf(wrapper)).toBe(source)
   })
 
   it('shows the source it was given', () => {
-    expect(mountField('Already written.').get('textarea').element.value).toBe('Already written.')
+    expect(sourceOf(mountField('Already written.'))).toBe('Already written.')
+  })
+
+  /* The parent's half of `v-model`. A body arriving from anywhere but the
+     keyboard — a cancelled edit, a scene loaded after the form opened — has to
+     reach the field, and the guard that stops the round trip fighting itself is
+     the easiest thing here to write backwards. */
+  it('takes a value written from outside', async () => {
+    const wrapper = mountField('First.')
+
+    wrapper.vm.body = 'Second.'
+    await nextTick()
+
+    expect(sourceOf(wrapper)).toBe('Second.')
+  })
+
+  /* Undo is the browser's on a textarea and nobody's on a contenteditable, so
+     it is a thing this field can quietly stop having. A toolbar press is one
+     step, not the two a separate insert and caret move would leave. */
+  it('undoes a toolbar press in one step', async () => {
+    const wrapper = mountField('Maerin Holt')
+
+    select(wrapper, 0, 11)
+    await press(wrapper, 'npc')
+    expect(sourceOf(wrapper)).toBe(':npc[Maerin Holt]')
+
+    undo(editor(wrapper))
+    await nextTick()
+
+    expect(sourceOf(wrapper)).toBe('Maerin Holt')
+    expect(wrapper.vm.body).toBe('Maerin Holt')
   })
 })

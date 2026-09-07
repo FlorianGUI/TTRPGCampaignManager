@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PrimeVue from 'primevue/config'
 import { PrimeVueToastSymbol } from 'primevue/usetoast'
+import { EditorView } from '@codemirror/view'
 import GroupingPage from './GroupingPage.vue'
 
 const request = vi.hoisted(() => vi.fn())
@@ -12,6 +13,14 @@ const request = vi.hoisted(() => vi.fn())
 const toast = { add: vi.fn() }
 
 vi.mock('../api/client.js', () => ({ request }))
+
+/*
+ * What the edit form is holding. The body is written in a CodeMirror view since
+ * #152, so there is no element with a `value` to read — the document is the
+ * value, and this is the one line of the field's shape this page's tests know.
+ */
+const sourceInField = (wrapper) =>
+  EditorView.findFromDOM(wrapper.get('.md-field__area').element).state.doc.toString()
 
 const scene = (id, title, position, extra = {}) => ({
   id,
@@ -161,7 +170,7 @@ describe('an act’s page', () => {
 
       await click(wrapper, 'Edit')
 
-      expect(wrapper.get('textarea').element.value).toBe('The Wardens’ trust.')
+      expect(sourceInField(wrapper)).toBe('The Wardens’ trust.')
     })
 
     it('sends both fields, so saving a title cannot clear a description', async () => {

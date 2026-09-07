@@ -18,17 +18,29 @@
  * — the rules about what a button writes and where the caret lands, which are
  * testable without mounting anything and are tested that way.
  *
- * **It is a `<textarea>` and nothing more.** No rich-text model, no
- * transformation on the way in or out: the buttons put characters into a string
- * and the string is what the API stores, byte for byte (#80). That is also why
- * the source is written and read at the same measure — what a game master types
- * here wraps the way it will wrap when they read it back at the table.
+ * **It is a string and nothing more.** No rich-text model, no transformation on
+ * the way in or out: the buttons put characters into a string and the string is
+ * what the API stores, byte for byte (#80). That is also why the source is
+ * written and read at the same measure — what a game master types here wraps the
+ * way it will wrap when they read it back at the table.
+ *
+ * **The surface is a CodeMirror view rather than a `<textarea>`** since #152,
+ * and the reason is narrow: a textarea renders one text style for its whole
+ * value, so the bold word and the chip #142 asks for are not awkward on one but
+ * impossible. Nothing is drawn on it yet — #153 and #154 add the decorations.
+ * What CodeMirror is here for is that it styles ranges and still hands back
+ * plain offsets into the same string, which is why `applyInsertion` below did
+ * not have to change; and that it builds DOM nodes rather than markup, so the
+ * guarantee the README states as a fact about the dependency list survives the
+ * writing side gaining a renderer of its own.
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
 import Popover from 'primevue/popover'
-import Textarea from 'primevue/textarea'
+import { Compartment, EditorState } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import {
   COLOR_ITEM,
   COLOR_ITEMS,
@@ -36,6 +48,7 @@ import {
   ENTITY_ITEMS,
   MARKER_ITEMS,
   applyInsertion,
+  narrowedTo,
 } from './toolbar.js'
 import { t } from '../i18n/index.js'
 
@@ -47,15 +60,88 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const field = ref(null)
+const host = ref(null)
 const row = ref(null)
 /* Which button the single tab stop lands on — see the note above `move`. */
 const active = ref(0)
 
-/* PrimeVue's `Textarea` renders the element as its own root, so `$el` is the
-   textarea itself rather than a wrapper to search — unlike the bare `<input>`
-   in `OutlineRow`, where the ref is already the element. */
-const textarea = () => field.value?.$el ?? null
+/*
+ * Not a `ref`. The view is not state the template reads, and making it reactive
+ * would have Vue walk a document, a selection and a DOM tree on every keystroke
+ * to find out that nothing rendered here depends on any of it.
+ */
+let view = null
+
+/*
+ * The label is the one extension that can change after the view is built, so it
+ * is the one that needs a compartment. `t()` is not reactive (#87 decides the
+ * locale before mount and there is no switcher), but the prop is a prop and a
+ * parent is free to change it.
+ */
+const label = new Compartment()
+
+const contentAttributes = () => EditorView.contentAttributes.of({ 'aria-label': props.ariaLabel })
+
+onMounted(() => {
+  view = new EditorView({
+    parent: host.value,
+    state: EditorState.create({
+      doc: props.modelValue,
+      extensions: [
+        /*
+         * A textarea's undo is the browser's and comes free. CodeMirror's does
+         * not, and a field that silently stopped answering ⌘Z would be a poor
+         * trade for a bold word.
+         */
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        /*
+         * Tab is deliberately unbound — `defaultKeymap` leaves it alone, so it
+         * moves focus the way it did out of the textarea. The toolbar spent #146
+         * getting the tab order down to one stop; a field that swallowed Tab
+         * would be a trap at the end of it.
+         */
+        EditorView.lineWrapping,
+        label.of(contentAttributes()),
+        /*
+         * The single place the model is told anything. Every write — typing, a
+         * paste, a toolbar press — is a transaction, so raising the event from
+         * here rather than from each of them is what makes "byte for byte" one
+         * claim instead of three.
+         */
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
+        }),
+      ],
+    }),
+  })
+})
+
+onBeforeUnmount(() => {
+  view?.destroy()
+  view = null
+})
+
+watch(
+  () => props.ariaLabel,
+  () => view?.dispatch({ effects: label.reconfigure(contentAttributes()) }),
+)
+
+/*
+ * The parent's half of `v-model`, and it has to be able to tell its own echo
+ * from a genuine change. Every keystroke emits, the parent writes the value
+ * back, and dispatching that identical string again would reset the selection
+ * to the start of the document on every character typed.
+ */
+watch(
+  () => props.modelValue,
+  (next) => {
+    const current = view?.state.doc.toString()
+    if (current === undefined || next === current) return
+
+    view.dispatch({ changes: narrowedTo(current, next) })
+  },
+)
 
 /*
  * A directive with no catalogue key shows its own name. That is the fallback for
@@ -127,8 +213,7 @@ const HUE_COUNT = new Set(COLOR_ITEMS.map((item) => item.hue)).size
  *
  * `Popover.hide()` only lowers a flag — it does not restore focus to the
  * trigger, and the focus trap unbinds without reaching for anything — so the
- * field `insert` hands back on the next tick keeps the caret. Closing after
- * would race that.
+ * field `insert` focuses keeps it. Closing after would race that.
  */
 function pick(item) {
   palette.value.hide()
@@ -168,28 +253,30 @@ const entityItems = computed(() =>
  * The focus and the caret are the whole point. A button that inserted text and
  * left the caret where the mouse had put it would make a game master click back
  * into the field and hunt for the brackets — which is the work the button was
- * pressed to avoid. `nextTick` because the caret is set on the text the model
- * has not rendered yet.
+ * pressed to avoid.
+ *
+ * **One transaction, carrying both the text and the caret.** That is what makes
+ * a press one step to undo rather than two, and it is why nothing here has to
+ * wait a tick: the document and the selection land together, and the model hears
+ * about it from the update listener like every other write.
+ *
+ * `narrowedTo` is what stands between the string `applyInsertion` returns and
+ * the change the editor records. Handing over the whole document works and
+ * misbehaves afterwards — undo and redo would restore a selection spanning the
+ * scene — so the press is dispatched as the span that actually differs.
  */
-async function insert(index, item) {
+function insert(index, item) {
   active.value = index
 
-  const element = textarea()
-  if (!element) return
+  if (!view) return
 
-  const { value, caret } = applyInsertion(
-    item,
-    props.modelValue,
-    element.selectionStart,
-    element.selectionEnd,
-  )
+  const source = view.state.doc.toString()
+  const { from, to } = view.state.selection.main
+  const { value, caret } = applyInsertion(item, source, from, to)
 
-  emit('update:modelValue', value)
+  view.dispatch({ changes: narrowedTo(source, value), selection: { anchor: caret } })
 
-  await nextTick()
-
-  element.focus()
-  element.setSelectionRange(caret, caret)
+  view.focus()
 }
 
 /*
@@ -375,14 +462,12 @@ function move(event) {
       </span>
     </div>
 
-    <Textarea
-      ref="field"
-      class="md-field__area"
-      :model-value="modelValue"
-      :rows="rows"
-      :aria-label="ariaLabel"
-      @update:model-value="emit('update:modelValue', $event)"
-    />
+    <!-- The view is built into this element on mount, so there is nothing to
+         render here. `rows` survives the move as a custom property: the
+         textarea took a line count, and the height that used to come from the
+         attribute is now the same count times the line height, which keeps both
+         callers looking as they did. -->
+    <div ref="host" class="md-field__area" :style="{ '--md-rows': rows }" />
 
     <!-- Said outright rather than left to be inferred from the buttons. A game
          master who has not pressed one still needs to know the field is not
@@ -578,9 +663,90 @@ function move(event) {
 .md-field__area {
   width: 100%;
   margin-top: var(--space-2);
+}
+
+/*
+ * The field's own chrome, written out because the element that carried it is
+ * gone.
+ *
+ * These are `.p-inputtext`'s rules, reading the tokens `.p-inputtext` reads
+ * them *from* — `--p-form-field-*`, the semantic layer, rather than the
+ * `--p-inputtext-*` a component emits. That is not a preference: PrimeVue
+ * registers a component's tokens the first time one of its components is
+ * mounted, so a field on a page with no other input would have resolved every
+ * one of them to nothing and drawn no border at all. Reading the layer above is
+ * what makes the field's appearance a fact about the theme rather than about
+ * what else happens to be on screen.
+ *
+ * `:deep` throughout: CodeMirror builds its own DOM imperatively, so none of it
+ * carries this component's scope attribute. The host element does, which is
+ * what keeps these rules from reaching any other editor on the page.
+ */
+.md-field__area :deep(.cm-editor) {
+  background: var(--p-form-field-background);
+  color: var(--p-form-field-color);
+  border: 1px solid var(--p-form-field-border-color);
+  border-radius: var(--p-form-field-border-radius);
+  box-shadow: var(--p-form-field-shadow);
+  transition:
+    background var(--p-form-field-transition-duration),
+    color var(--p-form-field-transition-duration),
+    border-color var(--p-form-field-transition-duration),
+    outline-color var(--p-form-field-transition-duration),
+    box-shadow var(--p-form-field-transition-duration);
+}
+
+.md-field__area :deep(.cm-editor:hover) {
+  border-color: var(--p-form-field-hover-border-color);
+}
+
+/*
+ * Focus is the border going gold, which is how every other field on the page
+ * shows it — the ring under it is transparent by design, and kept because it is
+ * the one thing a forced-colours mode has to draw.
+ *
+ * CodeMirror's own focused state is a dotted outline in a hardcoded near-black:
+ * a foreign object on parchment and invisible on candlelight. Replaced here
+ * rather than added to.
+ */
+.md-field__area :deep(.cm-editor.cm-focused) {
+  border-color: var(--p-form-field-focus-border-color);
+  box-shadow: var(--p-form-field-focus-ring-shadow);
+  outline: var(--p-form-field-focus-ring-width) var(--p-form-field-focus-ring-style)
+    var(--p-form-field-focus-ring-color);
+  outline-offset: var(--p-form-field-focus-ring-offset);
+}
+
+/*
+ * The writing surface itself. `--md-rows` is the `rows` the view asked for, and
+ * a minimum rather than a height: the field grew with its content as a textarea
+ * only when dragged, and growing on its own is the better half of the trade —
+ * what a game master is writing stays on screen.
+ */
+.md-field__area :deep(.cm-content) {
+  min-height: calc(var(--md-rows) * 1.6em);
+  padding: var(--p-form-field-padding-y) var(--p-form-field-padding-x);
   font-family: var(--grimoire-font-mono);
   font-size: var(--step--1);
   line-height: 1.6;
+  /* The caret is drawn by the browser rather than by CodeMirror — no
+     `drawSelection`, so the native selection and cursor are what appear, and
+     both follow the text colour into the dark scheme on their own. */
+  caret-color: var(--p-form-field-color);
+}
+
+/* CodeMirror indents every line by a few pixels of its own; the padding above
+   is the field's, and two of them read as a wobble at the start of the measure. */
+.md-field__area :deep(.cm-line) {
+  padding: 0;
+}
+
+/* Wrapping, not scrolling: a horizontal scrollbar under a column of prose set
+   at the measure it is read at would be a regression on its own. */
+.md-field__area :deep(.cm-scroller) {
+  font-family: inherit;
+  line-height: inherit;
+  overflow-x: hidden;
 }
 
 .md-field__hint {
