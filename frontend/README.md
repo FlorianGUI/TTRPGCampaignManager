@@ -93,6 +93,7 @@ frontend/
       toolbar.js                   # what a button writes, and where the caret lands
       livePreview.js               # mdast ⟶ what the field draws over the source
       editor.js                    # those descriptors ⟶ CodeMirror decorations
+      continuation.js              # what Enter writes on a line carrying a marker
     content/
       sample.js                    # the nav's sections, and sample copy for the spike
     i18n/
@@ -593,6 +594,23 @@ caret can still reach the characters": one filter in a pure function rather than
 caret handling spread across a view plugin. Quotes and list items open a line at
 a time, because opening all of a four-paragraph quote would put markers back on
 screen nowhere near where anyone is looking.
+
+**Enter continues what the line was carrying.** A list drawn as a list is one
+Enter has to be able to continue: `- a rope` gives `- `, `3.` gives `4.`, a
+quote goes on being quoted, and a marker with nothing after it is taken away
+instead of repeated — which is how a writer gets out of a list.
+
+`continuation.js` holds that rule, and holds it without importing CodeMirror at
+all, since a command is a function handed a view and a keymap entry is a plain
+object. It is bound ahead of `defaultKeymap` and answers `false` on every line
+with no marker, which hands Enter straight back.
+
+**It is the one question here the tree does not answer**, deliberately: the `>`
+on a quote's second line is not a node — it sits inside a text node with the
+words — so a prefix is a lexical fact about one line rather than an opinion
+about the document, which is why `quoteLines` reads markers the same way.
+`@codemirror/lang-markdown` ships exactly this behaviour and taking it would
+mean taking the Lezer grammar with it.
 
 **The document is re-read after a pause, not on the keystroke.** Measured: the
 walk costs under a millisecond on a two-thousand-word body and the parse costs

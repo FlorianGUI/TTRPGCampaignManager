@@ -41,6 +41,7 @@ import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { livePreview } from './editor.js'
+import { continuationKeymap } from './continuation.js'
 import {
   COLOR_ITEM,
   COLOR_ITEMS,
@@ -94,7 +95,14 @@ onMounted(() => {
          * trade for a bold word.
          */
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        /*
+         * The continuation first, so Enter gets the chance to carry a bullet, a
+         * number or a quote marker onto the next line — and declines on every
+         * line that has none, leaving `defaultKeymap` behind it to do what it
+         * always did. A list the field draws as a list is one Enter has to be
+         * able to continue.
+         */
+        keymap.of([...continuationKeymap, ...defaultKeymap, ...historyKeymap]),
         /*
          * Tab is deliberately unbound — `defaultKeymap` leaves it alone, so it
          * moves focus the way it did out of the textarea. The toolbar spent #146
