@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      // The DOM measurements jsdom does not implement, so the editor can ask
+      // for them without throwing out of an animation frame. See the file.
+      setupFiles: ['./vitest.setup.js'],
     },
   }
 })

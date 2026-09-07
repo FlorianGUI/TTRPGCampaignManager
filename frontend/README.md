@@ -34,6 +34,7 @@ is a separate origin, so that list is what lets the session cookie work at all.
 frontend/
   index.html                       # Vite entry point
   vite.config.js                   # Vite + Vitest config
+  vitest.setup.js                  # the DOM measurements jsdom does not implement
   scripts/
     vendor-fonts.mjs               # re-download the self-hosted webfonts
     check-contrast.mjs             # WCAG AA check over the theme's colour pairs
@@ -88,6 +89,8 @@ frontend/
       render.js                    # mdast ⟶ vnodes, block and inline
       toPlainText.js               # mdast ⟶ a string, for cells and titles
       nodes.js                     # the tree facts both renderers share
+      MarkdownField.vue            # the writing side: the toolbar, and the editor
+      toolbar.js                   # what a button writes, and where the caret lands
     content/
       sample.js                    # the nav's sections, and sample copy for the spike
     i18n/
@@ -561,6 +564,14 @@ That guarantee is a fact about the dependency list. **`remark-rehype`,
 `remark-stringify`, any `rehype-*` or any sanitiser appearing in
 `package.json` means a compiler is back and this stopped being true.**
 `remark-gfm` is the one safe addition — mdast in, mdast out.
+
+**CodeMirror does not weaken it.** The writing side is a CodeMirror view since
+#152 — a `<textarea>` renders one text style for its whole value, so it could
+never draw the formatting the field is meant to show. It builds DOM nodes rather
+than markup, exactly as `render.js` does, so there is still no string for
+anything to be injected into. What it must never gain is a grammar:
+`@codemirror/lang-markdown` would be a second parser reading the same text as
+the one above, and the two would disagree precisely where it matters.
 
 Dropping `v-html` does not close every hole on its own:
 `[click](javascript:…)` is an ordinary markdown link, and `h('a', { href })`

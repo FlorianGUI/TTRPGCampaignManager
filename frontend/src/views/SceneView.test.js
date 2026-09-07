@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PrimeVue from 'primevue/config'
+import { EditorView } from '@codemirror/view'
 import SceneView from './SceneView.vue'
 
 const request = vi.hoisted(() => vi.fn())
@@ -18,6 +19,14 @@ window.matchMedia ??= () => ({
   addEventListener() {},
   removeEventListener() {},
 })
+
+/*
+ * What the edit form is holding. The body is written in a CodeMirror view since
+ * #152, so there is no element with a `value` to read — the document is the
+ * value, and this is the one line of the field's shape this page's tests know.
+ */
+const sourceInField = (wrapper) =>
+  EditorView.findFromDOM(wrapper.get('.md-field__area').element).state.doc.toString()
 
 const scene = (id, title, position, extra = {}) => ({
   id,
@@ -160,7 +169,7 @@ describe('a scene’s page', () => {
 
       await click(wrapper, 'Edit')
 
-      expect(wrapper.get('textarea').element.value).toBe(BODY)
+      expect(sourceInField(wrapper)).toBe(BODY)
     })
 
     it('sends every field, so a save cannot clear what it did not touch', async () => {
