@@ -89,6 +89,7 @@ just db-down          # stop PostgreSQL
 just migrate          # apply migrations
 just migration <name> # generate a new migration
 just seed             # seed a default user and a filled-in campaign
+just reset            # drop the db volume, recreate, migrate, and re-seed
 ```
 
 ## Architecture

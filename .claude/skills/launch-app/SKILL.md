@@ -88,17 +88,24 @@ campaign with acts, a sequence, scenes in every status, two characters, and a so
 just seed
 ```
 
-Idempotent — safe to run again after a fresh `just migrate` on a wiped database; it
-finds the existing user/campaign by name and does nothing further if they're already
-there.
+Idempotent — safe to run again any time; it finds the existing user/campaign by name and
+does nothing further if they're already there. That's a floor, not a sync: it will
+never *update* a campaign it already created, even if `campaign.py` changes underneath
+it. **For a genuinely clean slate — new seed content included — use `just reset`**
+instead of `just seed`: it drops the database volume, recreates it, migrates, and
+re-seeds from nothing. That's also the go-to when local manual testing has mutated the
+seeded data enough that it's no longer a good baseline.
 
 **Login:** username `gm`, password `DevPassword123!`, at `http://localhost:5173/login`.
 Lands on "Les Landes Oubliées" — two acts, five scenes across all three statuses
 (planned/done/skipped), one sequence, two characters, one source.
 
-Need a *different* shape of data (empty campaign, different structure, more characters)?
-Edit `backend/scripts/seed_dev_data.py` directly rather than fighting the UI by hand —
-it's a plain script composing the same application services the API routers use.
+The seed lives at `backend/scripts/seed/`, one module per context (`user.py`,
+`campaign.py`, `source.py`) plus `__main__.py` orchestrating them — mirrors how
+`tests/unit/`, `tests/integration/` etc. are organised by context without living inside
+`app/`. Need a *different* shape of data? Edit the relevant module directly rather than
+fighting the UI by hand — each one composes the same application services the API
+routers use, nothing more.
 
 ## 5. Driving it
 
@@ -114,6 +121,7 @@ it's a plain script composing the same application services the API routers use.
 
 - `.env.example`'s Brevo/Discord/Google vars are placeholders. Real email delivery and
   SSO need real credentials from those providers.
-- `just seed` only covers the `campaign` and `source` contexts (whatever existed when
-  this skill was written). If new contexts are added and worth seeding, extend
-  `backend/scripts/seed_dev_data.py` rather than writing a second seed path.
+- `just seed` only covers the `user`, `campaign` and `source` contexts (whatever existed
+  when this skill was written). If a new context is added and worth seeding, add a
+  module under `backend/scripts/seed/` and call it from `__main__.py` rather than
+  writing a second seed path.
