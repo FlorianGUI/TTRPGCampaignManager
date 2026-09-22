@@ -39,6 +39,9 @@ migrate:
 migration name:
     cd backend && poetry run alembic revision --autogenerate -m "{{name}}"
 
+seed:
+    cd backend && poetry run python -m scripts.seed_dev_data
+
 # --- Frontend (Vue 3 + Vite, in ./frontend) ---
 
 front-install:

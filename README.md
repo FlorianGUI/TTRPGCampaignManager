@@ -87,7 +87,8 @@ just typecheck        # run mypy
 just db-up            # start PostgreSQL via Docker
 just db-down          # stop PostgreSQL
 just migrate          # apply migrations
-just migration <name> # generate adeploy on mainwhy ? new migration
+just migration <name> # generate a new migration
+just seed             # seed a default user and a filled-in campaign
 ```
 
 ## Architecture

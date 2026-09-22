@@ -57,6 +57,7 @@ just db-up        # start PostgreSQL via Docker
 just db-down      # stop PostgreSQL
 just migrate      # apply migrations (alembic upgrade head)
 just migration <name>  # generate a new migration
+just seed         # seed a default user and a filled-in campaign, for manual testing
 ```
 
 Run `poetry run pre-commit install` once after cloning to enable the pre-commit hooks (ruff + mypy) defined in `.pre-commit-config.yaml`.
