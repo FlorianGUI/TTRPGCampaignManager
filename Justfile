@@ -10,7 +10,7 @@ start:
     cd backend && poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 db-up:
-    docker compose up -d
+    docker compose up -d --wait
 
 db-down:
     docker compose down
@@ -38,6 +38,15 @@ migrate:
 
 migration name:
     cd backend && poetry run alembic revision --autogenerate -m "{{name}}"
+
+seed:
+    cd backend && poetry run python -m scripts.seed
+
+reset:
+    docker compose down -v
+    just db-up
+    just migrate
+    just seed
 
 # --- Frontend (Vue 3 + Vite, in ./frontend) ---
 
