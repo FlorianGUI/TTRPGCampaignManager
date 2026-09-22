@@ -26,13 +26,12 @@
  *
  * **The surface is a CodeMirror view rather than a `<textarea>`** since #152,
  * and the reason is narrow: a textarea renders one text style for its whole
- * value, so the bold word and the chip #142 asks for are not awkward on one but
- * impossible. Nothing is drawn on it yet — #153 and #154 add the decorations.
- * What CodeMirror is here for is that it styles ranges and still hands back
- * plain offsets into the same string, which is why `applyInsertion` below did
- * not have to change; and that it builds DOM nodes rather than markup, so the
- * guarantee the README states as a fact about the dependency list survives the
- * writing side gaining a renderer of its own.
+ * value, so the bold word #153 draws and the chip #154 will draw are not
+ * awkward on one but impossible. What CodeMirror is here for is that it styles
+ * ranges and still hands back plain offsets into the same string, which is why
+ * `applyInsertion` below did not have to change; and that it builds DOM nodes
+ * rather than markup, so the guarantee the README states as a fact about the
+ * dependency list survives the writing side gaining a renderer of its own.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Button from 'primevue/button'
@@ -41,6 +40,8 @@ import Popover from 'primevue/popover'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { livePreview } from './editor.js'
+import { continuationKeymap } from './continuation.js'
 import {
   COLOR_ITEM,
   COLOR_ITEMS,
@@ -94,7 +95,14 @@ onMounted(() => {
          * trade for a bold word.
          */
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        /*
+         * The continuation first, so Enter gets the chance to carry a bullet, a
+         * number or a quote marker onto the next line — and declines on every
+         * line that has none, leaving `defaultKeymap` behind it to do what it
+         * always did. A list the field draws as a list is one Enter has to be
+         * able to continue.
+         */
+        keymap.of([...continuationKeymap, ...defaultKeymap, ...historyKeymap]),
         /*
          * Tab is deliberately unbound — `defaultKeymap` leaves it alone, so it
          * moves focus the way it did out of the textarea. The toolbar spent #146
@@ -103,6 +111,13 @@ onMounted(() => {
          */
         EditorView.lineWrapping,
         label.of(contentAttributes()),
+        /*
+         * What #142 was for: the marks are drawn rather than spelled out, and
+         * the characters come back when the caret reaches them (#153). It reads
+         * the same tree `CampaignMarkdown` renders, so the field and the page
+         * cannot come to different conclusions about the same body.
+         */
+        livePreview,
         /*
          * The single place the model is told anything. Every write — typing, a
          * paste, a toolbar press — is a transaction, so raising the event from
@@ -739,6 +754,135 @@ function move(event) {
    is the field's, and two of them read as a wobble at the start of the measure. */
 .md-field__area :deep(.cm-line) {
   padding: 0;
+}
+
+/*
+ * What the live preview draws (#153).
+ *
+ * **The body stays in the mono face.** A field that switched to the reading
+ * face would wrap differently from the field a game master had been typing in a
+ * moment earlier, and #146 set the measure here so that what is written wraps
+ * the way it will be read. What changes is weight, slope, colour and scale —
+ * enough for a heading to read as a heading, and not so much that the source
+ * stops looking like source.
+ *
+ * Every value is a token these rules share with `base.css`, so the field and
+ * the page are the same decisions seen from two sides rather than two
+ * approximations of one.
+ */
+
+/* A marker that has come back because the caret reached it. Muted, so it reads
+   as punctuation the writer put there rather than as more of the sentence. */
+.md-field__area :deep(.md-syntax) {
+  color: var(--p-text-muted-color);
+}
+
+.md-field__area :deep(.md-strong) {
+  font-weight: 700;
+}
+
+.md-field__area :deep(.md-em) {
+  font-style: italic;
+}
+
+.md-field__area :deep(.md-code) {
+  padding: 0 0.2em;
+  border-radius: var(--p-border-radius-xs);
+  background: var(--p-content-hover-background);
+}
+
+.md-field__area :deep(.md-link) {
+  color: var(--p-primary-color);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  text-decoration-thickness: 1px;
+}
+
+/*
+ * Headings take the display face, which is the one exception to the paragraph
+ * above and earns it: a heading is not prose being read at the measure, it is a
+ * label, and it is the construct a writer most wants to see land.
+ *
+ * The scale is `base.css`'s own, one step down throughout — the field is set at
+ * `--step--1` where the page is at `--step-0`, so the ladder is walked from the
+ * same rung the surrounding text is on.
+ */
+.md-field__area :deep(.md-h1),
+.md-field__area :deep(.md-h2),
+.md-field__area :deep(.md-h3),
+.md-field__area :deep(.md-h4),
+.md-field__area :deep(.md-h5),
+.md-field__area :deep(.md-h6) {
+  font-family: var(--grimoire-font-display);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.md-field__area :deep(.md-h1) {
+  font-size: var(--step-3);
+}
+
+.md-field__area :deep(.md-h2) {
+  font-size: var(--step-2);
+}
+
+.md-field__area :deep(.md-h3) {
+  font-size: var(--step-1);
+}
+
+.md-field__area :deep(.md-h4),
+.md-field__area :deep(.md-h5),
+.md-field__area :deep(.md-h6) {
+  font-size: var(--step-0);
+}
+
+/* A rule down the side, which is what a quote is on every page that has ever
+   had one. The `>` it replaces is concealed line by line, so a quote being
+   edited shows its markers only on the line the caret is in. */
+.md-field__area :deep(.md-quote) {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--p-content-border-color);
+  color: var(--p-text-muted-color);
+}
+
+/*
+ * The hang, so a wrapped list item lines up under its own first word instead of
+ * under the bullet.
+ *
+ * `ch` because the field is monospaced: two characters is exactly what `- `
+ * occupied, so the bullet sits where the dash was and the text does not move.
+ * Ordered items take no hang — `1.` and `10.` are not the same width, and a
+ * single number would be wrong for one of them.
+ */
+.md-field__area :deep(.md-list) {
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.md-field__area :deep(.md-bullet) {
+  color: var(--p-text-muted-color);
+}
+
+/*
+ * The wash and the border `base.css` gives a `<pre>`, drawn per line because
+ * there is no block element here to put it on — the fences are emptied rather
+ * than removed, and the two blank lines they leave are the padding.
+ */
+.md-field__area :deep(.md-codeblock) {
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+  background: var(--p-content-hover-background);
+}
+
+/* The same double rule `render.js` draws, from the same token, so a thematic
+   break looks like itself before it is saved. */
+.md-field__area :deep(.md-rule) {
+  display: inline-block;
+  width: 100%;
+  height: 3px;
+  border-top: 1px solid var(--p-grimoire-rule-color);
+  border-bottom: 1px solid var(--p-grimoire-rule-color);
+  vertical-align: middle;
 }
 
 /* Wrapping, not scrolling: a horizontal scrollbar under a column of prose set

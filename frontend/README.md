@@ -91,6 +91,9 @@ frontend/
       nodes.js                     # the tree facts both renderers share
       MarkdownField.vue            # the writing side: the toolbar, and the editor
       toolbar.js                   # what a button writes, and where the caret lands
+      livePreview.js               # mdast ⟶ what the field draws over the source
+      editor.js                    # those descriptors ⟶ CodeMirror decorations
+      continuation.js              # what Enter writes on a line carrying a marker
     content/
       sample.js                    # the nav's sections, and sample copy for the spike
     i18n/
@@ -572,6 +575,50 @@ than markup, exactly as `render.js` does, so there is still no string for
 anything to be injected into. What it must never gain is a grammar:
 `@codemirror/lang-markdown` would be a second parser reading the same text as
 the one above, and the two would disagree precisely where it matters.
+
+### What the field draws
+
+`**bold**` reads as bold while it is being written and the asterisks come back
+when the caret reaches them (#153). The decorations come from the **same tree**
+`CampaignMarkdown` renders: `parse()` records an offset on every node, so which
+characters are a `strong` is a lookup rather than a second opinion.
+
+Two modules, split the way `toolbar.js` and `MarkdownField.vue` are split.
+`livePreview.js` is pure — a tree, the text, and where the caret is, in; `hide`,
+`mark`, `line` and `widget` descriptors out — and is tested without a DOM.
+`editor.js` turns those into CodeMirror decorations and has no decisions left to
+make.
+
+**A construct opens when the selection touches it**, which is the whole of "the
+caret can still reach the characters": one filter in a pure function rather than
+caret handling spread across a view plugin. Quotes and list items open a line at
+a time, because opening all of a four-paragraph quote would put markers back on
+screen nowhere near where anyone is looking.
+
+**Enter continues what the line was carrying.** A list drawn as a list is one
+Enter has to be able to continue: `- a rope` gives `- `, `3.` gives `4.`, a
+quote goes on being quoted, and a marker with nothing after it is taken away
+instead of repeated — which is how a writer gets out of a list.
+
+`continuation.js` holds that rule, and holds it without importing CodeMirror at
+all, since a command is a function handed a view and a keymap entry is a plain
+object. It is bound ahead of `defaultKeymap` and answers `false` on every line
+with no marker, which hands Enter straight back.
+
+**It is the one question here the tree does not answer**, deliberately: the `>`
+on a quote's second line is not a node — it sits inside a text node with the
+words — so a prefix is a lexical fact about one line rather than an opinion
+about the document, which is why `quoteLines` reads markers the same way.
+`@codemirror/lang-markdown` ships exactly this behaviour and taking it would
+mean taking the Lezer grammar with it.
+
+**The document is re-read after a pause, not on the keystroke.** Measured: the
+walk costs under a millisecond on a two-thousand-word body and the parse costs
+twenty to thirty, every keystroke, because the whole document is the only unit
+`remark-parse` takes. The delay is uniform rather than reserved for long bodies,
+because `**bold` is a half-written construct and re-reading between the two
+asterisks makes marks flicker under the fingers. While a tree is stale the
+decorations are carried along by the edits rather than dropped.
 
 Dropping `v-html` does not close every hole on its own:
 `[click](javascript:…)` is an ordinary markdown link, and `h('a', { href })`
